@@ -743,8 +743,8 @@ def flow_warp(x, flow, interp_mode='bilinear', padding_mode='zeros', align_corne
     n, _, h, w = x.size()
     x = x.float()
     # create mesh grid
-    # grid_y, grid_x = torch.meshgrid(torch.arange(0, h).type_as(x), torch.arange(0, w).type_as(x)) # an illegal memory access on TITAN RTX + PyTorch1.9.1
-    grid_y, grid_x = torch.meshgrid(torch.arange(0, h, dtype=x.dtype, device=x.device), torch.arange(0, w, dtype=x.dtype, device=x.device))
+    # grid_y, grid_x = torch.meshgrid(torch.arange(0, h).type_as(x), torch.arange(0, w).type_as(x), indexing='ij') # an illegal memory access on TITAN RTX + PyTorch1.9.1
+    grid_y, grid_x = torch.meshgrid(torch.arange(0, h, dtype=x.dtype, device=x.device), torch.arange(0, w, dtype=x.dtype, device=x.device), indexing='ij')
     grid = torch.stack((grid_x, grid_y), 2).float()  # W(x), H(y), 2
     grid.requires_grad = False
     grid = grid.type_as(x)
@@ -794,7 +794,7 @@ def flow_warp(x, flow, interp_mode='bilinear', padding_mode='zeros', align_corne
 #     assert x.size()[-2:] == flow.size()[1:3]
 #     B, C, H, W = x.size()
 #     # mesh grid
-#     grid_y, grid_x = torch.meshgrid(torch.arange(0, H), torch.arange(0, W))
+#     grid_y, grid_x = torch.meshgrid(torch.arange(0, H), torch.arange(0, W), indexing='ij')
 #     grid = torch.stack((grid_x, grid_y), 2).float()  # W(x), H(y), 2
 #     grid.requires_grad = False
 #     grid = grid.type_as(x)
