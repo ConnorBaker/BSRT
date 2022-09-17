@@ -8,7 +8,7 @@ dependencies:
   - pip==22.2.2
 
   # Pulls in cudatoolkit
-  - pytorch==1.11.0=py3.7_cuda11.3_cudnn8.2.0_0
+  - pytorch==1.11.0=py3.7_cuda11.5_cudnn8.3.2_0
   - torchvision
 
   # For DCNv2
