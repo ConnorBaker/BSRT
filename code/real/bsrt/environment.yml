@@ -1,0 +1,33 @@
+name: bsrt-real
+channels:
+  - conda-forge
+  - pytorch
+  - nvidia
+dependencies:
+  - python=3.7
+  - pip==22.2.2
+
+  # Pulls in cudatoolkit
+  - pytorch==1.6.0=py3.7_cuda10.1.243_cudnn7.6.3_0
+  - torchvision==0.7.0
+
+  # For DCNv2
+  - ninja==1.11.0
+  - cupy
+  - cuda-nvcc
+
+  # Used to be installed by pip
+  - matplotlib
+  - imageio
+  - opencv
+  - tensorboardx
+  - tqdm
+  - timm
+  - requests
+  - exifread
+
+  - pip:
+    - torchsummaryX
+    - pytorch-msssim
+    - lpips
+    - -e git+https://github.com/lbin/DCNv2.git@pytorch_1.6#egg=DCNv2
