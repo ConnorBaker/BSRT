@@ -1,3 +1,4 @@
+from argparse import Namespace
 import math
 import time
 import datetime
@@ -12,24 +13,25 @@ import os
 import sys
 
 import torch
+from torch import Tensor
 import torch.optim as optim
 import torch.optim.lr_scheduler as lrs
 
 import torch.distributed as dist
 import matplotlib
 
-matplotlib.use('Agg')
+matplotlib.use("Agg")
 
 
-def reduce_mean(tensor, nprocs):
-    rt = tensor.clone()
-    dist.all_reduce(rt, op=dist.ReduceOp.SUM)
+def reduce_mean(tensor: Tensor, nprocs: int) -> Tensor:
+    rt: Tensor = tensor.clone()  # type: ignore
+    dist.all_reduce(rt, op=dist.ReduceOp.SUM)  # type: ignore
     rt /= nprocs
     return rt
 
 
-def setup(rank, world_size):
-    if sys.platform == 'win32':
+def setup(rank: int, world_size: int) -> None:
+    if sys.platform == "win32":
         # Distributed package only covers collective communications with Gloo
         # backend and FileStore on Windows platform. Set init_method parameter
         # in init_process_group to a local file.
@@ -38,14 +40,11 @@ def setup(rank, world_size):
 
         # initialize the process group
         dist.init_process_group(
-            "gloo",
-            init_method=init_method,
-            rank=rank,
-            world_size=world_size
+            "gloo", init_method=init_method, rank=rank, world_size=world_size
         )
     else:
-        os.environ['MASTER_ADDR'] = 'localhost'
-        os.environ['MASTER_PORT'] = '12256'
+        os.environ["MASTER_ADDR"] = "localhost"
+        os.environ["MASTER_PORT"] = "12256"
 
         # initialize the process group
         dist.init_process_group("nccl", rank=rank, world_size=world_size)
@@ -55,117 +54,117 @@ def cleanup():
     dist.destroy_process_group()
 
 
-def mkdir(path):
-    if not os.path.exists(path):
-        os.makedirs(path)
+def mkdir(path: str):
+    os.makedirs(path, exist_ok=True)
 
 
-class timer():
+class timer:
     def __init__(self):
-        self.acc = 0
+        self.reset()
         self.tic()
 
-    def tic(self):
-        self.t0 = time.time()
+    def tic(self) -> None:
+        self.t0: float = time.time()
 
-    def toc(self, restart=False):
-        diff = time.time() - self.t0
-        if restart: self.t0 = time.time()
+    def toc(self, restart: bool = False) -> float:
+        diff: float = time.time() - self.t0
+        if restart:
+            self.t0: float = time.time()
         return diff
 
-    def hold(self):
+    def hold(self) -> None:
         self.acc += self.toc()
 
-    def release(self):
-        ret = self.acc
-        self.acc = 0
+    def release(self) -> float:
+        ret: float = self.acc
+        self.reset()
 
         return ret
 
-    def reset(self):
-        self.acc = 0
+    def reset(self) -> None:
+        self.acc: float = 0
 
 
-class checkpoint():
-    def __init__(self, args):
-        self.args = args
-        self.ok = True
-        self.log = torch.Tensor()
-        now = datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')
+class checkpoint:
+    def __init__(self, args: Namespace):
+        self.args: Namespace = args
+        self.ok: bool = True
+        self.log: Tensor = torch.Tensor()
+        now: str = datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
 
         if not args.load:
             if not args.save:
                 args.save = now
-            self.dir = os.path.join('..', 'experiment', args.save)
+            self.dir = os.path.join("..", "experiment", args.save)
         else:
-            self.dir = os.path.join('..', 'experiment', args.load)
+            self.dir = os.path.join("..", "experiment", args.load)
             if os.path.exists(self.dir):
-                self.log = torch.load(self.get_path('psnr_log.pt'))
-                print('Continue from epoch {}...'.format(len(self.log)))
+                self.log = torch.load(self.get_path("psnr_log.pt"))
+                print("Continue from epoch {}...".format(len(self.log)))
             else:
-                args.load = ''
+                args.load = ""
 
         if args.reset:
-            os.system('rm -rf ' + self.dir)
-            args.load = ''
+            os.system("rm -rf " + self.dir)
+            args.load = ""
 
         os.makedirs(self.dir, exist_ok=True)
-        os.makedirs(self.get_path('model'), exist_ok=True)
+        os.makedirs(self.get_path("model"), exist_ok=True)
         # for d in args.data_test:
         #     os.makedirs(self.get_path('results-{}'.format(d)), exist_ok=True)
 
-        open_type = 'a' if os.path.exists(self.get_path('log.txt')) else 'w'
-        self.log_file = open(self.get_path('log.txt'), open_type)
-        with open(self.get_path('config.txt'), open_type) as f:
-            f.write(now + '\n\n')
+        open_type = "a" if os.path.exists(self.get_path("log.txt")) else "w"
+        self.log_file = open(self.get_path("log.txt"), open_type)
+        with open(self.get_path("config.txt"), open_type) as f:
+            f.write(now + "\n\n")
             for arg in vars(args):
-                f.write('{}: {}\n'.format(arg, getattr(args, arg)))
-            f.write('\n')
+                f.write("{}: {}\n".format(arg, getattr(args, arg)))
+            f.write("\n")
 
         self.n_processes = 8
 
-    def get_path(self, *subdir):
+    def get_path(self, *subdir: str) -> str:
         return os.path.join(self.dir, *subdir)
 
-    def save(self, trainer, epoch, is_best=False):
-        trainer.model.save(self.get_path('model'), epoch, is_best=is_best)
+    def save(self, trainer, epoch, is_best: bool = False) -> None:
+        trainer.model.save(self.get_path("model"), epoch, is_best=is_best)
         trainer.loss.save(self.dir)
         trainer.loss.plot_loss(self.dir, epoch)
 
         self.plot_psnr(epoch)
         trainer.optimizer.save(self.dir)
-        torch.save(self.log, self.get_path('psnr_log.pt'))
+        torch.save(self.log, self.get_path("psnr_log.pt"))
 
-    def add_log(self, log):
-        self.log = torch.cat([self.log, log])
+    def add_log(self, log: Tensor):
+        self.log: Tensor = torch.cat([self.log, log])
 
-    def write_log(self, log, refresh=False):
+    def write_log(self, log: str, refresh: bool = False) -> None:
         print(log)
-        self.log_file.write(log + '\n')
+        self.log_file.write(log + "\n")
         if refresh:
             self.log_file.close()
-            self.log_file = open(self.get_path('log.txt'), 'a')
+            self.log_file = open(self.get_path("log.txt"), "a")
 
-    def done(self):
+    def done(self) -> None:
         self.log_file.close()
 
     def plot_psnr(self, epoch):
         axis = np.linspace(1, epoch, epoch)
         for idx_data, d in enumerate(self.args.data_test):
-            label = 'SR on {}'.format(d)
+            label = "SR on {}".format(d)
             fig = plt.figure()
             plt.title(label)
             for idx_scale, scale in enumerate(self.args.scale):
                 plt.plot(
                     axis,
                     self.log[:, idx_data, idx_scale].numpy(),
-                    label='Scale {}'.format(scale)
+                    label="Scale {}".format(scale),
                 )
             plt.legend()
-            plt.xlabel('Epochs')
-            plt.ylabel('PSNR')
+            plt.xlabel("Epochs")
+            plt.ylabel("PSNR")
             plt.grid(True)
-            plt.savefig(self.get_path('test_{}.pdf'.format(d)))
+            plt.savefig(self.get_path("test_{}.pdf".format(d)))
             plt.close(fig)
 
     def begin_background(self):
@@ -175,33 +174,38 @@ class checkpoint():
             while True:
                 if not queue.empty():
                     filename, tensor = queue.get()
-                    if filename is None: break
+                    if filename is None:
+                        break
                     imageio.imwrite(filename, tensor.numpy())
 
         self.process = [
-            Process(target=bg_target, args=(self.queue,)) \
+            Process(target=bg_target, args=(self.queue,))
             for _ in range(self.n_processes)
         ]
 
-        for p in self.process: p.start()
+        for p in self.process:
+            p.start()
 
     def end_background(self):
-        for _ in range(self.n_processes): self.queue.put((None, None))
-        while not self.queue.empty(): time.sleep(1)
-        for p in self.process: p.join()
+        for _ in range(self.n_processes):
+            self.queue.put((None, None))
+        while not self.queue.empty():
+            time.sleep(1)
+        for p in self.process:
+            p.join()
 
     def save_results(self, dataset, filename, save_list, scale):
         if self.args.save_results:
             filename = self.get_path(
-                'results-{}'.format(dataset.dataset.name),
-                '{}_x{}_'.format(filename, scale)
+                "results-{}".format(dataset.dataset.name),
+                "{}_x{}_".format(filename, scale),
             )
 
-            postfix = ('SR', 'LR', 'HR')
+            postfix = ("SR", "LR", "HR")
             for v, p in zip(save_list, postfix):
                 normalized = v[0].mul(255 / self.args.rgb_range)
                 tensor_cpu = normalized.byte().permute(1, 2, 0).cpu()
-                self.queue.put(('{}{}.png'.format(filename, p), tensor_cpu))
+                self.queue.put(("{}{}.png".format(filename, p), tensor_cpu))
 
 
 def quantize(img, rgb_range):
@@ -210,7 +214,8 @@ def quantize(img, rgb_range):
 
 
 def calc_psnr(sr, hr, scale, rgb_range, dataset=None):
-    if hr.nelement() == 1: return 0
+    if hr.nelement() == 1:
+        return 0
 
     diff = (sr - hr) / rgb_range
     if dataset and dataset.dataset.benchmark:
@@ -229,27 +234,27 @@ def calc_psnr(sr, hr, scale, rgb_range, dataset=None):
 
 
 def make_optimizer(args, target):
-    '''
-        make optimizer and scheduler together
-    '''
+    """
+    make optimizer and scheduler together
+    """
     # optimizer
     trainable = filter(lambda x: x.requires_grad, target.parameters())
-    kwargs_optimizer = {'lr': args.lr, 'weight_decay': args.weight_decay}
+    kwargs_optimizer = {"lr": args.lr, "weight_decay": args.weight_decay}
 
-    if args.optimizer == 'SGD':
+    if args.optimizer == "SGD":
         optimizer_class = optim.SGD
-        kwargs_optimizer['momentum'] = args.momentum
-    elif args.optimizer == 'ADAM':
+        kwargs_optimizer["momentum"] = args.momentum
+    elif args.optimizer == "ADAM":
         optimizer_class = optim.Adam
-        kwargs_optimizer['betas'] = args.betas
-        kwargs_optimizer['eps'] = args.epsilon
-    elif args.optimizer == 'RMSprop':
+        kwargs_optimizer["betas"] = args.betas
+        kwargs_optimizer["eps"] = args.epsilon
+    elif args.optimizer == "RMSprop":
         optimizer_class = optim.RMSprop
-        kwargs_optimizer['eps'] = args.epsilon
+        kwargs_optimizer["eps"] = args.epsilon
 
     # scheduler
-    milestones = list(map(lambda x: int(x), args.decay.split('-')))
-    kwargs_scheduler = {'milestones': milestones, 'gamma': args.gamma}
+    milestones = list(map(lambda x: int(x), args.decay.split("-")))
+    kwargs_scheduler = {"milestones": milestones, "gamma": args.gamma}
     scheduler_class = lrs.MultiStepLR
 
     class CustomOptimizer(optimizer_class):
@@ -265,10 +270,11 @@ def make_optimizer(args, target):
         def load(self, load_dir, epoch=1):
             self.load_state_dict(torch.load(self.get_dir(load_dir)))
             if epoch > 1:
-                for _ in range(epoch): self.scheduler.step()
+                for _ in range(epoch):
+                    self.scheduler.step()
 
         def get_dir(self, dir_path):
-            return os.path.join(dir_path, 'optimizer.pt')
+            return os.path.join(dir_path, "optimizer.pt")
 
         def schedule(self):
             self.scheduler.step()
@@ -295,11 +301,6 @@ def write_gray_to_tfboard(img):
     return img_debug[0, ...]
 
 
-
-
-
-
-
 ######################## BayerUnifyAug ############################
 
 BAYER_PATTERNS = ["RGGB", "BGGR", "GRBG", "GBRG"]
@@ -317,28 +318,36 @@ def bayer_unify(raw, input_pattern, target_pattern, mode) -> np.ndarray:
 
     if input_pattern == target_pattern:
         h_offset, w_offset = 0, 0
-    elif input_pattern[0] == target_pattern[2] and input_pattern[1] == target_pattern[3]:
+    elif (
+        input_pattern[0] == target_pattern[2] and input_pattern[1] == target_pattern[3]
+    ):
         h_offset, w_offset = 1, 0
-    elif input_pattern[0] == target_pattern[1] and input_pattern[2] == target_pattern[3]:
+    elif (
+        input_pattern[0] == target_pattern[1] and input_pattern[2] == target_pattern[3]
+    ):
         h_offset, w_offset = 0, 1
-    elif input_pattern[0] == target_pattern[3] and input_pattern[1] == target_pattern[2]:
+    elif (
+        input_pattern[0] == target_pattern[3] and input_pattern[1] == target_pattern[2]
+    ):
         h_offset, w_offset = 1, 1
     else:  # This is not happening in ["RGGB", "BGGR", "GRBG", "GBRG"]
-        raise RuntimeError('Unexpected pair of input and target bayer pattern!')
+        raise RuntimeError("Unexpected pair of input and target bayer pattern!")
 
     if mode == "pad":
         # out = np.pad(raw, [[h_offset, h_offset], [w_offset, w_offset]], 'reflect')
-        out = F.pad(raw, (w_offset, w_offset, h_offset, h_offset), mode='reflect')
+        out = F.pad(raw, (w_offset, w_offset, h_offset, h_offset), mode="reflect")
     elif mode == "crop":
         _, _, _, h, w = raw.shape
-        out = raw[..., h_offset:h - h_offset, w_offset:w - w_offset]
+        out = raw[..., h_offset : h - h_offset, w_offset : w - w_offset]
     else:
-        raise ValueError('Unknown normalization mode!')
+        raise ValueError("Unknown normalization mode!")
 
     return out
 
 
-def bayer_aug(raw, flip_h=False, flip_w=False, transpose=False, input_pattern='RGGB') -> np.ndarray:
+def bayer_aug(
+    raw, flip_h=False, flip_w=False, transpose=False, input_pattern="RGGB"
+) -> np.ndarray:
     """
     Apply augmentation to a bayer raw image.
     """
@@ -347,7 +356,7 @@ def bayer_aug(raw, flip_h=False, flip_w=False, transpose=False, input_pattern='R
 
     out = raw
     if flip_h:
-        out = torch.flip(out, [3]) # GBRG, RGGB
+        out = torch.flip(out, [3])  # GBRG, RGGB
         aug_pattern = aug_pattern[2] + aug_pattern[3] + aug_pattern[0] + aug_pattern[1]
     if flip_w:
         out = torch.flip(out, [4])
