@@ -62,8 +62,7 @@ def match_colors(im_ref, im_q, im_test, ksz, gauss_kernel):
     # Estimate color transformation matrix by minimizing the least squares error
     c_mat_all = []
     for ir, iq in zip(im_ref_mean_re, im_q_mean_re):
-        c = torch.lstsq(ir.t(), iq.t())
-        c = c.solution[:3]
+        c = torch.linalg.lstsq(iq.t(), ir.t()).solution
         c_mat_all.append(c)
 
     c_mat = torch.stack(c_mat_all, dim=0)
