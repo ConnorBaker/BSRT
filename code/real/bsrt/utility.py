@@ -47,7 +47,7 @@ def setup(rank: int, world_size: int) -> None:
         os.environ["MASTER_PORT"] = "12256"
 
         # initialize the process group
-        dist.init_process_group("nccl", rank=rank, world_size=world_size)
+        dist.init_process_group("nccl", timeout=datetime.timedelta(seconds=30), rank=rank, world_size=world_size)
 
 
 def cleanup():
