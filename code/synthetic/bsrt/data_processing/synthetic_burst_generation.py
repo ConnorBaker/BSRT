@@ -170,7 +170,7 @@ def single2lrburst(image, burst_size, downsample_factor=1, transformation_params
     sample_pos_inv_all = []
 
     rvs, cvs = torch.meshgrid([torch.arange(0, image.shape[0]),
-                               torch.arange(0, image.shape[1])])
+                               torch.arange(0, image.shape[1])], indexing='ij')
 
     sample_grid = torch.stack((cvs, rvs, torch.ones_like(cvs)), dim=-1).float()
 
