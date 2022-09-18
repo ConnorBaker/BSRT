@@ -47,7 +47,7 @@ def main_worker(local_rank, nprocs, args):
         param.requires_grad = False
 
     alignment_net = PWCNet(load_pretrained=True,
-                           weights_path='/home/ubuntu/bsrt/models/pwcnet-network-default.pth')
+                           weights_path=args.models_root + "/pwcnet-network-default.pth")
     alignment_net = alignment_net.to('cuda')
     for param in alignment_net.parameters():
         param.requires_grad = False

@@ -36,7 +36,7 @@ def main_worker(local_rank: int, nprocs: int, args: Namespace) -> None:
 
     alignment_net: nn.Module = PWCNet(
         load_pretrained=True,
-        weights_path="/home/ubuntu/bsrt/models/pwcnet-network-default.pth",
+        weights_path= args.models_root + "/pwcnet-network-default.pth"
     ).cuda()  # type: ignore
     for param in alignment_net.parameters():
         param.requires_grad = False

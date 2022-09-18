@@ -57,6 +57,8 @@ parser.add_argument('--root', type=str, default='/data/dataset/ntire21/burstsr/r
                     help='dataset directory')
 parser.add_argument('--val_root', type=str, default='../test_set',
                     help='dataset directory')
+parser.add_argument('--models_root', type=str,
+                    help='models directory')
 parser.add_argument('--mode', type=str, default='train',
                     help='demo image directory')
 parser.add_argument('--scale', type=str, default='4',
