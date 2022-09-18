@@ -393,7 +393,7 @@ class BurstSRDataset(torch.utils.data.Dataset):
                 meta_info_burst[k] = torch.tensor(v)
 
         meta_info_burst['burst_name'] = meta_info['burst_name']
-        
+
         return burst, frame_gt, meta_info_burst, meta_info_gt
 
 
