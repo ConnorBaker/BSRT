@@ -19,14 +19,14 @@ except ImportError:
     raise ImportError('Failed to import Non_Local module.')
 
 try:
-    from model.DCNv2.dcn_v2 import DCN_sep as DCN, FlowGuidedDCN, InsideFlowGuidedDCN
+    from model.DCNv2.dcn_v2 import DCN_sep as DCN, FlowGuidedDCN
 except ImportError:
     raise ImportError('Failed to import DCNv2 module.')
 
 
 def make_model(args, parent=False):
     nframes = args.burst_size
-    img_size = args.patch_size // args.scale[0]
+    img_size = args.patch_size * 2
     patch_size = 1
     in_chans = args.burst_channel
     out_chans = args.n_colors
@@ -183,26 +183,26 @@ class FlowGuidedPCDAlign(nn.Module):
         # L3: level 3, 1/4 spatial size
         self.L3_offset_conv1 = nn.Conv2d(nf * 2 + 2, nf, 3, 1, 1, bias=True)  # concat for diff
         self.L3_offset_conv2 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-        self.L3_dcnpack = FlowGuidedDCN(nf, nf, 3, stride=1, padding=1, dilation=1, deformable_groups=groups)
+        self.L3_dcnpack = FlowGuidedDCN(nf, nf, 3, stride=1, padding=1, dilation=1, groups=groups)
 
         # L2: level 2, 1/2 spatial size
         self.L2_offset_conv1 = nn.Conv2d(nf * 2 + 2, nf, 3, 1, 1, bias=True)  # concat for diff
         self.L2_offset_conv2 = nn.Conv2d(nf * 2, nf, 3, 1, 1, bias=True)  # concat for offset
         self.L2_offset_conv3 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-        self.L2_dcnpack = FlowGuidedDCN(nf, nf, 3, stride=1, padding=1, dilation=1, deformable_groups=groups)
+        self.L2_dcnpack = FlowGuidedDCN(nf, nf, 3, stride=1, padding=1, dilation=1, groups=groups)
         self.L2_fea_conv = nn.Conv2d(nf * 2, nf, 3, 1, 1, bias=True)  # concat for fea
 
         # L1: level 1, original spatial size
         self.L1_offset_conv1 = nn.Conv2d(nf * 2 + 2, nf, 3, 1, 1, bias=True)  # concat for diff
         self.L1_offset_conv2 = nn.Conv2d(nf * 2, nf, 3, 1, 1, bias=True)  # concat for offset
         self.L1_offset_conv3 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-        self.L1_dcnpack = FlowGuidedDCN(nf, nf, 3, stride=1, padding=1, dilation=1, deformable_groups=groups)
+        self.L1_dcnpack = FlowGuidedDCN(nf, nf, 3, stride=1, padding=1, dilation=1, groups=groups)
         self.L1_fea_conv = nn.Conv2d(nf * 2, nf, 3, 1, 1, bias=True)  # concat for fea
 
         # Cascading DCN
         self.cas_offset_conv1 = nn.Conv2d(nf * 2, nf, 3, 1, 1, bias=True)  # concat for diff
         self.cas_offset_conv2 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-        self.cas_dcnpack = DCN(nf, nf, 3, stride=1, padding=1, dilation=1, deformable_groups=groups)
+        self.cas_dcnpack = DCN(nf, nf, 3, stride=1, padding=1, dilation=1, groups=groups)
 
         self.lrelu = nn.LeakyReLU(negative_slope=0.1, inplace=True)
 
@@ -315,7 +315,7 @@ class BSRT(nn.Module):
         self.num_features = embed_dim
         self.mlp_ratio = mlp_ratio
 
-        spynet_path='/home/luoziwei/.pretrained_models/spynet_sintel_final-3d2a1287.pth'
+        spynet_path = args.models_root + '/spynet_sintel_final-3d2a1287.pth'
         self.spynet = SpyNet(spynet_path, [3, 4, 5])
         self.conv_flow = nn.Conv2d(1, 3, kernel_size=3, stride=1, padding=1)
         self.flow_ps = nn.PixelShuffle(2)
