@@ -13,7 +13,7 @@ parser.add_argument('--lr', type=float, default=1e-4,
 parser.add_argument('--burst_size', type=int, default=14,
                     help='burst size, max 14')
 parser.add_argument('--burst_channel', type=int, default=4,
-                    help='burst size, max 14')
+                    help='RAW channel, default:4')
 parser.add_argument('--swinfeature', action='store_true',
                     help='use swin transformer to extract features')
 parser.add_argument('--model_level', type=str, default='S',
@@ -35,12 +35,13 @@ parser.add_argument('--finetune_upconv', action='store_true',
 parser.add_argument('--finetune_spynet', action='store_true',
                     help='finetune finetune up conv layer')
 
+
 # Hardware specifications
 parser.add_argument('--n_threads', type=int, default=6,
                     help='number of threads for data loading')
 parser.add_argument('--cpu', action='store_true',
                     help='use cpu only')
-parser.add_argument('--n_GPUs', type=int, default=2,
+parser.add_argument('--n_GPUs', type=int, default=1,
                     help='number of GPUs')
 parser.add_argument('--seed', type=int, default=1,
                     help='random seed')
@@ -52,8 +53,12 @@ parser.add_argument('--use_checkpoint', action='store_true',
                     help='use use_checkpoint in swin transformer')
 
 # Data specifications
-parser.add_argument('--root', type=str, default='/data/dataset/ntire21/burstsr/synthetic',
+parser.add_argument('--root', type=str, default='/data/dataset/ntire21/burstsr/real',
                     help='dataset directory')
+parser.add_argument('--val_root', type=str, default='../test_set',
+                    help='dataset directory')
+parser.add_argument('--models_root', type=str,
+                    help='models directory')
 parser.add_argument('--mode', type=str, default='train',
                     help='demo image directory')
 parser.add_argument('--scale', type=str, default='4',
@@ -107,7 +112,7 @@ parser.add_argument('--reset', action='store_true',
                     help='reset the training')
 parser.add_argument('--test_every', type=int, default=1000,
                     help='do test per every N batches')
-parser.add_argument('--epochs', type=int, default=300,
+parser.add_argument('--epochs', type=int, default=100,
                     help='number of epochs to train')
 parser.add_argument('--batch_size', type=int, default=8,
                     help='input batch size for training')
@@ -122,7 +127,7 @@ parser.add_argument('--gan_k', type=int, default=1,
 
 # Optimization specifications
 
-parser.add_argument('--decay', type=str, default='100-200',
+parser.add_argument('--decay', type=str, default='40-80',
                     help='learning rate decay type')
 parser.add_argument('--gamma', type=float, default=0.5,
                     help='learning rate decay factor for step decay')
@@ -155,7 +160,7 @@ parser.add_argument('--resume', type=int, default=0,
                     help='resume from specific checkpoint')
 parser.add_argument('--save_models', action='store_true',
                     help='save all intermediate models')
-parser.add_argument('--print_every', type=int, default=20,
+parser.add_argument('--print_every', type=int, default=10,
                     help='how many batches to wait before logging training status')
 parser.add_argument('--save_results', action='store_true',
                     help='save output results')
