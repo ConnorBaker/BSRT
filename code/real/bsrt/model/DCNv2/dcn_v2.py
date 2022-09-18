@@ -1,156 +1,220 @@
-#!/usr/bin/env python
-from __future__ import absolute_import, division, print_function
-
+# Taken with much thanks from the Torchvision project, and modified slightly.
+# The original was taken from:
+# https://github.com/pytorch/vision/blob/93c85bbcc31f8d5a052daf06f2f91f39697af1a4/torchvision/ops/deform_conv.py
 import math
+from typing import Optional, Tuple
 
 import torch
-from torch import nn
-from torch.autograd import Function
-from torch.autograd.function import once_differentiable
+from torch import nn, Tensor
+from torch.nn import init
 from torch.nn.modules.utils import _pair
-from torch.cuda.amp import custom_fwd, custom_bwd
-# from apex import amp
-
-import _ext as _backend
+from torch.nn.parameter import Parameter
 
 
-class _DCNv2(Function):
-    @staticmethod
-    @custom_fwd(cast_inputs=torch.float32)
-    # @amp.float_function
-    def forward(
-        ctx, input, offset, mask, weight, bias, stride, padding, dilation, deformable_groups
-    ):
-        ctx.stride = _pair(stride)
-        ctx.padding = _pair(padding)
-        ctx.dilation = _pair(dilation)
-        ctx.kernel_size = _pair(weight.shape[2:4])
-        ctx.deformable_groups = deformable_groups
-        output = _backend.dcn_v2_forward(
-            input,
-            weight,
-            bias,
-            offset,
-            mask,
-            ctx.kernel_size[0],
-            ctx.kernel_size[1],
-            ctx.stride[0],
-            ctx.stride[1],
-            ctx.padding[0],
-            ctx.padding[1],
-            ctx.dilation[0],
-            ctx.dilation[1],
-            ctx.deformable_groups,
-        )
-        ctx.save_for_backward(input, offset, mask, weight, bias)
-        return output
+def deform_conv2d(
+    input: Tensor,
+    offset: Tensor,
+    weight: Tensor,
+    n_weight_grps: int,
+    bias: Optional[Tensor] = None,
+    stride: Tuple[int, int] = (1, 1),
+    padding: Tuple[int, int] = (0, 0),
+    dilation: Tuple[int, int] = (1, 1),
+    mask: Optional[Tensor] = None,
+) -> Tensor:
+    r"""
+    Performs Deformable Convolution v2, described in
+    `Deformable ConvNets v2: More Deformable, Better Results
+    <https://arxiv.org/abs/1811.11168>`__ if :attr:`mask` is not ``None`` and
+    Performs Deformable Convolution, described in
+    `Deformable Convolutional Networks
+    <https://arxiv.org/abs/1703.06211>`__ if :attr:`mask` is ``None``.
 
-    @staticmethod
-    @once_differentiable
-    @custom_bwd
-    # @amp.float_function
-    def backward(ctx, grad_output):
-        input, offset, mask, weight, bias = ctx.saved_tensors
-        grad_input, grad_offset, grad_mask, grad_weight, grad_bias = _backend.dcn_v2_backward(
-            input,
-            weight,
-            bias,
-            offset,
-            mask,
-            grad_output,
-            ctx.kernel_size[0],
-            ctx.kernel_size[1],
-            ctx.stride[0],
-            ctx.stride[1],
-            ctx.padding[0],
-            ctx.padding[1],
-            ctx.dilation[0],
-            ctx.dilation[1],
-            ctx.deformable_groups,
-        )
+    Args:
+        input (Tensor[batch_size, in_channels, in_height, in_width]): input tensor
+        offset (Tensor[batch_size, 2 * offset_groups * kernel_height * kernel_width, out_height, out_width]):
+            offsets to be applied for each position in the convolution kernel.
+        weight (Tensor[out_channels, in_channels // groups, kernel_height, kernel_width]): convolution weights,
+            split into groups of size (in_channels // groups)
+        bias (Tensor[out_channels]): optional bias of shape (out_channels,). Default: None
+        stride (int or Tuple[int, int]): distance between convolution centers. Default: 1
+        padding (int or Tuple[int, int]): height/width of padding of zeroes around
+            each image. Default: 0
+        dilation (int or Tuple[int, int]): the spacing between kernel elements. Default: 1
+        mask (Tensor[batch_size, offset_groups * kernel_height * kernel_width, out_height, out_width]):
+            masks to be applied for each position in the convolution kernel. Default: None
 
-        return grad_input, grad_offset, grad_mask, grad_weight, grad_bias, None, None, None, None
+    Returns:
+        Tensor[batch_sz, out_channels, out_h, out_w]: result of convolution
 
-    @staticmethod
-    def symbolic(
-        g, input, offset, mask, weight, bias, stride, padding, dilation, deformable_groups
-    ):
-        from torch.nn.modules.utils import _pair
+    Examples::
+        >>> input = torch.rand(4, 3, 10, 10)
+        >>> kh, kw = 3, 3
+        >>> weight = torch.rand(5, 3, kh, kw)
+        >>> # offset and mask should have the same spatial size as the output
+        >>> # of the convolution. In this case, for an input of 10, stride of 1
+        >>> # and kernel size of 3, without padding, the output size is 8
+        >>> offset = torch.rand(4, 2 * kh * kw, 8, 8)
+        >>> mask = torch.rand(4, kh * kw, 8, 8)
+        >>> out = deform_conv2d(input, offset, weight, mask=mask)
+        >>> print(out.shape)
+        >>> # returns
+        >>>  torch.Size([4, 5, 8, 8])
+    """
+    out_channels = weight.shape[0]
 
-        stride = _pair(stride)
-        padding = _pair(padding)
-        dilation = _pair(dilation)
-        # as of trt 7, the dcn operation will be translated again by modifying the onnx file
-        # so the exporting code is kept to resemble the forward()
-        return g.op(
-            "DCNv2_2",
-            input,
-            offset,
-            mask,
-            weight,
-            bias,
-            stride_i=stride,
-            padding_i=padding,
-            dilation_i=dilation,
-            deformable_groups_i=deformable_groups,
+    use_mask = mask is not None
+
+    if mask is None:
+        mask = torch.zeros((input.shape[0], 0), device=input.device, dtype=input.dtype)
+
+    if bias is None:
+        bias = torch.zeros(out_channels, device=input.device, dtype=input.dtype)
+
+    stride_h, stride_w = _pair(stride)
+    pad_h, pad_w = _pair(padding)
+    dil_h, dil_w = _pair(dilation)
+    weights_h, weights_w = weight.shape[-2:]
+    # This is now unecessary because we don't need to calculate n_weight_grps.
+    # See comment below for more.
+    # _, n_in_channels, _, _ = input.shape
+
+    n_offset_grps = offset.shape[1] // (2 * weights_h * weights_w)
+    # Since we don't quotient the second dimension of the weight by the number
+    # of groups, there's no way to get it back out by doing this quotient.
+    # Instead, we take as a function argument.
+    # n_weight_grps = n_in_channels // weight.shape[1]
+
+    if n_offset_grps == 0:
+        raise RuntimeError(
+            "the shape of the offset tensor at dimension 1 is not valid. It should "
+            "be a multiple of 2 * weight.size[2] * weight.size[3].\n"
+            f"Got offset.shape[1]={offset.shape[1]}, while 2 * weight.size[2] * weight.size[3]={2 * weights_h * weights_w}"
         )
 
+    return torch.ops.torchvision.deform_conv2d(
+        input,
+        weight,
+        offset,
+        mask,
+        bias,
+        stride_h,
+        stride_w,
+        pad_h,
+        pad_w,
+        dil_h,
+        dil_w,
+        n_weight_grps,
+        n_offset_grps,
+        use_mask,
+    )
 
-dcn_v2_conv = _DCNv2.apply
 
+class DeformConv2d(nn.Module):
+    """
+    See :func:`deform_conv2d`.
+    """
 
-class DCNv2(nn.Module):
     def __init__(
         self,
-        in_channels,
-        out_channels,
-        kernel_size,
-        stride,
-        padding,
-        dilation=1,
-        deformable_groups=1,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int,
+        stride: int = 1,
+        padding: int = 0,
+        dilation: int = 1,
+        groups: int = 1,
+        bias: bool = True,
     ):
-        super(DCNv2, self).__init__()
+        super().__init__()
+
+        if in_channels % groups != 0:
+            raise ValueError("in_channels must be divisible by groups")
+        if out_channels % groups != 0:
+            raise ValueError("out_channels must be divisible by groups")
+
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = _pair(kernel_size)
         self.stride = _pair(stride)
         self.padding = _pair(padding)
         self.dilation = _pair(dilation)
-        self.deformable_groups = deformable_groups
+        self.groups = groups
 
-        self.weight = nn.Parameter(torch.Tensor(out_channels, in_channels, *self.kernel_size))
-        self.bias = nn.Parameter(torch.Tensor(out_channels))
+        # Since we're loading from a pre-trained model to avoid wasting days/
+        # weeks, we need to keep the second argument to torch.empty as-is.
+        # The deform_conv2d function used the fact that we had divided the
+        # second dimension to retrieve the number of groups. We instead pass
+        # the number of groups as an argument directly to the function.
+        # self.weight = Parameter(
+        #     torch.empty(
+        #         out_channels,
+        #         in_channels // groups,
+        #         self.kernel_size[0],
+        #         self.kernel_size[1],
+        #     )
+        # )
+        self.weight = Parameter(
+            torch.empty(out_channels, in_channels, *self.kernel_size)
+        )
+
+        if bias:
+            self.bias = Parameter(torch.empty(out_channels))
+        else:
+            self.register_parameter("bias", None)
+
         self.reset_parameters()
 
-    def reset_parameters(self):
-        n = self.in_channels
-        for k in self.kernel_size:
-            n *= k
-        stdv = 1.0 / math.sqrt(n)
-        self.weight.data.uniform_(-stdv, stdv)
-        self.bias.data.zero_()
+    def reset_parameters(self) -> None:
+        init.kaiming_uniform_(self.weight, a=math.sqrt(5))
 
-    def forward(self, input, offset, mask):
-        assert (
-            2 * self.deformable_groups * self.kernel_size[0] * self.kernel_size[1]
-            == offset.shape[1]
-        )
-        assert self.deformable_groups * self.kernel_size[0] * self.kernel_size[1] == mask.shape[1]
-        return dcn_v2_conv(
+        if self.bias is not None:
+            fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
+            bound = 1 / math.sqrt(fan_in)
+            init.uniform_(self.bias, -bound, bound)
+
+    def forward(
+        self, input: Tensor, offset: Tensor, mask: Optional[Tensor] = None
+    ) -> Tensor:
+        """
+        Args:
+            input (Tensor[batch_size, in_channels, in_height, in_width]): input tensor
+            offset (Tensor[batch_size, 2 * offset_groups * kernel_height * kernel_width, out_height, out_width]):
+                offsets to be applied for each position in the convolution kernel.
+            mask (Tensor[batch_size, offset_groups * kernel_height * kernel_width, out_height, out_width]):
+                masks to be applied for each position in the convolution kernel.
+        """
+        return deform_conv2d(
             input,
             offset,
-            mask,
             self.weight,
             self.bias,
-            self.stride,
-            self.padding,
-            self.dilation,
-            self.deformable_groups,
+            stride=self.stride,
+            padding=self.padding,
+            dilation=self.dilation,
+            mask=mask,
         )
 
+    def __repr__(self) -> str:
+        s = (
+            f"{self.__class__.__name__}("
+            f"{self.in_channels}"
+            f", {self.out_channels}"
+            f", kernel_size={self.kernel_size}"
+            f", stride={self.stride}"
+        )
+        s += f", padding={self.padding}" if self.padding != (0, 0) else ""
+        s += f", dilation={self.dilation}" if self.dilation != (1, 1) else ""
+        s += f", groups={self.groups}" if self.groups != 1 else ""
+        s += ", bias=False" if self.bias is None else ""
+        s += ")"
 
-class DCN(DCNv2):
+        return s
+
+
+class DCN_sep(DeformConv2d):
+    """Use other features to generate offsets and masks"""
+
     def __init__(
         self,
         in_channels,
@@ -159,13 +223,12 @@ class DCN(DCNv2):
         stride,
         padding,
         dilation=1,
-        deformable_groups=1,
+        groups=1,
     ):
-        super(DCN, self).__init__(
-            in_channels, out_channels, kernel_size, stride, padding, dilation, deformable_groups
+        super(DCN_sep, self).__init__(
+            in_channels, out_channels, kernel_size, stride, padding, dilation, groups
         )
-
-        channels_ = self.deformable_groups * 3 * self.kernel_size[0] * self.kernel_size[1]
+        channels_ = self.groups * 3 * self.kernel_size[0] * self.kernel_size[1]
         self.conv_offset_mask = nn.Conv2d(
             self.in_channels,
             channels_,
@@ -180,55 +243,9 @@ class DCN(DCNv2):
         self.conv_offset_mask.weight.data.zero_()
         self.conv_offset_mask.bias.data.zero_()
 
-    def forward(self, input):
-        out = self.conv_offset_mask(input)
-        o1, o2, mask = torch.chunk(out, 3, dim=1)
-        offset = torch.cat((o1, o2), dim=1)
-        mask = torch.sigmoid(mask)
-        return dcn_v2_conv(
-            input,
-            offset,
-            mask,
-            self.weight,
-            self.bias,
-            self.stride,
-            self.padding,
-            self.dilation,
-            self.deformable_groups,
-        )
-
-
-class DCN_sep(DCNv2):
-    '''Use other features to generate offsets and masks'''
-
-    def __init__(self,
-                 in_channels,
-                 out_channels,
-                 kernel_size,
-                 stride,
-                 padding,
-                 dilation=1,
-                 deformable_groups=1):
-        super(DCN_sep, self).__init__(in_channels, out_channels, kernel_size, stride, padding,
-                                      dilation, deformable_groups)
-
-        channels_ = self.deformable_groups * 3 * self.kernel_size[0] * self.kernel_size[1]
-        self.conv_offset_mask = nn.Conv2d(
-            self.in_channels,
-            channels_,
-            kernel_size=self.kernel_size,
-            stride=self.stride,
-            padding=self.padding,
-            bias=True)
-        self.init_offset()
-
-    def init_offset(self):
-        self.conv_offset_mask.weight.data.zero_()
-        self.conv_offset_mask.bias.data.zero_()
-
     def forward(self, input, fea):
-        '''input: input features for deformable conv
-        fea: other features used for generating offsets and mask'''
+        """input: input features for deformable conv
+        fea: other features used for generating offsets and mask"""
         out = self.conv_offset_mask(fea)
         o1, o2, mask = torch.chunk(out, 3, dim=1)
         offset = torch.cat((o1, o2), dim=1)
@@ -236,33 +253,45 @@ class DCN_sep(DCNv2):
 
         offset_mean = torch.mean(torch.abs(offset))
         if offset_mean > 250:
-            print('Offset mean is {}, larger than 100.'.format(offset_mean))
+            print("Offset mean is {}, larger than 100.".format(offset_mean))
             # return None
             # offset[offset>=150] = 1e-3
             # offset = offset.clamp(-50, 50)
 
         mask = torch.sigmoid(mask)
-        return dcn_v2_conv(input, offset, mask, self.weight, self.bias, self.stride, self.padding,
-                           self.dilation, self.deformable_groups)
+        return deform_conv2d(
+            input,
+            offset,
+            self.weight,
+            self.groups,
+            self.bias,
+            self.stride,
+            self.padding,
+            self.dilation,
+            mask,
+        )
 
 
-class FlowGuidedDCN(DCNv2):
-    '''Use other features to generate offsets and masks'''
+class FlowGuidedDCN(DeformConv2d):
+    """Use other features to generate offsets and masks"""
 
-    def __init__(self,
-                 in_channels,
-                 out_channels,
-                 kernel_size,
-                 stride,
-                 padding,
-                 dilation=1,
-                 deformable_groups=1):
-        super(FlowGuidedDCN, self).__init__(in_channels, out_channels, kernel_size, stride, padding,
-                                      dilation, deformable_groups)
-
-        channels_ = self.deformable_groups * 3 * self.kernel_size[0] * self.kernel_size[1]
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride,
+        padding,
+        dilation=1,
+        groups=1,
+    ):
+        super(FlowGuidedDCN, self).__init__(
+            in_channels, out_channels, kernel_size, stride, padding, dilation, groups
+        )
+        channels_ = self.groups * 3 * self.kernel_size[0] * self.kernel_size[1]
         self.conv_offset_mask = nn.Conv2d(
-            in_channels, channels_, kernel_size, stride, padding, bias=True)
+            in_channels, channels_, kernel_size, stride, padding, bias=True
+        )
 
         self.init_offset()
 
@@ -271,294 +300,33 @@ class FlowGuidedDCN(DCNv2):
         self.conv_offset_mask.bias.data.zero_()
 
     def forward(self, input, fea, flows):
-        '''input: input features for deformable conv: N, C, H, W.
-           fea: other features used for generating offsets and mask: N, C, H, W.
-           flows: N, 2, H, W.
-        '''
+        """input: input features for deformable conv: N, C, H, W.
+        fea: other features used for generating offsets and mask: N, C, H, W.
+        flows: N, 2, H, W.
+        """
         out = self.conv_offset_mask(fea)
         o1, o2, mask = torch.chunk(out, 3, dim=1)
 
-        offset = torch.tanh(torch.cat((o1, o2), dim=1)) * 10 # max_residue_magnitude
-        offset = offset + flows.flip(1).repeat(1, offset.size(1)//2, 1, 1)
+        offset = torch.tanh(torch.cat((o1, o2), dim=1)) * 10  # max_residue_magnitude
+        offset = offset + flows.flip(1).repeat(1, offset.size(1) // 2, 1, 1)
 
         offset_mean = torch.mean(torch.abs(offset))
         if offset_mean > 250:
-            print('FlowGuidedDCN: Offset mean is {}, larger than 100.'.format(offset_mean))
+            print(
+                "FlowGuidedDCN: Offset mean is {}, larger than 100.".format(offset_mean)
+            )
             # offset = offset.clamp(-50, 50)
             # return None
 
         mask = torch.sigmoid(mask)
-        return dcn_v2_conv(input, offset, mask, self.weight, self.bias, self.stride, self.padding,
-                           self.dilation, self.deformable_groups)
-
-
-
-class InsideFlowGuidedDCN(DCNv2):
-    '''Use other features to generate offsets and masks'''
-
-    def __init__(self,
-                 in_channels,
-                 out_channels,
-                 kernel_size,
-                 stride,
-                 padding,
-                 dilation=1,
-                 deformable_groups=1):
-        super(InsideFlowGuidedDCN, self).__init__(in_channels, out_channels, kernel_size, stride, padding,
-                                      dilation, deformable_groups)
-
-        channels_ = self.deformable_groups * 3 * self.kernel_size[0] * self.kernel_size[1]
-        self.conv_offset_mask = nn.Sequential(
-            nn.Conv2d(in_channels*2+2, out_channels, kernel_size, stride, padding, bias=True),
-            nn.LeakyReLU(negative_slope=0.1, inplace=True),
-            nn.Conv2d(out_channels, out_channels, kernel_size, stride, padding, bias=True),
-            nn.LeakyReLU(negative_slope=0.1, inplace=True),
-            nn.Conv2d(out_channels, channels_, kernel_size, stride, padding, bias=True)
-        )
-
-        self.reset_parameters()
-        self.init_offset()
-
-    def reset_parameters(self):
-        n = self.in_channels
-        for k in self.kernel_size:
-            n *= k
-        stdv = 1.0 / math.sqrt(n)
-        self.weight.data.uniform_(-stdv, stdv)
-        self.bias.data.zero_()
-
-
-    def init_offset(self):
-        self.conv_offset_mask[-1].weight.data.zero_()
-        self.conv_offset_mask[-1].bias.data.zero_()
-
-    def forward(self, input, warped, ref, flows):
-        '''input: input features for deformable conv: N, C, H, W.
-           fea: other features used for generating offsets and mask: N, C, H, W.
-           flows: N, 2, H, W.
-        '''
-        out = self.conv_offset_mask(torch.cat([warped, ref, flows], dim=1))
-        o1, o2, mask = torch.chunk(out, 3, dim=1)
-
-        offset = torch.tanh(torch.cat((o1, o2), dim=1)) * 10 # max_residue_magnitude
-        offset = offset + flows.flip(1).repeat(1, offset.size(1)//2, 1, 1)
-
-        offset_mean = torch.mean(torch.abs(offset))
-        if offset_mean > 250:
-            print('InsideFlowGuidedDCN: Offset mean is {}, larger than 100.'.format(offset_mean))
-            print('flow mean is {}'.format(torch.abs(flows).mean()))
-            offset = offset.clamp(-50, 50)
-            # return None
-
-        mask = torch.sigmoid(mask)
-        return dcn_v2_conv(input, offset, mask, self.weight, self.bias, self.stride, self.padding,
-                           self.dilation, self.deformable_groups)
-
-
-
-class _DCNv2Pooling(Function):
-    @staticmethod
-    def forward(
-        ctx,
-        input,
-        rois,
-        offset,
-        spatial_scale,
-        pooled_size,
-        output_dim,
-        no_trans,
-        group_size=1,
-        part_size=None,
-        sample_per_part=4,
-        trans_std=0.0,
-    ):
-        ctx.spatial_scale = spatial_scale
-        ctx.no_trans = int(no_trans)
-        ctx.output_dim = output_dim
-        ctx.group_size = group_size
-        ctx.pooled_size = pooled_size
-        ctx.part_size = pooled_size if part_size is None else part_size
-        ctx.sample_per_part = sample_per_part
-        ctx.trans_std = trans_std
-
-        output, output_count = _backend.dcn_v2_psroi_pooling_forward(
+        return deform_conv2d(
             input,
-            rois,
             offset,
-            ctx.no_trans,
-            ctx.spatial_scale,
-            ctx.output_dim,
-            ctx.group_size,
-            ctx.pooled_size,
-            ctx.part_size,
-            ctx.sample_per_part,
-            ctx.trans_std,
-        )
-        ctx.save_for_backward(input, rois, offset, output_count)
-        return output
-
-    @staticmethod
-    @once_differentiable
-    def backward(ctx, grad_output):
-        input, rois, offset, output_count = ctx.saved_tensors
-        grad_input, grad_offset = _backend.dcn_v2_psroi_pooling_backward(
-            grad_output,
-            input,
-            rois,
-            offset,
-            output_count,
-            ctx.no_trans,
-            ctx.spatial_scale,
-            ctx.output_dim,
-            ctx.group_size,
-            ctx.pooled_size,
-            ctx.part_size,
-            ctx.sample_per_part,
-            ctx.trans_std,
-        )
-
-        return grad_input, None, grad_offset, None, None, None, None, None, None, None, None
-
-
-dcn_v2_pooling = _DCNv2Pooling.apply
-
-
-class DCNv2Pooling(nn.Module):
-    def __init__(
-        self,
-        spatial_scale,
-        pooled_size,
-        output_dim,
-        no_trans,
-        group_size=1,
-        part_size=None,
-        sample_per_part=4,
-        trans_std=0.0,
-    ):
-        super(DCNv2Pooling, self).__init__()
-        self.spatial_scale = spatial_scale
-        self.pooled_size = pooled_size
-        self.output_dim = output_dim
-        self.no_trans = no_trans
-        self.group_size = group_size
-        self.part_size = pooled_size if part_size is None else part_size
-        self.sample_per_part = sample_per_part
-        self.trans_std = trans_std
-
-    def forward(self, input, rois, offset):
-        assert input.shape[1] == self.output_dim
-        if self.no_trans:
-            offset = input.new()
-        return dcn_v2_pooling(
-            input,
-            rois,
-            offset,
-            self.spatial_scale,
-            self.pooled_size,
-            self.output_dim,
-            self.no_trans,
-            self.group_size,
-            self.part_size,
-            self.sample_per_part,
-            self.trans_std,
-        )
-
-
-class DCNPooling(DCNv2Pooling):
-    def __init__(
-        self,
-        spatial_scale,
-        pooled_size,
-        output_dim,
-        no_trans,
-        group_size=1,
-        part_size=None,
-        sample_per_part=4,
-        trans_std=0.0,
-        deform_fc_dim=1024,
-    ):
-        super(DCNPooling, self).__init__(
-            spatial_scale,
-            pooled_size,
-            output_dim,
-            no_trans,
-            group_size,
-            part_size,
-            sample_per_part,
-            trans_std,
-        )
-
-        self.deform_fc_dim = deform_fc_dim
-
-        if not no_trans:
-            self.offset_mask_fc = nn.Sequential(
-                nn.Linear(
-                    self.pooled_size * self.pooled_size * self.output_dim, self.deform_fc_dim
-                ),
-                nn.ReLU(inplace=True),
-                nn.Linear(self.deform_fc_dim, self.deform_fc_dim),
-                nn.ReLU(inplace=True),
-                nn.Linear(self.deform_fc_dim, self.pooled_size * self.pooled_size * 3),
-            )
-            self.offset_mask_fc[4].weight.data.zero_()
-            self.offset_mask_fc[4].bias.data.zero_()
-
-    def forward(self, input, rois):
-        offset = input.new()
-
-        if not self.no_trans:
-
-            # do roi_align first
-            n = rois.shape[0]
-            roi = dcn_v2_pooling(
-                input,
-                rois,
-                offset,
-                self.spatial_scale,
-                self.pooled_size,
-                self.output_dim,
-                True,  # no trans
-                self.group_size,
-                self.part_size,
-                self.sample_per_part,
-                self.trans_std,
-            )
-
-            # build mask and offset
-            offset_mask = self.offset_mask_fc(roi.view(n, -1))
-            offset_mask = offset_mask.view(n, 3, self.pooled_size, self.pooled_size)
-            o1, o2, mask = torch.chunk(offset_mask, 3, dim=1)
-            offset = torch.cat((o1, o2), dim=1)
-            mask = torch.sigmoid(mask)
-
-            # do pooling with offset and mask
-            return (
-                dcn_v2_pooling(
-                    input,
-                    rois,
-                    offset,
-                    self.spatial_scale,
-                    self.pooled_size,
-                    self.output_dim,
-                    self.no_trans,
-                    self.group_size,
-                    self.part_size,
-                    self.sample_per_part,
-                    self.trans_std,
-                )
-                * mask
-            )
-        # only roi_align
-        return dcn_v2_pooling(
-            input,
-            rois,
-            offset,
-            self.spatial_scale,
-            self.pooled_size,
-            self.output_dim,
-            self.no_trans,
-            self.group_size,
-            self.part_size,
-            self.sample_per_part,
-            self.trans_std,
+            self.weight,
+            self.groups,
+            self.bias,
+            self.stride,
+            self.padding,
+            self.dilation,
+            mask,
         )

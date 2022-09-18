@@ -8,8 +8,8 @@ dependencies:
   - pip==22.2.2
 
   # Pulls in cudatoolkit
-  - pytorch==1.11.0=py3.7_cuda11.5_cudnn8.3.2_0
-  - torchvision
+  - pytorch==1.12.1=py3.7_cuda11.6_cudnn8.3.2_0
+  - torchvision==0.13.1=py37_cu116
 
   # For DCNv2
   - ninja==1.11.0
@@ -30,4 +30,3 @@ dependencies:
     - torchsummaryX
     - pytorch-msssim
     - lpips
-    - -e git+https://github.com/lbin/DCNv2.git@pytorch_1.11#egg=DCNv2
