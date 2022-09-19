@@ -20,10 +20,16 @@ class ZurichRAW2RGB(torch.utils.data.Dataset):
         self.image_list = self._get_image_list(split)
 
     def _get_image_list(self, split):
+        # if split == 'train':
+        #     image_list = ['{:d}.jpg'.format(i) for i in range(46839)]
+        # elif split == 'test':
+        #     image_list = ['{:d}.jpg'.format(i) for i in range(1200)]
+        # else:
+        #     raise Exception
         if split == 'train':
-            image_list = ['{:d}.jpg'.format(i) for i in range(46839)]
+            image_list = ['{:d}.jpg'.format(i) for i in range(0, 5000)]
         elif split == 'test':
-            image_list = ['{:d}.jpg'.format(i) for i in range(1200)]
+            image_list = ['{:d}.jpg'.format(i) for i in range(45000, 46839)]
         else:
             raise Exception
 

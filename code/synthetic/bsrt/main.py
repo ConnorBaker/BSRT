@@ -55,9 +55,9 @@ def main_worker(local_rank, nprocs, args):
         train_zurich_raw2rgb = ZurichRAW2RGB(root=args.root, split='train')
         train_data = SyntheticBurst(train_zurich_raw2rgb, burst_size=args.burst_size, crop_sz=args.patch_size)
 
-        # valid_zurich_raw2rgb = ZurichRAW2RGB(root=args.root, split='test')
-        # valid_data = SyntheticBurst(valid_zurich_raw2rgb, burst_size=14, crop_sz=1024)
-        valid_data = SyntheticBurstVal(root=args.root)
+        valid_zurich_raw2rgb = ZurichRAW2RGB(root=args.root, split='test')
+        valid_data = SyntheticBurst(valid_zurich_raw2rgb, burst_size=14, crop_sz=1024)
+        # valid_data = SyntheticBurstVal(root=args.root)
 
         if local_rank <= 0:
             print(f"train data: {len(train_data)}, test data: {len(valid_data)}")
