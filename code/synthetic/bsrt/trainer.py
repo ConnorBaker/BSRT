@@ -1,8 +1,8 @@
-import os, sys
+import os
+import sys
 from decimal import Decimal
 import cv2
 import utility
-import random
 
 import torch
 from tensorboardX import SummaryWriter
@@ -10,32 +10,33 @@ from tensorboardX import SummaryWriter
 from utils.postprocessing_functions import SimplePostProcess
 from utils.data_format_utils import convert_dict
 from utils.metrics import PSNR, L1, L2, CharbonnierLoss, MSSSIMLoss
-from datasets.burstsr_dataset import pack_raw_image, flatten_raw_image_batch, pack_raw_image_batch
-from data_processing.camera_pipeline import demosaic
+
+# from datasets.burstsr_dataset import pack_raw_image, flatten_raw_image_batch, pack_raw_image_batch
+# from data_processing.camera_pipeline import demosaic
 from tqdm import tqdm
 import time
 
 from torch.cuda.amp import autocast as autocast, GradScaler
 
-train_log_dir = '../train_log/'
+train_log_dir = "../train_log/"
 
-exp_name = os.path.dirname(os.path.abspath(__file__)).split('/')[-1]
+exp_name = os.path.dirname(os.path.abspath(__file__)).split("/")[-1]
 tfboard_name = exp_name + "_"
 exp_train_log_dir = os.path.join(train_log_dir, exp_name)
 
-LOG_DIR = os.path.join(exp_train_log_dir, 'logs')
+LOG_DIR = os.path.join(exp_train_log_dir, "logs")
 
 # save img path
-IMG_SAVE_DIR = os.path.join(exp_train_log_dir, 'img_log')
+IMG_SAVE_DIR = os.path.join(exp_train_log_dir, "img_log")
 # Where to load model
-LOAD_MODEL_DIR = os.path.join(exp_train_log_dir, 'models')
+LOAD_MODEL_DIR = os.path.join(exp_train_log_dir, "models")
 # Where to save new model
-SAVE_MODEL_DIR = os.path.join(exp_train_log_dir, 'real_models')
+SAVE_MODEL_DIR = os.path.join(exp_train_log_dir, "real_models")
 
-SAVE_STATE_DIR = os.path.join(exp_train_log_dir, 'training_states')
+SAVE_STATE_DIR = os.path.join(exp_train_log_dir, "training_states")
 
 # Where to save visualization images (for report)
-RESULTS_DIR = os.path.join(exp_train_log_dir, 'report')
+RESULTS_DIR = os.path.join(exp_train_log_dir, "report")
 
 # print(SAVE_STATE_DIR)
 utility.mkdir(SAVE_STATE_DIR)
@@ -44,8 +45,10 @@ utility.mkdir(IMG_SAVE_DIR)
 utility.mkdir(LOG_DIR)
 
 
-class Trainer():
-    def __init__(self, args, train_loader, train_sampler, valid_loader, my_model, my_loss, ckp):
+class Trainer:
+    def __init__(
+        self, args, train_loader, train_sampler, valid_loader, my_model, my_loss, ckp
+    ):
         self.args = args
         self.scale = args.scale[0]
 
@@ -71,20 +74,25 @@ class Trainer():
         # Postprocessing function to obtain sRGB images
         self.postprocess_fn = SimplePostProcess(return_np=True)
 
-        if 'L1' in args.loss:
+        if "L1" in args.loss:
             self.aligned_loss = L1(boundary_ignore=None).cuda(args.local_rank)
-        elif 'MSE' in args.loss:
+        elif "MSE" in args.loss:
             self.aligned_loss = L2(boundary_ignore=None).cuda(args.local_rank)
-        elif 'CB' in args.loss:
-            self.aligned_loss = CharbonnierLoss(boundary_ignore=None).cuda(args.local_rank)
-        elif 'MSSSIM' in args.loss:
+        elif "CB" in args.loss:
+            self.aligned_loss = CharbonnierLoss(boundary_ignore=None).cuda(
+                args.local_rank
+            )
+        elif "MSSSIM" in args.loss:
             self.aligned_loss = MSSSIMLoss(boundary_ignore=None).cuda(args.local_rank)
 
         if self.args.fp16:
             self.scaler = GradScaler()
 
-        self.best_psnr = 0.
+        self.best_psnr = 0.0
         self.best_epoch = 0
+
+        if self.args.load != "":
+            self.optimizer.load(self.save_state_dir, epoch=int(self.args.load))
 
         self.error_last = 1e8
         self.glob_iter = 0
@@ -99,21 +107,17 @@ class Trainer():
 
         # Where to save visualization images (for report)
         self.results_dir = RESULTS_DIR + "/" + args.save
-
-        if self.args.load != '':
-            self.optimizer.load(self.save_state_dir, epoch=int(self.args.load))
+        self.writer = SummaryWriter(log_dir=self.log_dir)
 
         utility.mkdir(self.save_state_dir)
         utility.mkdir(self.save_model_dir)
         utility.mkdir(self.img_save_dir)
         utility.mkdir(self.log_dir)
-        utility.mkdir('frames')
+        utility.mkdir("frames")
 
-        # self.writer = SummaryWriter(log_dir=self.log_dir)
         if self.args.local_rank <= 0:
             number_parameters = sum(map(lambda x: x.numel(), self.model.parameters()))
             print("number of parameters: ", number_parameters)
-
 
     def train(self):
         self.loss.step()
@@ -122,9 +126,9 @@ class Trainer():
 
         if self.train_sampler:
             self.train_sampler.set_epoch(epoch)
-        if epoch % 200 == 0:
+        if epoch % 100 == 0:
             self.ckp.write_log(
-                '[Epoch {}]\tLearning rate: {:.2e}'.format(epoch, Decimal(lr))
+                "[Epoch {}]\tLearning rate: {:.2e}".format(epoch, Decimal(lr))
             )
         self.loss.start_log()
 
@@ -132,48 +136,56 @@ class Trainer():
         if self.args.pre_train == "":
             if self.fix_unflagged and epoch < self.fix_epoch:
                 if self.args.local_rank <= 0:
-                    print(f'Fix keys: {self.fix_keys} for the first {self.fix_epoch} epochs.')
+                    print(
+                        f"Fix keys: {self.fix_keys} for the first {self.fix_epoch} epochs."
+                    )
                 self.fix_unflagged = False
                 for name, param in self.model.named_parameters():
                     if any([key in name for key in self.fix_keys]):
                         param.requires_grad_(False)
             elif epoch == self.fix_epoch:
                 if self.args.local_rank <= 0:
-                    print(f'Train all the parameters from {self.fix_epoch} epochs.')
+                    print(f"Train all the parameters from {self.fix_epoch} epochs.")
                 self.model.requires_grad_(True)
 
         # self.test()
         self.model.train()
-        if self.args.local_rank == 0:
-            timer_data, timer_model, timer_epoch = utility.timer(), utility.timer(), utility.timer()
+        if self.args.local_rank <= 0:
+            timer_data, timer_model, timer_epoch = (
+                utility.timer(),
+                utility.timer(),
+                utility.timer(),
+            )
             timer_epoch.tic()
-        
+
         for batch, batch_value in enumerate(self.loader_train):
 
             burst, gt, flow_vectors, meta_info = batch_value
-
             burst, gt, flow_vectors = self.prepare(burst, gt, flow_vectors)
             # burst = flatten_raw_image_batch(burst)
-            if self.args.local_rank == 0:
+
+            if self.args.local_rank <= 0:
                 timer_data.hold()
                 timer_model.tic()
 
             if self.args.fp16:
                 with autocast():
-                    sr = self.model(burst, 0)
-                    loss = self.aligned_loss(sr, gt)
+                    sr = self.model(burst, 0).float()
+
             else:
                 sr = self.model(burst, 0)
-                loss = self.aligned_loss(sr, gt)
+
+            loss = self.aligned_loss(sr, gt)
 
             if self.args.n_GPUs > 1:
                 torch.distributed.barrier()
                 reduced_loss = utility.reduce_mean(loss, self.args.n_GPUs)
+
             else:
                 reduced_loss = loss
 
             self.optimizer.zero_grad()
-            
+
             if self.args.fp16:
                 self.scaler.scale(loss).backward()
                 # torch.nn.utils.clip_grad_value_(self.model.parameters(), .02)
@@ -181,7 +193,9 @@ class Trainer():
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
                 else:
-                    print(f'Nan num: {torch.isnan(sr).sum()}, inf num: {torch.isinf(sr).sum()}')
+                    print(
+                        f"Nan num: {torch.isnan(sr).sum()}, inf num: {torch.isinf(sr).sum()}"
+                    )
                     reduced_loss = None
                     os._exit(0)
                     sys.exit(0)
@@ -191,36 +205,48 @@ class Trainer():
                 if torch.isinf(sr).sum() + torch.isnan(sr).sum() <= 0:
                     self.optimizer.step()
                 else:
-                    print(f'Nan num: {torch.isnan(sr).sum()}, inf num: {torch.isinf(sr).sum()}')
+                    print(
+                        f"Nan num: {torch.isnan(sr).sum()}, inf num: {torch.isinf(sr).sum()}"
+                    )
                     reduced_loss = None
 
-            if self.args.local_rank == 0:
+            if self.args.local_rank <= 0:
                 timer_model.hold()
+                if batch % 10 == 0:
+                    self.writer.add_scalars(
+                        "Loss",
+                        {tfboard_name + "_mse_L1": reduced_loss.detach().cpu().numpy()},
+                        self.glob_iter,
+                    )
+
                 if (batch + 1) % self.args.print_every == 0:
-                    self.ckp.write_log('[{}/{}]\t[{:.4f}]\t{:.1f}+{:.1f}s'.format(
-                        (batch + 1) * self.args.batch_size,
-                        len(self.loader_train.dataset),
-                        reduced_loss.item(),
-                        timer_model.release(),
-                        timer_data.release()))
+                    self.ckp.write_log(
+                        "[{}/{}]\t[{:.4f}]\t{:.1f}+{:.1f}s".format(
+                            (batch + 1) * self.args.batch_size,
+                            len(self.loader_train.dataset),
+                            reduced_loss.item(),
+                            timer_model.release(),
+                            timer_data.release(),
+                        )
+                    )
 
                 self.glob_iter += 1
                 timer_data.tic()
 
-            if self.args.local_rank <= 0 and (batch + 1) % 2000 == 0:
+            if self.args.local_rank <= 0 and (batch + 1) % 200 == 0:
                 if not self.args.test_only:
-                    filename = exp_name + '_latest' + '.pth'
+                    filename = exp_name + "_latest" + ".pth"
                     self.save_model(filename)
 
         if self.args.local_rank <= 0:
             timer_epoch.hold()
-            print('Epoch {} cost time: {:.1f}s, lr: {:5f}'.format(epoch, timer_epoch.release(), lr))
-            if (epoch) % 1 == 0 and not self.args.test_only:
-                filename = exp_name + '_epoch_' + str(epoch) + '.pth'
-                self.save_model(filename)
-
+            print(
+                "Epoch {} cost time: {:.1f}s, lr: {:5f}".format(
+                    epoch, timer_epoch.release(), lr
+                )
+            )
             if not self.args.test_only:
-                filename = exp_name + '_latest' + '.pth'
+                filename = exp_name + "_epoch_" + str(epoch) + ".pth"
                 self.save_model(filename)
 
         torch.cuda.synchronize()
@@ -231,7 +257,7 @@ class Trainer():
         self.optimizer.schedule()
 
     def test(self, print_time=False):
-
+        torch.set_grad_enabled(False)
 
         def ttaup(burst):
             # burst0 = flatten_raw_image_batch(burst) # B, T, C, H, W
@@ -246,93 +272,103 @@ class Trainer():
             out = burst0
             return out
 
-        torch.set_grad_enabled(False)
-
         epoch = self.optimizer.get_last_epoch() + 1
         self.model.eval()
-        if self.args.local_rank == 0:
+        if self.args.local_rank <= 0:
+            print("Testing...")
             timer_test = utility.timer()
-        if epoch == 1 or epoch % 1 == 0:
-            self.model.eval()
-            total_psnr = 0
-            total_ssim = 0
-            total_lpips = 0
-            count = 0
-            if self.args.local_rank <= 0:
-                print("Testing...")
-            for i, batch_value in enumerate(self.loader_valid):
-                burst_, gt, meta_info = batch_value
-                burst_, gt = self.prepare(burst_, gt)
 
-                bursts = ttaup(burst_)
+        self.model.eval()
+        total_psnr = 0
+        total_ssim = 0
+        total_lpips = 0
+        count = 0
+        for i, batch_value in tqdm(enumerate(self.loader_valid)):
 
-                # burst_ = flatten_raw_image_batch(burst_)
-                if print_time and self.args.local_rank <= 0:
-                    tic = time.time()
-                with torch.no_grad():
-                    srs = []
-                    for burst in bursts:
-                        if self.args.fp16:
-                            with autocast():
-                                sr = self.model(burst, 0).float()
-                        else:
-                            sr = self.model(burst, 0).float()
-                        srs.append(sr)
-                    sr = ttadown(srs)
+            burst, gt, flow_vectors, meta_info = batch_value
+            burst, gt = self.prepare(burst, gt)
 
-                if print_time and self.args.local_rank <= 0:
-                    toc = time.time()
-                    print(f'model pass time: {toc-tic:.4f}')
+            # burst = flatten_raw_image_batch(burst)
 
-                psnr_score, ssim_score, lpips_score = self.psnr_fn(sr, gt)
+            bursts = ttaup(burst)
 
-                if self.args.n_GPUs > 1:
-                    torch.distributed.barrier()
-                    psnr_score = utility.reduce_mean(psnr_score, self.args.n_GPUs)
-                    ssim_score = utility.reduce_mean(ssim_score, self.args.n_GPUs)
-                    lpips_score = utility.reduce_mean(lpips_score, self.args.n_GPUs)
+            if print_time and self.args.local_rank <= 0:
+                tic = time.time()
+            with torch.no_grad():
+                srs = []
+                for b in bursts:
+                    if self.args.fp16:
+                        with autocast():
+                            sr = self.model(b, 0).float()
+                    else:
+                        sr = self.model(b, 0).float()
+                    srs.append(sr)
+                sr = ttadown(srs)
 
-                total_psnr += psnr_score
-                total_ssim += ssim_score
-                total_lpips += lpips_score
-                count += 1
+            if print_time and self.args.local_rank <= 0:
+                toc = time.time()
+                print(f"model pass time: {toc-tic:.4f}")
 
-            total_psnr = total_psnr / count
-            total_ssim = total_ssim / count
-            total_lpips = total_lpips / count
-            if self.args.local_rank == 0:
-                print("[Epoch: {}][PSNR: {:.4f}][SSIM: {:.4f}][LPIPS: {:.4f}][Best PSNR: {:.4f}][Best Epoch: {}]"
-                    .format(epoch, total_psnr, total_ssim, total_lpips, self.best_psnr, self.best_epoch))
-                if epoch > 1 and total_psnr > self.best_psnr:
-                    self.best_psnr = total_psnr
-                    self.best_epoch = epoch
-                    filename = exp_name + '_best_epoch.pth'
-                    self.save_model(filename)
-                # self.writer.add_scalars('PSNR', {tfboard_name + '_PSNR': total_psnr}, self.glob_iter)
+            psnr_score, ssim_score, lpips_score = self.psnr_fn(sr, gt)
 
-                print('Forward: {:.2f}s\n'.format(timer_test.toc()))
+            if self.args.n_GPUs > 1:
+                torch.distributed.barrier()
+                psnr_score = utility.reduce_mean(psnr_score, self.args.n_GPUs)
+                ssim_score = utility.reduce_mean(ssim_score, self.args.n_GPUs)
+                lpips_score = utility.reduce_mean(lpips_score, self.args.n_GPUs)
+
+            total_psnr += psnr_score
+            total_ssim += ssim_score
+            total_lpips += lpips_score
+            count += 1
+
+        total_psnr = total_psnr / count
+        total_ssim = total_ssim / count
+        total_lpips = total_lpips / count
+        if self.args.local_rank <= 0:
+            print(
+                "[Epoch: {}]\n[PSNR: {:.4f}][SSIM: {:.4f}][LPIPS: {:.4f}][Best PSNR: {:.4f}][Best Epoch: {}]".format(
+                    epoch,
+                    total_psnr,
+                    total_ssim,
+                    total_lpips,
+                    self.best_psnr,
+                    self.best_epoch,
+                )
+            )
+            if epoch >= 1 and total_psnr > self.best_psnr:
+                self.best_psnr = total_psnr
+                self.best_epoch = epoch
+                filename = exp_name + "_best_epoch.pth"
+                self.save_model(filename)
+            self.writer.add_scalars(
+                "PSNR", {tfboard_name + "_PSNR": total_psnr}, self.glob_iter
+            )
+
+            print("Forward: {:.2f}s\n".format(timer_test.toc()))
 
         torch.cuda.synchronize()
         torch.set_grad_enabled(True)
         torch.cuda.empty_cache()
 
     def save_model(self, filename):
-        print('save model...')
+        print("save model...")
         net_save_path = os.path.join(self.save_model_dir, filename)
 
         model = self.model.model
         if self.args.n_GPUs > 1:
             model = model.module
 
-        # self.optimizer.save(self.save_state_dir)
         torch.save(model.state_dict(), net_save_path)
 
-
     def prepare(self, *args):
-        device = torch.device('cpu' if self.args.cpu else 'cuda:{}'.format(self.args.local_rank))
+        device = torch.device(
+            "cpu" if self.args.cpu else "cuda:{}".format(self.args.local_rank)
+        )
 
         def _prepare(tensor):
-            if self.args.precision == 'half': tensor = tensor.half()
+            if self.args.precision == "half":
+                tensor = tensor.half()
             return tensor.to(device)
 
         # print(_prepare(args[0]).device)
