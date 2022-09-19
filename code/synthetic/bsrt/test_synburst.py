@@ -93,21 +93,21 @@ def main_worker(local_rank, nprocs, args):
         lpipss.append(lpips.item())
 
 
-        # lrs = burst_[0]
-        # os.makedirs(f'{out_dir}/{name}', exist_ok=True)
-        # for i, lr in enumerate(lrs):
-        #     # print(lr[[0, 1, 3],...].shape)
-        #     lr = postprocess_fn.process(lr[[0, 1, 3],...], meta_info)
-        #     lr = cv2.cvtColor(lr, cv2.COLOR_RGB2BGR)
-        #     cv2.imwrite('{}/{}/{:2d}.png'.format(out_dir, name, i), lr)
+        lrs = burst_[0]
+        os.makedirs(f'{out_dir}/{name}', exist_ok=True)
+        for i, lr in enumerate(lrs):
+            # print(lr[[0, 1, 3],...].shape)
+            lr = postprocess_fn.process(lr[[0, 1, 3],...], meta_info)
+            lr = cv2.cvtColor(lr, cv2.COLOR_RGB2BGR)
+            cv2.imwrite('{}/{}/{:2d}.png'.format(out_dir, name, i), lr)
 
-        # gt = postprocess_fn.process(gt[0], meta_info)
-        # gt = cv2.cvtColor(gt, cv2.COLOR_RGB2BGR)
-        # cv2.imwrite('{}/{}_gt.png'.format(out_dir, name), gt)
+        gt = postprocess_fn.process(gt[0], meta_info)
+        gt = cv2.cvtColor(gt, cv2.COLOR_RGB2BGR)
+        cv2.imwrite('{}/{}_gt.png'.format(out_dir, name), gt)
 
-        # sr_ = postprocess_fn.process(sr[0], meta_info)
-        # sr_ = cv2.cvtColor(sr_, cv2.COLOR_RGB2BGR)
-        # cv2.imwrite('{}/{}_bsrt.png'.format(out_dir, name), sr_)
+        sr_ = postprocess_fn.process(sr[0], meta_info)
+        sr_ = cv2.cvtColor(sr_, cv2.COLOR_RGB2BGR)
+        cv2.imwrite('{}/{}_bsrt.png'.format(out_dir, name), sr_)
 
         del burst_
         del sr

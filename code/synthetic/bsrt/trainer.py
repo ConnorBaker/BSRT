@@ -285,7 +285,7 @@ class Trainer:
         count = 0
         for i, batch_value in tqdm(enumerate(self.loader_valid)):
 
-            burst, gt, flow_vectors, meta_info = batch_value
+            burst, gt, meta_info = batch_value
             burst, gt = self.prepare(burst, gt)
 
             # burst = flatten_raw_image_batch(burst)
