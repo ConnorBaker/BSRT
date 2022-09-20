@@ -1,4 +1,4 @@
-name: bsrt-real
+name: bsrt
 channels:
   - conda-forge
   - pytorch
@@ -10,11 +10,6 @@ dependencies:
   # Pulls in cudatoolkit
   - pytorch==1.12.1=py3.7_cuda11.6_cudnn8.3.2_0
   - torchvision==0.13.1=py37_cu116
-
-  # For DCNv2
-  - ninja==1.11.0
-  - cupy
-  - cuda-nvcc
 
   # Used to be installed by pip
   - matplotlib
