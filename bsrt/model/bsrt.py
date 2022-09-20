@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import model.arch_util as arch_util
 from torch.cuda.amp.autocast_mode import autocast
 import model.swin_util as swu
-from spynet_util import SpyNet
+from model.spynet_util import SpyNet
 from model.non_local.non_local_cross_dot_product import NONLocalBlock2D as NonLocalCross
 from model.non_local.non_local_dot_product import NONLocalBlock2D as NonLocal
 from model.DCNv2.dcn_v2 import DCN_sep as DCN, FlowGuidedDCN
