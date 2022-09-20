@@ -2,6 +2,8 @@ import os
 from importlib import import_module
 
 import matplotlib
+
+from option import Config
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
@@ -12,15 +14,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class Loss(nn.modules.loss._Loss):
-    def __init__(self, args, ckp):
+    def __init__(self, config: Config, ckp):
         super(Loss, self).__init__()
-        if args.local_rank == 0:
+        if config.local_rank == 0:
             print('Preparing loss function:')
 
-        self.n_GPUs = args.n_GPUs
+        self.n_GPUs = config.n_GPUs
         self.loss = []
         self.loss_module = nn.ModuleList()
-        for loss in args.loss.split('+'):
+        for loss in config.loss.split('+'):
             weight, loss_type = loss.split('*')
             if loss_type == 'MSE':
                 loss_function = nn.MSELoss()
@@ -30,23 +32,23 @@ class Loss(nn.modules.loss._Loss):
                 module = import_module('loss.vgg')
                 loss_function = getattr(module, 'VGG')(
                     loss_type[3:],
-                    rgb_range=args.rgb_range
+                    rgb_range=config.rgb_range
                 )
             elif loss_type.find('GAN') >= 0:
                 module = import_module('loss.adversarial')
                 loss_function = getattr(module, 'Adversarial')(
-                    args,
+                    config,
                     loss_type
                 )
             elif loss_type == 'FILTER':
                 module = import_module('loss.filter')
-                loss_function = getattr(module, 'Filter')(args)
+                loss_function = getattr(module, 'Filter')(config)
             elif loss_type == 'SSIM':
                 module = import_module('loss.mssim')
-                loss_function = getattr(module, 'SSIM')(args)
+                loss_function = getattr(module, 'SSIM')(config)
             elif loss_type == 'MSSSIM':
                 module = import_module('loss.mssim')
-                loss_function = getattr(module, 'MSSSIM')(args)
+                loss_function = getattr(module, 'MSSSIM')(config)
 
             self.loss.append({
                 'type': loss_type,
@@ -61,21 +63,21 @@ class Loss(nn.modules.loss._Loss):
 
         for l in self.loss:
             if l['function'] is not None:
-                if args.local_rank == 0:
+                if config.local_rank == 0:
                     print('{:.3f} * {}'.format(l['weight'], l['type']))
                 self.loss_module.append(l['function'])
 
         self.log = torch.Tensor()
 
-        device = torch.device('cpu' if args.cpu else 'cuda')
+        device = torch.device('cpu' if config.cpu else 'cuda')
         self.loss_module.to(device)
-        if args.precision == 'half': self.loss_module.half()
-        if not args.cpu and args.n_GPUs > 1:
+        if config.precision == 'half': self.loss_module.half()
+        if not config.cpu and config.n_GPUs > 1:
             self.loss_module = nn.DataParallel(
-                self.loss_module, range(args.n_GPUs)
+                self.loss_module, range(config.n_GPUs)
             )
 
-        if args.load != '': self.load(ckp.dir, cpu=args.cpu)
+        if config.load != '': self.load(ckp.dir, cpu=config.cpu)
 
     def forward(self, sr, hr):
         losses = []

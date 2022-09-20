@@ -1,3 +1,4 @@
+from bsrt.option import Config
 import utility
 from types import SimpleNamespace
 
@@ -10,11 +11,11 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 class Adversarial(nn.Module):
-    def __init__(self, args, gan_type):
+    def __init__(self, config: Config, gan_type):
         super(Adversarial, self).__init__()
         self.gan_type = gan_type
-        self.gan_k = args.gan_k
-        self.dis = discriminator.Discriminator(args)
+        self.gan_k = config.gan_k
+        self.dis = discriminator.Discriminator(config)
         # if gan_type == 'WGAN_GP':
         if True:
             # see https://arxiv.org/pdf/1704.00028.pdf pp.4
@@ -23,13 +24,13 @@ class Adversarial(nn.Module):
                 'betas': (0.5, 0.9),
                 'epsilon': 1e-8,
                 'lr': 1e-5,
-                'weight_decay': args.weight_decay,
-                'decay': args.decay,
-                'gamma': args.gamma
+                'weight_decay': config.weight_decay,
+                'decay': config.decay,
+                'gamma': config.gamma
             }
             optim_args = SimpleNamespace(**optim_dict)
         else:
-            optim_args = args
+            optim_args = config
 
         self.optimizer = utility.make_optimizer(optim_args, self.dis)
 

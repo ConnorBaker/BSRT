@@ -2,6 +2,7 @@ name: bsrt
 channels:
   - conda-forge
   - pytorch
+  - fastai
 dependencies:
   - python=3.7
   - pip==22.2.2
@@ -9,11 +10,12 @@ dependencies:
   - pytorch==1.12.1=py3.7_cuda11.6_cudnn8.3.2_0
   - torchvision==0.13.1=py37_cu116
   - pytorch-lightning==1.7.6
+  - torchmetrics==0.9.3
   - cupy==11.1.0
 
   - matplotlib
   - imageio
-  - opencv
+  - opencv-python-headless
   - tensorboardx
   - tqdm
   - timm
@@ -22,5 +24,3 @@ dependencies:
 
   - pip:
     - torchsummaryX
-    - pytorch-msssim
-    - lpips

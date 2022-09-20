@@ -1,23 +1,24 @@
 import math
+from typing import Optional
 import torch
+from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
 import utils.spatial_color_alignment as sca_utils
 from utils.spatial_color_alignment import get_gaussian_kernel, match_colors
 from utils.warp import warp
 from loss.Charbonnier import CharbonnierLoss as CBLoss
-from loss.mssim import MSSSIM
-from pytorch_msssim import ssim
-import lpips
-
+from typing import Tuple
+from torchmetrics.image.ssim import MultiScaleStructuralSimilarityIndexMeasure as MSSSIM, StructuralSimilarityIndexMeasure as SSIM
+from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity as LPIPS
 
 class MSSSIMLoss(nn.Module):
-    def __init__(self, boundary_ignore=None):
+    def __init__(self, boundary_ignore: Optional[int]=None):
         super().__init__()
         self.boundary_ignore = boundary_ignore
         self.msssim = MSSSIM()
 
-    def forward(self, pred, gt, valid=None):
+    def forward(self, pred: Tensor, gt: Tensor) -> Tensor: # type: ignore
         if self.boundary_ignore is not None:
             pred = pred[
                 ...,
@@ -30,21 +31,18 @@ class MSSSIMLoss(nn.Module):
                 self.boundary_ignore : -self.boundary_ignore,
             ]
 
-        pred_m = pred
-        gt_m = gt
-
-        loss = self.msssim(pred_m, gt_m)
+        loss = self.msssim(pred, gt)
 
         return loss
 
 
 class CharbonnierLoss(nn.Module):
-    def __init__(self, boundary_ignore=None):
+    def __init__(self, boundary_ignore: Optional[int]=None):
         super().__init__()
         self.boundary_ignore = boundary_ignore
         self.charbonnier_loss = CBLoss(reduce=True)
 
-    def forward(self, pred, gt, valid=None):
+    def forward(self, pred: Tensor, gt: Tensor) -> Tensor: # type: ignore
         if self.boundary_ignore is not None:
             pred = pred[
                 ...,
@@ -57,20 +55,17 @@ class CharbonnierLoss(nn.Module):
                 self.boundary_ignore : -self.boundary_ignore,
             ]
 
-        pred_m = pred
-        gt_m = gt
-
-        loss = self.charbonnier_loss(pred_m, gt_m)
+        loss = self.charbonnier_loss(pred, gt)
 
         return loss
 
 
 class L1(nn.Module):
-    def __init__(self, boundary_ignore=None):
+    def __init__(self, boundary_ignore: Optional[int]=None):
         super().__init__()
         self.boundary_ignore = boundary_ignore
 
-    def forward(self, pred, gt, valid=None):
+    def forward(self, pred: Tensor, gt: Tensor, valid: Optional[Tensor]=None) -> Tensor: # type: ignore
         if self.boundary_ignore is not None:
             pred = pred[
                 ...,
@@ -90,13 +85,10 @@ class L1(nn.Module):
                     self.boundary_ignore : -self.boundary_ignore,
                 ]
 
-        pred_m = pred
-        gt_m = gt
-
         if valid is None:
-            mse = F.l1_loss(pred_m, gt_m)
+            mse = F.l1_loss(pred, gt)
         else:
-            mse = F.l1_loss(pred_m, gt_m, reduction="none")
+            mse = F.l1_loss(pred, gt, reduction="none")
 
             eps = 1e-12
             elem_ratio = mse.numel() / valid.numel()
@@ -106,12 +98,13 @@ class L1(nn.Module):
 
 
 class L2(nn.Module):
-    def __init__(self, boundary_ignore=None):
+    def __init__(self, boundary_ignore: Optional[int]=None):
         super().__init__()
         self.boundary_ignore = boundary_ignore
-        self.loss_fn = lpips.LPIPS(net="alex").cuda()
+        self.ssim = SSIM()
+        self.loss_fn = LPIPS(net="alex").cuda()
 
-    def forward(self, pred, gt, valid=None):
+    def forward(self, pred: Tensor, gt: Tensor, valid: Optional[Tensor]=None) -> Tuple[Tensor, Tensor, Tensor]: # type: ignore
         if self.boundary_ignore is not None:
             pred = pred[
                 ...,
@@ -131,28 +124,25 @@ class L2(nn.Module):
                     self.boundary_ignore : -self.boundary_ignore,
                 ]
 
-        pred_m = pred
-        gt_m = gt
-
         if valid is None:
-            mse = F.mse_loss(pred_m, gt_m)
+            mse = F.mse_loss(pred, gt)
         else:
-            mse = F.mse_loss(pred_m, gt_m, reduction="none")
+            mse = F.mse_loss(pred, gt, reduction="none")
 
             eps = 1e-12
             elem_ratio = mse.numel() / valid.numel()
             mse = (mse * valid.float()).sum() / (valid.float().sum() * elem_ratio + eps)
 
-        ss = ssim(
-            pred_m.contiguous(), gt_m.contiguous(), data_range=1.0, size_average=True
+        ss = self.ssim(
+            pred.contiguous(), gt.contiguous(), data_range=1.0, size_average=True
         )
-        lp = self.loss_fn(pred_m.contiguous(), gt_m.contiguous()).squeeze()
+        lp = self.loss_fn(pred.contiguous(), gt.contiguous()).squeeze()
 
         return mse, ss, lp
 
 
 class PSNR(nn.Module):
-    def __init__(self, boundary_ignore=None, max_value=1.0):
+    def __init__(self, boundary_ignore: Optional[int]=None, max_value: float=1.0):
         super().__init__()
         self.l2 = L2(boundary_ignore=boundary_ignore)
         self.max_value = max_value
@@ -268,7 +258,8 @@ class AlignedL2(nn.Module):
         self.sr_factor = sr_factor
         self.boundary_ignore = boundary_ignore
         self.alignment_net = alignment_net
-        self.loss_fn = lpips.LPIPS(net="alex").cuda()
+        self.loss_fn = LPIPS(net="alex").cuda()
+        self.ssim = SSIM()
 
         self.gauss_kernel, self.ksz = sca_utils.get_gaussian_kernel(sd=1.5)
 
@@ -338,7 +329,7 @@ class AlignedL2(nn.Module):
         elem_ratio = mse.numel() / valid.numel()
         mse = (mse * valid.float()).sum() / (valid.float().sum() * elem_ratio + eps)
 
-        ss = ssim(
+        ss = self.ssim(
             pred_warped_m.contiguous(),
             gt.contiguous(),
             data_range=1.0,
@@ -387,6 +378,7 @@ class AlignedSSIM(nn.Module):
         self.sr_factor = sr_factor
         self.boundary_ignore = boundary_ignore
         self.alignment_net = alignment_net
+        self.ssim = SSIM()
 
         self.gauss_kernel, self.ksz = sca_utils.get_gaussian_kernel(sd=1.5)
 
@@ -450,7 +442,7 @@ class AlignedSSIM(nn.Module):
             ]
 
         # Estimate MSE
-        mse = ssim(
+        mse = self.ssim(
             pred_warped_m.contiguous(),
             gt.contiguous(),
             data_range=1.0,
@@ -478,7 +470,7 @@ class AlignedLPIPS(nn.Module):
         self.sr_factor = sr_factor
         self.boundary_ignore = boundary_ignore
         self.alignment_net = alignment_net
-        self.loss_fn = lpips.LPIPS(net="alex").cuda()
+        self.loss_fn = LPIPS(net="alex").cuda()
 
         self.gauss_kernel, self.ksz = sca_utils.get_gaussian_kernel(sd=1.5)
 

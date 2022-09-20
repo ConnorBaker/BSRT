@@ -1,7 +1,7 @@
 from argparse import Namespace
 from datasets.burstsr_dataset import BurstSRDataset
 from datasets.synthetic_burst_val_set import SyntheticBurstVal
-from option import args
+from option import config, Config
 from pwcnet.pwcnet import PWCNet
 from tqdm import tqdm
 from utils.metrics import AlignedPSNR, PSNR
@@ -19,36 +19,36 @@ import torch.utils.data.distributed
 import utility
 
 
-checkpoint = utility.checkpoint(args)
+checkpoint = utility.checkpoint(config)
 
 
 def main() -> None:
-    mp.spawn(main_worker, nprocs=1, args=(1, args)) # type: ignore
+    mp.spawn(main_worker, nprocs=1, args=(1, config)) # type: ignore
 
 
-def main_worker(local_rank: int, nprocs: int, args: Namespace) -> None:
+def main_worker(local_rank: int, nprocs: int, config: Config) -> None:
     cudnn.benchmark = True
-    args.local_rank = local_rank
+    config.local_rank = local_rank
     utility.setup(local_rank, nprocs)
     torch.cuda.set_device(local_rank) # type: ignore
 
-    _model: : nn.Module = model.Model(args, checkpoint)
+    _model: nn.Module = model.Model(config, checkpoint)
 
     for param in _model.parameters():
         param.requires_grad = False
 
-    if args.data_type == "synthetic":
-        dataset = SyntheticBurstVal(root=args.root)
+    if config.data_type == "synthetic":
+        dataset = SyntheticBurstVal(root=config.root)
         out_dir = "val/bsrt_synburst"
         psnr_fn = PSNR(boundary_ignore=40)
         postprocess_fn = SimplePostProcess(return_np=True)
 
-    elif args.data_type == "real":
-        dataset = BurstSRDataset(root=args.root, burst_size=14, crop_sz=80, split="val")
+    elif config.data_type == "real":
+        dataset = BurstSRDataset(root=config.root, burst_size=14, crop_sz=80, split="val")
         out_dir = "val/bsrt_real"
         alignment_net: nn.Module = PWCNet(
             load_pretrained=True,
-            weights_path=args.models_root + "/pwcnet-network-default.pth",
+            weights_path=config.models_root + "/pwcnet-network-default.pth",
         ).cuda()  # type: ignore
         for param in alignment_net.parameters():
             param.requires_grad = False
@@ -74,10 +74,10 @@ def main_worker(local_rank: int, nprocs: int, args: Namespace) -> None:
             toc = time.time()
             tt.append(toc - tic)
 
-        if args.data_type == "synthetic":
+        if config.data_type == "synthetic":
             psnr, ssim, lpips = psnr_fn(sr, gt)
 
-        elif args.data_type == "real":
+        elif config.data_type == "real":
             psnr, ssim, lpips = psnr_fn(sr, gt, burst_)
 
         psnrs.append(psnr.item())

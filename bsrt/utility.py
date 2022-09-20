@@ -1,16 +1,7 @@
-from argparse import Namespace
-from multiprocessing import Process
-from multiprocessing import Queue
 from torch import Tensor
-import datetime
-import imageio
 import math
-import matplotlib
-import matplotlib.pyplot as plt
 import numpy as np
 import os
-import sys
-import time
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
@@ -18,7 +9,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torch.optim.lr_scheduler as lrs
 
-matplotlib.use("Agg")
+from option import Config
 
 
 def reduce_mean(tensor: Tensor, nprocs: int) -> Tensor:
@@ -49,30 +40,6 @@ def smooth_loss(flow, img):
     loss = smooth_grad_1st(flow, img, 10)
     return sum([torch.mean(loss)])
 
-def setup(rank: int, world_size: int) -> None:
-    if sys.platform == "win32":
-        # Distributed package only covers collective communications with Gloo
-        # backend and FileStore on Windows platform. Set init_method parameter
-        # in init_process_group to a local file.
-        # Example init_method="file:///f:/libtmp/some_file"
-        init_method = "tcp://localhost:1234"
-
-        # initialize the process group
-        dist.init_process_group(
-            "gloo", init_method=init_method, rank=rank, world_size=world_size
-        )
-    else:
-        os.environ["MASTER_ADDR"] = "localhost"
-        os.environ["MASTER_PORT"] = "12256"
-
-        # initialize the process group
-        dist.init_process_group(
-            "nccl",
-            timeout=datetime.timedelta(seconds=30),
-            rank=rank,
-            world_size=world_size,
-        )
-
 
 def cleanup():
     dist.destroy_process_group()
@@ -80,156 +47,6 @@ def cleanup():
 
 def mkdir(path: str):
     os.makedirs(path, exist_ok=True)
-
-
-class timer:
-    def __init__(self):
-        self.reset()
-        self.tic()
-
-    def tic(self) -> None:
-        self.t0: float = time.time()
-
-    def toc(self, restart: bool = False) -> float:
-        diff: float = time.time() - self.t0
-        if restart:
-            self.t0: float = time.time()
-        return diff
-
-    def hold(self) -> None:
-        self.acc += self.toc()
-
-    def release(self) -> float:
-        ret: float = self.acc
-        self.reset()
-
-        return ret
-
-    def reset(self) -> None:
-        self.acc: float = 0
-
-
-class checkpoint:
-    def __init__(self, args: Namespace):
-        self.args: Namespace = args
-        self.ok: bool = True
-        self.log: Tensor = torch.Tensor()
-        now: str = datetime.datetime.now().strftime("%Y-%m-%d-%H:%M:%S")
-
-        if not args.load:
-            if not args.save:
-                args.save = now
-            self.dir = os.path.join("..", "experiment", args.save)
-        else:
-            self.dir = os.path.join("..", "experiment", args.load)
-            if os.path.exists(self.dir):
-                self.log = torch.load(self.get_path("psnr_log.pt"))
-                print("Continue from epoch {}...".format(len(self.log)))
-            else:
-                args.load = ""
-
-        if args.reset:
-            os.system("rm -rf " + self.dir)
-            args.load = ""
-
-        os.makedirs(self.dir, exist_ok=True)
-        os.makedirs(self.get_path("model"), exist_ok=True)
-        # for d in args.data_test:
-        #     os.makedirs(self.get_path('results-{}'.format(d)), exist_ok=True)
-
-        open_type = "a" if os.path.exists(self.get_path("log.txt")) else "w"
-        self.log_file = open(self.get_path("log.txt"), open_type)
-        with open(self.get_path("config.txt"), open_type) as f:
-            f.write(now + "\n\n")
-            for arg in vars(args):
-                f.write("{}: {}\n".format(arg, getattr(args, arg)))
-            f.write("\n")
-
-        self.n_processes = 8
-
-    def get_path(self, *subdir: str) -> str:
-        return os.path.join(self.dir, *subdir)
-
-    def save(self, trainer, epoch, is_best: bool = False) -> None:
-        trainer.model.save(self.get_path("model"), epoch, is_best=is_best)
-        trainer.loss.save(self.dir)
-        trainer.loss.plot_loss(self.dir, epoch)
-
-        self.plot_psnr(epoch)
-        trainer.optimizer.save(self.dir)
-        torch.save(self.log, self.get_path("psnr_log.pt"))
-
-    def add_log(self, log: Tensor):
-        self.log: Tensor = torch.cat([self.log, log])
-
-    def write_log(self, log: str, refresh: bool = False) -> None:
-        print(log)
-        self.log_file.write(log + "\n")
-        if refresh:
-            self.log_file.close()
-            self.log_file = open(self.get_path("log.txt"), "a")
-
-    def done(self) -> None:
-        self.log_file.close()
-
-    def plot_psnr(self, epoch):
-        axis = np.linspace(1, epoch, epoch)
-        for idx_data, d in enumerate(self.args.data_test):
-            label = "SR on {}".format(d)
-            fig = plt.figure()
-            plt.title(label)
-            for idx_scale, scale in enumerate(self.args.scale):
-                plt.plot(
-                    axis,
-                    self.log[:, idx_data, idx_scale].numpy(),
-                    label="Scale {}".format(scale),
-                )
-            plt.legend()
-            plt.xlabel("Epochs")
-            plt.ylabel("PSNR")
-            plt.grid(True)
-            plt.savefig(self.get_path("test_{}.pdf".format(d)))
-            plt.close(fig)
-
-    def begin_background(self):
-        self.queue = Queue()
-
-        def bg_target(queue):
-            while True:
-                if not queue.empty():
-                    filename, tensor = queue.get()
-                    if filename is None:
-                        break
-                    imageio.imwrite(filename, tensor.numpy())
-
-        self.process = [
-            Process(target=bg_target, args=(self.queue,))
-            for _ in range(self.n_processes)
-        ]
-
-        for p in self.process:
-            p.start()
-
-    def end_background(self):
-        for _ in range(self.n_processes):
-            self.queue.put((None, None))
-        while not self.queue.empty():
-            time.sleep(1)
-        for p in self.process:
-            p.join()
-
-    def save_results(self, dataset, filename, save_list, scale):
-        if self.args.save_results:
-            filename = self.get_path(
-                "results-{}".format(dataset.dataset.name),
-                "{}_x{}_".format(filename, scale),
-            )
-
-            postfix = ("SR", "LR", "HR")
-            for v, p in zip(save_list, postfix):
-                normalized = v[0].mul(255 / self.args.rgb_range)
-                tensor_cpu = normalized.byte().permute(1, 2, 0).cpu()
-                self.queue.put(("{}{}.png".format(filename, p), tensor_cpu))
 
 
 def quantize(img, rgb_range):
@@ -257,28 +74,28 @@ def calc_psnr(sr, hr, scale, rgb_range, dataset=None):
     return -10 * math.log10(mse)
 
 
-def make_optimizer(args, target):
+def make_optimizer(config: Config, target):
     """
     make optimizer and scheduler together
     """
     # optimizer
     trainable = filter(lambda x: x.requires_grad, target.parameters())
-    kwargs_optimizer = {"lr": args.lr, "weight_decay": args.weight_decay}
+    kwargs_optimizer = {"lr": config.lr, "weight_decay": config.weight_decay}
 
-    if args.optimizer == "SGD":
+    if config.optimizer == "SGD":
         optimizer_class = optim.SGD
-        kwargs_optimizer["momentum"] = args.momentum
-    elif args.optimizer == "ADAM":
+        kwargs_optimizer["momentum"] = config.momentum
+    elif config.optimizer == "ADAM":
         optimizer_class = optim.Adam
-        kwargs_optimizer["betas"] = args.betas
-        kwargs_optimizer["eps"] = args.epsilon
-    elif args.optimizer == "RMSprop":
+        kwargs_optimizer["betas"] = config.betas
+        kwargs_optimizer["eps"] = config.epsilon
+    elif config.optimizer == "RMSprop":
         optimizer_class = optim.RMSprop
-        kwargs_optimizer["eps"] = args.epsilon
+        kwargs_optimizer["eps"] = config.epsilon
 
     # scheduler
-    milestones = list(map(lambda x: int(x), args.decay.split("-")))
-    kwargs_scheduler = {"milestones": milestones, "gamma": args.gamma}
+    milestones = list(map(lambda x: int(x), config.decay.split("-")))
+    kwargs_scheduler = {"milestones": milestones, "gamma": config.gamma}
     scheduler_class = lrs.MultiStepLR
 
     class CustomOptimizer(optimizer_class):

@@ -1,7 +1,14 @@
+import os
+import sys
 import functools
 import torch
 import torch.nn as nn
+import torch.optim as optim
+from torch.nn.parameter import Parameter
 import torch.nn.functional as F
+import utility
+from torch.optim import lr_scheduler
+from option import Config
 import model.arch_util as arch_util
 from torch.cuda.amp.autocast_mode import autocast
 import model.swin_util as swu
@@ -9,45 +16,50 @@ from model.spynet_util import SpyNet
 from model.non_local.non_local_cross_dot_product import NONLocalBlock2D as NonLocalCross
 from model.non_local.non_local_dot_product import NONLocalBlock2D as NonLocal
 from model.DCNv2.dcn_v2 import DCN_sep as DCN, FlowGuidedDCN
+import pytorch_lightning as pl
 
 
-def make_model(args, parent=False):
-    nframes = args.burst_size
-    img_size = args.patch_size * 2
+def make_model(config: Config, checkpoint = None):
+    nframes = config.burst_size
+    img_size = config.patch_size * 2
     patch_size = 1
-    in_chans = args.burst_channel
-    out_chans = args.n_colors
+    in_chans = config.burst_channel
+    out_chans = config.n_colors
     
-    if args.model_level == "S":
+    if config.model_level == "S":
         depths = [6]*1 + [6] * 4
         num_heads = [6]*1 + [6] * 4
         embed_dim = 60
-    elif args.model_level == "L":
+    elif config.model_level == "L":
         depths = [6]*1 + [8] * 6
         num_heads = [6]*1 + [6] * 6
         embed_dim = 180
     window_size = 8
     mlp_ratio = 2
-    upscale = args.scale[0]
-    non_local = args.non_local
-    use_checkpoint=args.use_checkpoint
+    upscale = config.scale
+    non_local = config.non_local
+    use_swin_checkpoint=config.use_checkpoint
 
-    if args.local_rank <= 0:
-        print("depths: ", depths)
+    print("depths: ", depths) # type: ignore
 
-    return BSRT(args=args,nframes=nframes,
+    bsrt = BSRT(config=config,nframes=nframes,
                    img_size=img_size,
                    patch_size=patch_size,
                    in_chans=in_chans,
                    out_chans=out_chans,
-                   embed_dim=embed_dim,
-                   depths=depths,
-                   num_heads=num_heads,
+                   embed_dim=embed_dim, # type: ignore
+                   depths=depths, # type: ignore
+                   num_heads=num_heads, # type: ignore
                    window_size=window_size,
                    mlp_ratio=mlp_ratio,
                    upscale=upscale,
                    non_local=non_local,
-                   use_checkpoint=use_checkpoint)
+                   use_swin_checkpoint=use_swin_checkpoint)
+
+    if config.precision == 'half':
+        bsrt = bsrt.half()
+
+    return bsrt.cuda()
 
 
 class FlowGuidedPCDAlign(nn.Module):
@@ -161,13 +173,13 @@ class CrossNonLocal_Fusion(nn.Module):
 
 
 
-class BSRT(nn.Module):
-    def __init__(self, args, nframes=8, img_size=64, patch_size=1, in_chans=3, out_chans=3,
+class BSRT(pl.LightningModule):
+    def __init__(self, config: Config, nframes=8, img_size=64, patch_size=1, in_chans=3, out_chans=3,
                  embed_dim=96, depths=[6, 6, 6, 6], num_heads=[6, 6, 6, 6],
                  window_size=7, mlp_ratio=4., qkv_bias=True, qk_scale=None,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
                  norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
-                 use_checkpoint=False, upscale=4, non_local=False,
+                 use_swin_checkpoint=False, upscale=4, non_local=False,
                  **kwargs):
         super(BSRT, self).__init__()
         num_in_ch = in_chans
@@ -178,7 +190,8 @@ class BSRT(nn.Module):
         back_RBs = 5
         n_resblocks = 6
 
-        self.args = args
+        self.config = config
+        self.precision: str = config.precision
         self.center = 0
         self.upscale = upscale
         self.window_size = window_size
@@ -192,7 +205,8 @@ class BSRT(nn.Module):
         self.num_features = embed_dim
         self.mlp_ratio = mlp_ratio
 
-        spynet_path = args.models_root + '/spynet_sintel_final-3d2a1287.pth'
+        # print(self.model, file=ckp.log_file)
+        spynet_path = config.models_root + '/spynet_sintel_final-3d2a1287.pth'
         self.spynet = SpyNet(spynet_path, [3, 4, 5])
         self.conv_flow = nn.Conv2d(1, 3, kernel_size=3, stride=1, padding=1)
         self.flow_ps = nn.PixelShuffle(2)
@@ -217,9 +231,8 @@ class BSRT(nn.Module):
         # # stochastic depth
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]  # stochastic depth decay rule
 
-        if args.swinfeature:
-            if self.args.local_rank <= 0:
-                print("using swinfeature")
+        if config.swinfeature:
+            print("using swinfeature")
             self.pre_layers = nn.ModuleList()
             for i_layer in range(depths[0]):
                 layer = swu.SwinTransformerBlock(dim=embed_dim, 
@@ -263,8 +276,7 @@ class BSRT(nn.Module):
         ################################### 3, Multi-frame Feature Fusion  ##################################
 
         if self.non_local:
-            if self.args.local_rank <= 0:
-                print("using non_local")
+            print("using non_local")
             self.fusion = CrossNonLocal_Fusion(nf=num_feat, out_feat=embed_dim, nframes=nframes, center=self.center)
         else:
             self.fusion = nn.Conv2d(nframes * num_feat, embed_dim, 1, 1, bias=True)
@@ -274,7 +286,7 @@ class BSRT(nn.Module):
 
         # absolute position embedding
         if self.ape:
-            self.absolute_pos_embed = nn.Parameter(torch.zeros(1, num_patches, embed_dim))
+            self.absolute_pos_embed = Parameter(torch.zeros(1, num_patches, embed_dim))
             swu.trunc_normal_(self.absolute_pos_embed, std=.02)
 
         self.pos_drop = nn.Dropout(p=drop_rate)
@@ -294,7 +306,7 @@ class BSRT(nn.Module):
                          drop_path=dpr[sum(depths[:i_layer]):sum(depths[:i_layer + 1])],  # no impact on SR results
                          norm_layer=norm_layer,
                          downsample=None,
-                         use_checkpoint=use_checkpoint,
+                         use_checkpoint=use_swin_checkpoint,
                          img_size=img_size,
                          patch_size=patch_size
                          )
@@ -312,12 +324,12 @@ class BSRT(nn.Module):
         self.upconv2 = nn.Conv2d(num_feat, 64 * 4, 3, 1, 1, bias=True)
         self.pixel_shuffle = nn.PixelShuffle(2)
         self.HRconv = nn.Conv2d(64, 64, 3, 1, 1, bias=True)
-        self.conv_last = nn.Conv2d(64, args.n_colors, 3, 1, 1, bias=True)
+        self.conv_last = nn.Conv2d(64, config.n_colors, 3, 1, 1, bias=True)
 
         #### skip #############
         self.skip_pixel_shuffle = nn.PixelShuffle(2)
         self.skipup1 = nn.Conv2d(num_in_ch//4, num_feat * 4, 3, 1, 1, bias=True)
-        self.skipup2 = nn.Conv2d(num_feat, args.n_colors * 4, 3, 1, 1, bias=True)
+        self.skipup2 = nn.Conv2d(num_feat, config.n_colors * 4, 3, 1, 1, bias=True)
 
         #### activation function
         self.lrelu = nn.LeakyReLU(0.1, inplace=True)
@@ -354,7 +366,7 @@ class BSRT(nn.Module):
         return x
 
     def pre_forward_features(self, x):
-        if self.args.swinfeature:
+        if self.config.swinfeature:
             x_size = (x.shape[-2], x.shape[-1])
             x = self.patch_embed(x, use_norm=True)
             if self.ape:
@@ -481,7 +493,173 @@ class BSRT(nn.Module):
 
         return flows_list
 
+    def prepare(self, *args):
+        def _prepare(tensor):
+            if self.precision == "half":
+                tensor = tensor.half()
+            return tensor.cuda()
 
+        return [_prepare(a) for a in args]
+
+    def training_step(self, batch_value, batch_idx):
+        if self.config.data_type == "synthetic":
+            burst, gt, flow_vectors, meta_info = batch_value
+            burst, gt, flow_vectors = self.prepare(burst, gt, flow_vectors)
+        elif self.config.data_type == "real":
+            burst, gt, meta_info_burst, meta_info_gt = batch_value
+            burst, gt = self.prepare(burst, gt)
+        else:
+            raise Exception(
+                "Unexpected data_type: expected either synthetic or real"
+            )
+
+        if self.config.fp16:
+            with autocast():
+                sr = self(burst).float()
+
+        else:
+            sr = self(burst)
+
+        if self.config.data_type == "synthetic":
+            loss = self.aligned_loss(sr, gt)
+        elif self.config.data_type == "real":
+            loss = self.aligned_loss(sr, gt, burst)
+        else:
+            raise Exception(
+                "Unexpected data_type: expected either synthetic or real"
+            )
+
+        # if self.config.n_GPUs > 1:
+        #     torch.distributed.barrier()
+        #     reduced_loss = utility.reduce_mean(loss, self.config.n_GPUs)
+
+        reduced_loss = loss
+
+        if self.config.data_type == "synthetic":
+            self.optimizer.zero_grad()
+        elif self.config.data_type == "real":
+            self.model.zero_grad()
+        else:
+            raise Exception(
+                "Unexpected data_type: expected either synthetic or real"
+            )
+
+        if self.config.fp16:
+            self.scaler.scale(loss).backward()
+            # torch.nn.utils.clip_grad_value_(self.model.parameters(), .02)
+            if torch.isinf(sr).sum() + torch.isnan(sr).sum() <= 0:
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+            else:
+                print(
+                    f"Nan num: {torch.isnan(sr).sum()}, inf num: {torch.isinf(sr).sum()}"
+                )
+                reduced_loss = None
+                sys.exit(0)
+        else:
+            loss.backward()
+            # torch.nn.utils.clip_grad_value_(self.model.parameters(), .02)
+            if torch.isinf(sr).sum() + torch.isnan(sr).sum() <= 0:
+                self.optimizer.step()
+            else:
+                print(
+                    f"Nan num: {torch.isnan(sr).sum()}, inf num: {torch.isinf(sr).sum()}"
+                )
+                reduced_loss = None
+
+        self.log("mse_L1", reduced_loss)
+        return loss
+
+
+    def test_step(self, batch_value, batch_idx):
+        if self.config.data_type == "synthetic":
+            burst, gt, meta_info = batch_value
+            burst, gt = self.prepare(burst, gt)
+        elif self.config.data_type == "real":
+            burst, gt, meta_info_burst, meta_info_gt = batch_value
+            burst, gt = self.prepare(burst, gt)
+        else:
+            raise Exception(
+                "Unexpected data_type: expected either synthetic or real"
+            )
+
+        with torch.no_grad():
+            sr = self.model(burst).float()
+
+        if self.config.data_type == "synthetic":
+            psnr_score, ssim_score, lpips_score = self.psnr_fn(sr, gt)
+        elif self.config.data_type == "real":
+            psnr_score, ssim_score, lpips_score = self.psnr_fn(sr, gt, burst)
+        else:
+            raise Exception(
+                "Unexpected data_type: expected either synthetic or real"
+            )
+
+        # if self.config.n_GPUs > 1:
+        #     torch.distributed.barrier()
+        #     psnr_score = utility.reduce_mean(psnr_score, self.config.n_GPUs)
+        #     ssim_score = utility.reduce_mean(ssim_score, self.config.n_GPUs)
+        #     lpips_score = utility.reduce_mean(lpips_score, self.config.n_GPUs)
+
+        return psnr_score, ssim_score, lpips_score
+
+        
+
+    def configure_optimizers(self):
+        """
+        make optimizer and scheduler together
+        """
+        # optimizer
+        trainable = filter(lambda x: x.requires_grad, self.parameters())
+        kwargs_optimizer = {"lr": self.config.lr, "weight_decay": self.config.weight_decay}
+
+        if self.config.optimizer == "SGD":
+            optimizer_class = optim.SGD
+            kwargs_optimizer["momentum"] = self.config.momentum
+        elif self.config.optimizer == "ADAM":
+            optimizer_class = optim.Adam
+            kwargs_optimizer["betas"] = self.config.betas
+            kwargs_optimizer["eps"] = self.config.epsilon
+        elif self.config.optimizer == "RMSprop":
+            optimizer_class = optim.RMSprop
+            kwargs_optimizer["eps"] = self.config.epsilon
+
+        # scheduler
+        milestones = list(map(lambda x: int(x), self.config.decay.split("-")))
+        kwargs_scheduler = {"milestones": milestones, "gamma": self.config.gamma}
+        scheduler_class = lr_scheduler.MultiStepLR
+
+        class CustomOptimizer(optimizer_class):
+            def __init__(self, *args, **kwargs):
+                super(CustomOptimizer, self).__init__(*args, **kwargs)
+
+            def _register_scheduler(self, scheduler_class, **kwargs):
+                self.scheduler = scheduler_class(self, **kwargs)
+
+            def save(self, save_dir):
+                torch.save(self.state_dict(), self.get_dir(save_dir))
+
+            def load(self, load_dir, epoch=1):
+                self.load_state_dict(torch.load(self.get_dir(load_dir)))
+                if epoch > 1:
+                    for _ in range(epoch):
+                        self.scheduler.step()
+
+            def get_dir(self, dir_path):
+                return os.path.join(dir_path, "optimizer.pt")
+
+            def schedule(self):
+                self.scheduler.step()
+
+            def get_lr(self):
+                return self.scheduler.get_last_lr()[0]
+
+            def get_last_epoch(self):
+                return self.scheduler.last_epoch
+
+        optimizer = CustomOptimizer(trainable, **kwargs_optimizer)
+        optimizer._register_scheduler(scheduler_class, **kwargs_scheduler)
+        return optimizer
 
 
 

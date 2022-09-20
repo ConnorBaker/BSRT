@@ -12,6 +12,7 @@ import sys
 import time
 import torch
 import utility
+from option import Config
 
 train_log_dir = "../train_log/"
 
@@ -41,10 +42,10 @@ utility.mkdir(LOG_DIR)
 
 class Trainer:
     def __init__(
-        self, args, train_loader, train_sampler, valid_loader, my_model, my_loss, ckp
+        self, config: Config, train_loader, train_sampler, valid_loader, my_model, my_loss, ckp
     ):
-        self.args = args
-        self.scale = args.scale[0]
+        self.args = config
+        self.scale = config.scale[0]
 
         self.ckp = ckp
         self.loader_train = train_loader
@@ -52,10 +53,10 @@ class Trainer:
         self.train_sampler = train_sampler
         self.model = my_model
         self.loss = my_loss
-        self.optimizer = utility.make_optimizer(args, self.model)
+        self.optimizer = utility.make_optimizer(config, self.model)
 
-        if args.data_type == "synthetic":
-            if args.pre_train == "":
+        if config.data_type == "synthetic":
+            if config.pre_train == "":
                 self.fix_unflagged = True
             else:
                 self.fix_unflagged = False
@@ -63,14 +64,14 @@ class Trainer:
             self.fix_keys = ["spynet", "dcnpack"]
 
         # Postprocessing function to obtain sRGB images
-        if args.data_type == "synthetic":
+        if config.data_type == "synthetic":
             self.postprocess_fn = SimplePostProcess(return_np=True)
             self.psnr_fn = PSNR(boundary_ignore=40)
-        elif args.data_type == "real":
+        elif config.data_type == "real":
             self.postprocess_fn = BurstSRPostProcess(return_np=True)
             self.alignment_net = PWCNet(
                 load_pretrained=True,
-                weights_path=args.models_root + "/pwcnet-network-default.pth",
+                weights_path=config.models_root + "/pwcnet-network-default.pth",
             ).to(
                 "cuda"
             )  # type: ignore
@@ -82,10 +83,10 @@ class Trainer:
         else:
             raise Exception("Unexpected data_type: expected either synthetic or real")
 
-        if "L1" in args.loss:
-            if args.data_type == "synthetic":
-                self.aligned_loss = L1(boundary_ignore=None).cuda(args.local_rank)
-            elif args.data_type == "real":
+        if "L1" in config.loss:
+            if config.data_type == "synthetic":
+                self.aligned_loss = L1(boundary_ignore=None).cuda(config.local_rank)
+            elif config.data_type == "real":
                 self.aligned_loss = AlignedL1(
                     alignment_net=self.alignment_net, boundary_ignore=40
                 )
@@ -94,14 +95,14 @@ class Trainer:
                     "Unexpected data_type: expected either synthetic or real"
                 )
 
-        elif "MSE" in args.loss:
-            self.aligned_loss = L2(boundary_ignore=None).cuda(args.local_rank)
-        elif "CB" in args.loss:
+        elif "MSE" in config.loss:
+            self.aligned_loss = L2(boundary_ignore=None).cuda(config.local_rank)
+        elif "CB" in config.loss:
             self.aligned_loss = CharbonnierLoss(boundary_ignore=None).cuda(
-                args.local_rank
+                config.local_rank
             )
-        elif "MSSSIM" in args.loss:
-            self.aligned_loss = MSSSIMLoss(boundary_ignore=None).cuda(args.local_rank)
+        elif "MSSSIM" in config.loss:
+            self.aligned_loss = MSSSIMLoss(boundary_ignore=None).cuda(config.local_rank)
 
         if self.args.fp16:
             self.scaler = GradScaler()
@@ -110,9 +111,9 @@ class Trainer:
         self.best_epoch = 0
 
         if self.args.load != "":
-            if args.data_type == "synthetic":
+            if config.data_type == "synthetic":
                 self.optimizer.load(self.save_state_dir, epoch=int(self.args.load))
-            elif args.data_type == "real":
+            elif config.data_type == "real":
                 self.optimizer.load(ckp.dir, epoch=len(ckp.log))
             else:
                 raise Exception(
@@ -122,16 +123,16 @@ class Trainer:
         self.error_last = 1e8
         self.glob_iter = 0
 
-        self.log_dir = LOG_DIR + "/" + args.save
-        self.img_save_dir = IMG_SAVE_DIR + "/" + args.save
+        self.log_dir = LOG_DIR + "/" + config.save
+        self.img_save_dir = IMG_SAVE_DIR + "/" + config.save
         # Where to load model
-        self.load_model_dir = LOAD_MODEL_DIR + "/" + args.save
+        self.load_model_dir = LOAD_MODEL_DIR + "/" + config.save
         # Where to save new model
-        self.save_model_dir = SAVE_MODEL_DIR + "/" + args.save
-        self.save_state_dir = SAVE_STATE_DIR + "/" + args.save
+        self.save_model_dir = SAVE_MODEL_DIR + "/" + config.save
+        self.save_state_dir = SAVE_STATE_DIR + "/" + config.save
 
         # Where to save visualization images (for report)
-        self.results_dir = RESULTS_DIR + "/" + args.save
+        self.results_dir = RESULTS_DIR + "/" + config.save
         self.writer = SummaryWriter(log_dir=self.log_dir)
 
         utility.mkdir(self.save_state_dir)
@@ -185,105 +186,7 @@ class Trainer:
 
         for batch, batch_value in enumerate(self.loader_train):
 
-            if self.args.data_type == "synthetic":
-                burst, gt, flow_vectors, meta_info = batch_value
-                burst, gt, flow_vectors = self.prepare(burst, gt, flow_vectors)
-            elif self.args.data_type == "real":
-                burst, gt, meta_info_burst, meta_info_gt = batch_value
-                burst, gt = self.prepare(burst, gt)
-            else:
-                raise Exception(
-                    "Unexpected data_type: expected either synthetic or real"
-                )
-
-            if self.args.local_rank <= 0:
-                timer_data.hold()
-                timer_model.tic()
-
-            if self.args.fp16:
-                with autocast():
-                    sr = self.model(burst, 0).float()
-
-            else:
-                sr = self.model(burst, 0)
-
-            if self.args.data_type == "synthetic":
-                loss = self.aligned_loss(sr, gt)
-            elif self.args.data_type == "real":
-                loss = self.aligned_loss(sr, gt, burst)
-            else:
-                raise Exception(
-                    "Unexpected data_type: expected either synthetic or real"
-                )
-
-            if self.args.n_GPUs > 1:
-                torch.distributed.barrier()
-                reduced_loss = utility.reduce_mean(loss, self.args.n_GPUs)
-
-            else:
-                reduced_loss = loss
-
-            if self.args.data_type == "synthetic":
-                self.optimizer.zero_grad()
-            elif self.args.data_type == "real":
-                self.model.zero_grad()
-            else:
-                raise Exception(
-                    "Unexpected data_type: expected either synthetic or real"
-                )
-
-            if self.args.fp16:
-                self.scaler.scale(loss).backward()
-                # torch.nn.utils.clip_grad_value_(self.model.parameters(), .02)
-                if torch.isinf(sr).sum() + torch.isnan(sr).sum() <= 0:
-                    self.scaler.step(self.optimizer)
-                    self.scaler.update()
-                else:
-                    print(
-                        f"Nan num: {torch.isnan(sr).sum()}, inf num: {torch.isinf(sr).sum()}"
-                    )
-                    reduced_loss = None
-                    os._exit(0)
-                    sys.exit(0)
-            else:
-                loss.backward()
-                # torch.nn.utils.clip_grad_value_(self.model.parameters(), .02)
-                if torch.isinf(sr).sum() + torch.isnan(sr).sum() <= 0:
-                    self.optimizer.step()
-                else:
-                    print(
-                        f"Nan num: {torch.isnan(sr).sum()}, inf num: {torch.isinf(sr).sum()}"
-                    )
-                    reduced_loss = None
-
-            if self.args.local_rank <= 0:
-                timer_model.hold()
-                if batch % 10 == 0:
-                    self.writer.add_scalars(
-                        "Loss",
-                        {tfboard_name + "_mse_L1": reduced_loss.detach().cpu().numpy()},
-                        self.glob_iter,
-                    )
-
-                if (batch + 1) % self.args.print_every == 0:
-                    self.ckp.write_log(
-                        "[{}/{}]\t[{:.4f}]\t{:.1f}+{:.1f}s".format(
-                            (batch + 1) * self.args.batch_size,
-                            len(self.loader_train.dataset),
-                            reduced_loss.item(),
-                            timer_model.release(),
-                            timer_data.release(),
-                        )
-                    )
-
-                self.glob_iter += 1
-                timer_data.tic()
-
-            # Don't interrupt an epoch to save the model
-            # if self.args.local_rank <= 0 and (batch + 1) % 200 == 0:
-            #     if not self.args.test_only:
-            #         filename = exp_name + "_latest" + ".pth"
-            #         self.save_model(filename)
+            # Moved to body of bsrt training_step
 
         if self.args.local_rank <= 0:
             timer_epoch.hold()
@@ -307,17 +210,10 @@ class Trainer:
         torch.set_grad_enabled(False)
 
         def ttaup(burst):
-            # burst0 = flatten_raw_image_batch(burst) # B, T, C, H, W
-            # burst1 = utility.bayer_aug(burst0, flip_h=False, flip_w=False, transpose=True)
-            # burst1 = pack_raw_image_batch(burst1)
             return [burst]
 
         def ttadown(bursts):
-            burst0 = bursts[0]
-            # burst1 = bursts[1].permute(0, 1, 3, 2)
-            # out = (burst0 + burst1) / 2
-            out = burst0
-            return out
+            return bursts[0]
 
         epoch = self.optimizer.get_last_epoch() + 1
         self.model.eval()
@@ -349,16 +245,9 @@ class Trainer:
 
             if print_time and self.args.local_rank <= 0:
                 tic = time.time()
+
             with torch.no_grad():
-                srs = []
-                for b in bursts:
-                    if self.args.fp16:
-                        with autocast():
-                            sr = self.model(b, 0).float()
-                    else:
-                        sr = self.model(b, 0).float()
-                    srs.append(sr)
-                sr = ttadown(srs)
+                sr = self.model(burst).float()
 
             if print_time and self.args.local_rank <= 0:
                 toc = time.time()

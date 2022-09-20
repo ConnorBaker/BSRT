@@ -1,3 +1,4 @@
+from bsrt.option import Config
 from model import common
 
 import torch.nn as nn
@@ -6,10 +7,10 @@ class Discriminator(nn.Module):
     '''
         output is not normalized
     '''
-    def __init__(self, args, gan_type='GAN'):
+    def __init__(self, config: Config, gan_type='GAN'):
         super(Discriminator, self).__init__()
 
-        in_channels = args.n_colors
+        in_channels = config.n_colors
         out_channels = 32
         depth = 6
 
@@ -48,7 +49,7 @@ class Discriminator(nn.Module):
             stride = 2
             m_features.append(_block(in_channels, out_channels, stride=stride))
 
-        patch_size = args.patch_size // 2**(depth-1)
+        patch_size = config.patch_size // 2**(depth-1)
 
         # print(out_channels, patch_size)
 
