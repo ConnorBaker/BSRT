@@ -278,10 +278,11 @@ class Trainer:
                 self.glob_iter += 1
                 timer_data.tic()
 
-            if self.args.local_rank <= 0 and (batch + 1) % 200 == 0:
-                if not self.args.test_only:
-                    filename = exp_name + "_latest" + ".pth"
-                    self.save_model(filename)
+            # Don't interrupt an epoch to save the model
+            # if self.args.local_rank <= 0 and (batch + 1) % 200 == 0:
+            #     if not self.args.test_only:
+            #         filename = exp_name + "_latest" + ".pth"
+            #         self.save_model(filename)
 
         if self.args.local_rank <= 0:
             timer_epoch.hold()
