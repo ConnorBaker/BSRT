@@ -1,6 +1,7 @@
 from decimal import Decimal
 from tensorboardX import SummaryWriter
-from torch.cuda.amp import autocast as autocast, GradScaler
+from torch.cuda.amp.autocast_mode import autocast
+from torch.cuda.amp.grad_scaler import GradScaler
 from pwcnet.pwcnet import PWCNet
 from tqdm import tqdm
 from utils.postprocessing_functions import SimplePostProcess

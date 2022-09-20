@@ -5,7 +5,6 @@ import torch.nn.functional as F
 import utils.spatial_color_alignment as sca_utils
 from utils.spatial_color_alignment import get_gaussian_kernel, match_colors
 from utils.warp import warp
-from torch.cuda.amp import autocast
 from loss.Charbonnier import CharbonnierLoss as CBLoss
 from loss.mssim import MSSSIM
 from pytorch_msssim import ssim
