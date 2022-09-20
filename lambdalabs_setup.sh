@@ -21,6 +21,6 @@ tar -xf models.tar.zst && tar -xf datasets.tar.zst
 cd ./BSRT
 micromamba create -f ./environment.yml -y
 micromamba activate bsrt
-cd ./code/synthetic/bsrt
+cd ./bsrt
 
-python main.py --n_GPUs 8 --print_every 40 --lr 0.0001 --decay 100-200 --save bsrt_tiny --model BSRT --fp16 --model_level S --swinfeature --batch_size 64 --burst_size 14 --patch_size 256 --root ~/working/datasets/zurich-raw-to-rgb  --val_root ~/working/datasets/SyntheticBurstVal --models_root ~/working/models --epochs 100 --use_checkpoint --save_models
+python main.py --n_GPUs 8 --data_type synthetic --print_every 40 --lr 0.0001 --decay 100-200 --save bsrt_tiny --model BSRT --fp16 --model_level S --swinfeature --batch_size 64 --burst_size 14 --patch_size 256 --root ~/working/datasets/zurich-raw-to-rgb  --val_root ~/working/datasets/SyntheticBurstVal --models_root ~/working/models --epochs 100 --use_checkpoint --save_models
