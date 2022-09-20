@@ -1,3 +1,4 @@
+# Modified from https://github.com/JingyunLiang/SwinIR/blob/9d14daa8b6169c57e7604af8d0bf31f1c3496a50/models/network_swinir.py
 # -----------------------------------------------------------------------------------
 # SwinIR: Image Restoration Using Swin Transformer, https://arxiv.org/abs/2108.10257
 # Originally Written by Ze Liu, Modified by Jingyun Liang.
