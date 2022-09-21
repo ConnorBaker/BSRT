@@ -17,16 +17,15 @@ def warp(feat, flow, mode='bilinear', padding_mode='zeros'):
 
     # mesh grid
     rowv, colv = torch.meshgrid([torch.arange(0.5, H + 0.5), torch.arange(0.5, W + 0.5)], indexing='ij')
-    grid = torch.stack((colv, rowv), dim=0).unsqueeze(0).float().to(flow.device)
+    grid = torch.stack((colv, rowv), dim=0).unsqueeze(0).float()
     # print(grid.device, flow.device, feat.device)
-    # grid = grid.cuda()
     grid = grid + flow
 
     # scale grid to [-1,1]
     grid_norm_c = 2.0 * grid[:, 0] / W - 1.0
     grid_norm_r = 2.0 * grid[:, 1] / H - 1.0
 
-    grid_norm = torch.stack((grid_norm_c, grid_norm_r), dim=1).to(flow.device)
+    grid_norm = torch.stack((grid_norm_c, grid_norm_r), dim=1)
 
     grid_norm = grid_norm.permute(0, 2, 3, 1)
 

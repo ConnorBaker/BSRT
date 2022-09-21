@@ -16,13 +16,12 @@ except:
 backwarp_tenGrid = {}
 backwarp_tenPartial = {}
 
-# @autocast(enabled=False)
 def backwarp(tenInput, tenFlow):
     if str(tenFlow.shape) not in backwarp_tenGrid:
         tenHor = torch.linspace(-1.0 + (1.0 / tenFlow.shape[3]), 1.0 - (1.0 / tenFlow.shape[3]), tenFlow.shape[3]).view(1, 1, 1, -1).expand(-1, -1, tenFlow.shape[2], -1)
         tenVer = torch.linspace(-1.0 + (1.0 / tenFlow.shape[2]), 1.0 - (1.0 / tenFlow.shape[2]), tenFlow.shape[2]).view(1, 1, -1, 1).expand(-1, -1, -1, tenFlow.shape[3])
 
-        backwarp_tenGrid[str(tenFlow.shape)] = torch.cat([tenHor, tenVer], 1).cuda()
+        backwarp_tenGrid[str(tenFlow.shape)] = torch.cat([tenHor, tenVer], 1)
 
     if str(tenFlow.shape) not in backwarp_tenPartial:
         backwarp_tenPartial[str(tenFlow.shape)] = tenFlow.new_ones([ tenFlow.shape[0], 1, tenFlow.shape[2], tenFlow.shape[3] ])
@@ -248,7 +247,6 @@ class PWCNet(torch.nn.Module):
                                           in weights_dict.items()})
 
 
-    # @autocast()
     def forward(self, source_img, target_img):
         assert (source_img.shape[-1] == target_img.shape[-1])
         assert (source_img.shape[-2] == target_img.shape[-2])

@@ -85,7 +85,7 @@ def apply_ccm(image, ccm):
 
     shape = image.shape
     image = image.view(3, -1)
-    ccm = ccm.to(image.device).type_as(image)
+    ccm = ccm.type_as(image)
 
     image = torch.mm(ccm, image)
 
@@ -101,7 +101,7 @@ def apply_gains(image, rgb_gain, red_gain, blue_gain):
     else:
         gains = torch.tensor([red_gain, 1.0, 1.0, blue_gain]) * rgb_gain
     gains = gains.view(-1, 1, 1)
-    gains = gains.to(image.device).type_as(image)
+    gains = gains.type_as(image)
 
     return (image * gains).clamp(0.0, 1.0)
 
@@ -201,7 +201,7 @@ def random_noise_levels():
 def add_noise(image, shot_noise=0.01, read_noise=0.0005):
     """Adds random shot (proportional to image) and read (independent) noise."""
     variance = image * shot_noise + read_noise
-    noise = torch.FloatTensor(image.shape).normal_().to(image.device)*variance.sqrt()
+    noise = torch.FloatTensor(image.shape).normal_()*variance.sqrt()
     return image + noise
 
 

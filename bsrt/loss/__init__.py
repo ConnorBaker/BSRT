@@ -69,9 +69,6 @@ class Loss(nn.modules.loss._Loss):
 
         self.log = torch.Tensor()
 
-        device = torch.device('cpu' if config.cpu else 'cuda')
-        self.loss_module.to(device)
-        if config.precision == 'half': self.loss_module.half()
         if not config.cpu and config.n_GPUs > 1:
             self.loss_module = nn.DataParallel(
                 self.loss_module, range(config.n_GPUs)

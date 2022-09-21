@@ -48,7 +48,7 @@ def backwarp(tenInput, tenFlow):
 		tenHor = torch.linspace(-1.0 + (1.0 / tenFlow.shape[3]), 1.0 - (1.0 / tenFlow.shape[3]), tenFlow.shape[3]).view(1, 1, 1, -1).expand(-1, -1, tenFlow.shape[2], -1)
 		tenVer = torch.linspace(-1.0 + (1.0 / tenFlow.shape[2]), 1.0 - (1.0 / tenFlow.shape[2]), tenFlow.shape[2]).view(1, 1, -1, 1).expand(-1, -1, -1, tenFlow.shape[3])
 
-		backwarp_tenGrid[str(tenFlow.shape)] = torch.cat([ tenHor, tenVer ], 1).cuda()
+		backwarp_tenGrid[str(tenFlow.shape)] = torch.cat([ tenHor, tenVer ], 1)
 	# end
 
 	if str(tenFlow.shape) not in backwarp_tenPartial:
@@ -281,7 +281,7 @@ def estimate(tenFirst, tenSecond):
 	global netNetwork
 
 	if netNetwork is None:
-		netNetwork = Network().cuda().eval()
+		netNetwork = Network().eval()
 	# end
 
 	assert(tenFirst.shape[1] == tenSecond.shape[1])
@@ -293,8 +293,8 @@ def estimate(tenFirst, tenSecond):
 	assert(intWidth == 1024) # remember that there is no guarantee for correctness, comment this line out if you acknowledge this and want to continue
 	assert(intHeight == 436) # remember that there is no guarantee for correctness, comment this line out if you acknowledge this and want to continue
 
-	tenPreprocessedFirst = tenFirst.cuda().view(1, 3, intHeight, intWidth)
-	tenPreprocessedSecond = tenSecond.cuda().view(1, 3, intHeight, intWidth)
+	tenPreprocessedFirst = tenFirst.view(1, 3, intHeight, intWidth)
+	tenPreprocessedSecond = tenSecond.view(1, 3, intHeight, intWidth)
 
 	intPreprocessedWidth = int(math.floor(math.ceil(intWidth / 64.0) * 64.0))
 	intPreprocessedHeight = int(math.floor(math.ceil(intHeight / 64.0) * 64.0))

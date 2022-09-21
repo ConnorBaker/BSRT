@@ -55,10 +55,10 @@ def process_burstsr_image_rgb(im, meta_info, return_np=False, external_norm_fact
     im = im * meta_info.get('norm_factor', 1.0)
 
     if not meta_info.get('black_level_subtracted', False):
-        im = (im - torch.tensor(meta_info['black_level'])[[0, 1, -1]].view(3, 1, 1).to(im.device))
+        im = im - torch.tensor(meta_info['black_level'])[[0, 1, -1]].view(3, 1, 1)
 
     if not meta_info.get('while_balance_applied', False) and not no_white_balance:
-        im = im * (meta_info['cam_wb'][[0, 1, -1]].view(3, 1, 1) / meta_info['cam_wb'][1]).to(im.device)
+        im = im * (meta_info['cam_wb'][[0, 1, -1]].view(3, 1, 1) / meta_info['cam_wb'][1])
 
     im_out = im
 

@@ -54,7 +54,7 @@ class PSConv2d(nn.Module):
             out[self.mask] = 0
             return out
 
-        self.mask = torch.zeros(self.conv.weight.shape).byte().cuda()
+        self.mask = torch.zeros(self.conv.weight.shape).byte()
         _in_channels = in_channels // parts
         _out_channels = out_channels // parts
         for i in range(parts):
@@ -85,7 +85,7 @@ class PSGConv2d(nn.Module):
             out[self.mask] = 0
             return out
 
-        self.mask = torch.zeros(self.conv.weight.shape).bool().cuda()
+        self.mask = torch.zeros(self.conv.weight.shape).bool()
         _in_channels = in_channels // (groups * parts)
         _out_channels = out_channels // (groups * parts)
         for i in range(parts):

@@ -4,7 +4,6 @@ import torch
 
 import cupy
 import re
-# from torch.cuda.amp import custom_fwd, custom_bwd
 
 kernel_Correlation_rearrange = '''
 	extern "C" __global__ void kernel_Correlation_rearrange(
@@ -278,7 +277,6 @@ def cupy_launch(strFunction, strKernel):
 
 class _FunctionCorrelation(torch.autograd.Function):
 	@staticmethod
-	# @custom_fwd#(cast_inputs=torch.float32)
 	def forward(self, first, second):
 		rbot0 = first.new_zeros([ first.shape[0], first.shape[2] + 8, first.shape[3] + 8, first.shape[1] ])
 		rbot1 = first.new_zeros([ first.shape[0], first.shape[2] + 8, first.shape[3] + 8, first.shape[1] ])

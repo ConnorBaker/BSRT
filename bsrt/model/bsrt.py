@@ -6,11 +6,14 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.nn.parameter import Parameter
 import torch.nn.functional as F
+from pwcnet.pwcnet import PWCNet
+from utils.postprocessing_functions import BurstSRPostProcess, SimplePostProcess
+from loss.Charbonnier import CharbonnierLoss
+from utils.metrics import L1, L2, PSNR, AlignedL1, AlignedPSNR, MSSSIMLoss
 import utility
 from torch.optim import lr_scheduler
 from option import Config
 import model.arch_util as arch_util
-from torch.cuda.amp.autocast_mode import autocast
 import model.swin_util as swu
 from model.spynet_util import SpyNet
 from model.non_local.non_local_cross_dot_product import NONLocalBlock2D as NonLocalCross
@@ -56,10 +59,7 @@ def make_model(config: Config, checkpoint = None):
                    non_local=non_local,
                    use_swin_checkpoint=use_swin_checkpoint)
 
-    if config.precision == 'half':
-        bsrt = bsrt.half()
-
-    return bsrt.cuda()
+    return bsrt
 
 
 class FlowGuidedPCDAlign(nn.Module):
@@ -191,7 +191,6 @@ class BSRT(pl.LightningModule):
         n_resblocks = 6
 
         self.config = config
-        self.precision: str = config.precision
         self.center = 0
         self.upscale = upscale
         self.window_size = window_size
@@ -210,6 +209,46 @@ class BSRT(pl.LightningModule):
         self.spynet = SpyNet(spynet_path, [3, 4, 5])
         self.conv_flow = nn.Conv2d(1, 3, kernel_size=3, stride=1, padding=1)
         self.flow_ps = nn.PixelShuffle(2)
+
+
+        # Loss functions
+        if "L1" in config.loss:
+            if config.data_type == "synthetic":
+                self.aligned_loss = L1(boundary_ignore=None)
+            elif config.data_type == "real":
+                self.aligned_loss = AlignedL1(
+                    alignment_net=self.alignment_net, boundary_ignore=40
+                )
+            else:
+                raise Exception(
+                    "Unexpected data_type: expected either synthetic or real"
+                )
+
+        elif "MSE" in config.loss:
+            self.aligned_loss = L2(boundary_ignore=None)
+        elif "CB" in config.loss:
+            self.aligned_loss = CharbonnierLoss(boundary_ignore=None)
+        elif "MSSSIM" in config.loss:
+            self.aligned_loss = MSSSIMLoss(boundary_ignore=None)
+
+        # PSNR functions
+        if config.data_type == "synthetic":
+            self.postprocess_fn = SimplePostProcess(return_np=True)
+            self.psnr_fn = PSNR(boundary_ignore=40)
+        elif config.data_type == "real":
+            self.postprocess_fn = BurstSRPostProcess(return_np=True)
+            self.alignment_net = PWCNet(
+                load_pretrained=True,
+                weights_path=config.models_root + "/pwcnet-network-default.pth",
+            )
+            for param in self.alignment_net.parameters():
+                param.requires_grad = False
+            self.psnr_fn = AlignedPSNR(
+                alignment_net=self.alignment_net, boundary_ignore=40
+            )
+        else:
+            raise Exception("Unexpected data_type: expected either synthetic or real")
+
 
         # split image into non-overlapping patches
         self.patch_embed = swu.PatchEmbed(
@@ -401,7 +440,6 @@ class BSRT(pl.LightningModule):
 
         return x
 
-    @autocast()
     def forward(self, x, print_time=False):
         B, N, C, H, W = x.size()  # N video frames
         x_center = x[:, self.center, :, :, :].contiguous()
@@ -493,32 +531,18 @@ class BSRT(pl.LightningModule):
 
         return flows_list
 
-    def prepare(self, *args):
-        def _prepare(tensor):
-            if self.precision == "half":
-                tensor = tensor.half()
-            return tensor.cuda()
-
-        return [_prepare(a) for a in args]
 
     def training_step(self, batch_value, batch_idx):
         if self.config.data_type == "synthetic":
             burst, gt, flow_vectors, meta_info = batch_value
-            burst, gt, flow_vectors = self.prepare(burst, gt, flow_vectors)
         elif self.config.data_type == "real":
             burst, gt, meta_info_burst, meta_info_gt = batch_value
-            burst, gt = self.prepare(burst, gt)
         else:
             raise Exception(
                 "Unexpected data_type: expected either synthetic or real"
             )
 
-        if self.config.fp16:
-            with autocast():
-                sr = self(burst).float()
-
-        else:
-            sr = self(burst)
+        sr = self(burst)
 
         if self.config.data_type == "synthetic":
             loss = self.aligned_loss(sr, gt)
@@ -529,62 +553,22 @@ class BSRT(pl.LightningModule):
                 "Unexpected data_type: expected either synthetic or real"
             )
 
-        # if self.config.n_GPUs > 1:
-        #     torch.distributed.barrier()
-        #     reduced_loss = utility.reduce_mean(loss, self.config.n_GPUs)
-
-        reduced_loss = loss
-
-        if self.config.data_type == "synthetic":
-            self.optimizer.zero_grad()
-        elif self.config.data_type == "real":
-            self.model.zero_grad()
-        else:
-            raise Exception(
-                "Unexpected data_type: expected either synthetic or real"
-            )
-
-        if self.config.fp16:
-            self.scaler.scale(loss).backward()
-            # torch.nn.utils.clip_grad_value_(self.model.parameters(), .02)
-            if torch.isinf(sr).sum() + torch.isnan(sr).sum() <= 0:
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
-            else:
-                print(
-                    f"Nan num: {torch.isnan(sr).sum()}, inf num: {torch.isinf(sr).sum()}"
-                )
-                reduced_loss = None
-                sys.exit(0)
-        else:
-            loss.backward()
-            # torch.nn.utils.clip_grad_value_(self.model.parameters(), .02)
-            if torch.isinf(sr).sum() + torch.isnan(sr).sum() <= 0:
-                self.optimizer.step()
-            else:
-                print(
-                    f"Nan num: {torch.isnan(sr).sum()}, inf num: {torch.isinf(sr).sum()}"
-                )
-                reduced_loss = None
-
-        self.log("mse_L1", reduced_loss)
+        self.log("mse_L1", loss)
         return loss
 
 
     def test_step(self, batch_value, batch_idx):
         if self.config.data_type == "synthetic":
             burst, gt, meta_info = batch_value
-            burst, gt = self.prepare(burst, gt)
         elif self.config.data_type == "real":
             burst, gt, meta_info_burst, meta_info_gt = batch_value
-            burst, gt = self.prepare(burst, gt)
         else:
             raise Exception(
                 "Unexpected data_type: expected either synthetic or real"
             )
 
         with torch.no_grad():
-            sr = self.model(burst).float()
+            sr = self(burst)
 
         if self.config.data_type == "synthetic":
             psnr_score, ssim_score, lpips_score = self.psnr_fn(sr, gt)

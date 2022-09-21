@@ -281,7 +281,7 @@ class SwinTransformerBlock(nn.Module):
         # if self.input_resolution != x_size:
         #     self.input_resolution = x_size
         #     if self.attn_mask is not None:
-        #         self.attn_mask = self.calculate_mask(x_size).to(x.device)
+        #         self.attn_mask = self.calculate_mask(x_size)
 
         shortcut = x
         x = self.norm1(x)
@@ -306,9 +306,9 @@ class SwinTransformerBlock(nn.Module):
         #         attn_windows = self.attn(x_windows, mask=self.attn_mask)  # nW*B, window_size*window_size, C
         # else:
         #     if self.use_checkpoint:
-        #         attn_windows = checkpoint.apply(self.attn, x_windows, self.calculate_mask(x_size).to(x.device))
+        #         attn_windows = checkpoint.apply(self.attn, x_windows, self.calculate_mask(x_size))
         #     else:
-        #         attn_windows = self.attn(x_windows, mask=self.calculate_mask(x_size).to(x.device))
+        #         attn_windows = self.attn(x_windows, mask=self.calculate_mask(x_size))
 
         attn_mask = calculate_mask(x_size, self.window_size, self.shift_size).to(x.device)
         attn_windows = self.attn(x_windows, mask=attn_mask)

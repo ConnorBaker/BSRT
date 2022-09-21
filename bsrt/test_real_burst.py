@@ -61,7 +61,7 @@ def main_worker(local_rank: int, nprocs: int, config: Config):
         burst, meta_info = dataset[idx]
         burst_name = meta_info["burst_name"]
 
-        burst = burst.to(device).unsqueeze(0)
+        burst = burst.unsqueeze(0)
         if config.data_type == "synthetic":
             bursts = ttaup(burst)
             srs = []

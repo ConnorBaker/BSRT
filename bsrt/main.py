@@ -1,7 +1,6 @@
-import torch
-import random
-import numpy as np
-from torch.utils.data import DataLoader
+import os
+from pathlib import Path
+from torch.utils.data import DataLoader, random_split
 import model.bsrt as bsrt
 import loss
 from option import Config, config
@@ -10,19 +9,12 @@ from datasets.burstsr_dataset import BurstSRDataset
 from datasets.synthetic_burst_train_set import SyntheticBurst
 from datasets.synthetic_burst_val_set import SyntheticBurstVal
 from datasets.zurich_raw2rgb_dataset import ZurichRAW2RGB
-import torch.multiprocessing as mp
-import torch.backends.cudnn as cudnn
-import torch.utils.data.distributed
 
 
-def init_seeds(seed=0):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
 
 def main():
-    init_seeds(0)
-    cudnn.benchmark = True
+    pl.seed_everything(0)
+    pl.
 
     batch_size: int = config.batch_size
     if config.data_type == "synthetic":
@@ -56,10 +48,12 @@ def main():
     #     valid_data, shuffle=False
     # )
 
+    num_workers = os.cpu_count()
+    num_workers = num_workers // 2 if num_workers is not None else 0
     train_loader = DataLoader(
         dataset=train_data,
         batch_size=batch_size,
-        # num_workers=config.n_threads,
+        num_workers=num_workers,
         pin_memory=True,
         drop_last=True,
         # sampler=train_sampler,
@@ -67,14 +61,14 @@ def main():
     valid_loader = DataLoader(
         dataset=valid_data,
         batch_size=batch_size,
-        # num_workers=config.n_threads,
+        num_workers=num_workers,
         pin_memory=True,
         drop_last=True,
         # sampler=valid_sampler,
     )
 
     _model = bsrt.make_model(config)
-    trainer = pl.Trainer()
+    trainer = pl.Trainer(accelerator="gpu", devices=1)
     trainer.fit(_model, train_loader, valid_loader)
     _loss = loss.Loss(config)
 

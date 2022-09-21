@@ -1,6 +1,5 @@
 from decimal import Decimal
 from tensorboardX import SummaryWriter
-from torch.cuda.amp.autocast_mode import autocast
 from torch.cuda.amp.grad_scaler import GradScaler
 from pwcnet.pwcnet import PWCNet
 from tqdm import tqdm
@@ -72,9 +71,7 @@ class Trainer:
             self.alignment_net = PWCNet(
                 load_pretrained=True,
                 weights_path=config.models_root + "/pwcnet-network-default.pth",
-            ).to(
-                "cuda"
-            )  # type: ignore
+            )
             for param in self.alignment_net.parameters():
                 param.requires_grad = False
             self.psnr_fn = AlignedPSNR(
@@ -103,9 +100,6 @@ class Trainer:
             )
         elif "MSSSIM" in config.loss:
             self.aligned_loss = MSSSIMLoss(boundary_ignore=None).cuda(config.local_rank)
-
-        if self.args.fp16:
-            self.scaler = GradScaler()
 
         self.best_psnr = 0.0
         self.best_epoch = 0
@@ -311,19 +305,6 @@ class Trainer:
             model = model.module
 
         torch.save(model.state_dict(), net_save_path)
-
-    def prepare(self, *args):
-        device = torch.device(
-            "cpu" if self.args.cpu else "cuda:{}".format(self.args.local_rank)
-        )
-
-        def _prepare(tensor):
-            if self.args.precision == "half":
-                tensor = tensor.half()
-            return tensor.to(device)
-
-        # print(_prepare(args[0]).device)
-        return [_prepare(a) for a in args]
 
     def terminate(self):
         if self.args.test_only:

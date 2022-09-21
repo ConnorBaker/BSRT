@@ -24,19 +24,17 @@ def main():
     # TODO Set your network here
     net = SimpleBaseline()
 
-    device = 'cuda'
-
     # Load alignment network, used in AlignedPSNR
     alignment_net = PWCNet(load_pretrained=True,
                            weights_path='PATH_TO_PWCNET_WEIGHTS')
-    alignment_net = alignment_net.to(device)
+    alignment_net = alignment_net
     aligned_psnr_fn = AlignedPSNR(alignment_net=alignment_net, boundary_ignore=40)
 
     scores_all = []
     for idx in range(len(dataset)):
         burst, frame_gt, meta_info_burst, meta_info_gt = dataset[idx]
-        burst = burst.unsqueeze(0).to(device)
-        frame_gt = frame_gt.unsqueeze(0).to(device)
+        burst = burst.unsqueeze(0)
+        frame_gt = frame_gt.unsqueeze(0)
 
         net_pred = net(burst)
 

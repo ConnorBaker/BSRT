@@ -24,13 +24,12 @@ def main():
     # TODO Set your network here
     net = SimpleBaseline()
 
-    device = 'cuda'
     os.makedirs(out_dir, exist_ok=True)
 
     for idx in range(len(dataset)):
         burst, burst_name = dataset[idx]
 
-        burst = burst.to(device).unsqueeze(0)
+        burst = burst.unsqueeze(0)
 
         with torch.no_grad():
             net_pred = net(burst)

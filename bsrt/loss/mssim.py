@@ -36,7 +36,7 @@ def ssim(img1, img2, window_size=11, window=None, size_average=True, full=False,
     (_, channel, height, width) = img1.size()
     if window is None:
         real_size = min(window_size, height, width)
-        window = create_window(real_size, channel=channel).to(img1.device)
+        window = create_window(real_size, channel=channel)
 
     mu1 = F.conv2d(img1, window, padding=padd, groups=channel)
     mu2 = F.conv2d(img2, window, padding=padd, groups=channel)
@@ -69,8 +69,7 @@ def ssim(img1, img2, window_size=11, window=None, size_average=True, full=False,
 
 
 def msssim(img1, img2, window_size=11, size_average=True, val_range=None, normalize=None):
-    device = img1.device
-    weights = torch.FloatTensor([0.0448, 0.2856, 0.3001, 0.2363, 0.1333]).to(device)
+    weights = torch.FloatTensor([0.0448, 0.2856, 0.3001, 0.2363, 0.1333])
     levels = weights.size()[0]
     ssims = []
     mcs = []
@@ -123,7 +122,7 @@ class SSIM(torch.nn.Module):
         if channel == self.channel and self.window.dtype == img1.dtype:
             window = self.window
         else:
-            window = create_window(self.window_size, channel).to(img1.device).type(img1.dtype)
+            window = create_window(self.window_size, channel).type(img1.dtype)
             self.window = window
             self.channel = channel
 

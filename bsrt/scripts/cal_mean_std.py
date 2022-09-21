@@ -18,5 +18,4 @@ def main():
 
 
 if __name__ == '__main__':
-    # if not args.cpu: torch.cuda.set_device(0)
     main()

@@ -18,7 +18,7 @@ def main():
     # Load alignment network, used in AlignedPSNR
     alignment_net = PWCNet(load_pretrained=True,
                            weights_path='PATH_TO_PWCNET_WEIGHTS')
-    alignment_net = alignment_net.to('cuda')
+    alignment_net = alignment_net
 
     aligned_psnr_fn = AlignedPSNR(alignment_net=alignment_net, boundary_ignore=40)
 
@@ -34,7 +34,7 @@ def main():
         burst_rgb = F.interpolate(burst_rgb, scale_factor=8, mode='bilinear')
 
         # Calculate Aligned PSNR
-        score = aligned_psnr_fn(burst_rgb.cuda(), frame_gt.cuda(), burst.cuda())
+        score = aligned_psnr_fn(burst_rgb, frame_gt, burst)
         print('PSNR is {:0.3f}'.format(score))
 
         meta_info_gt = convert_dict(meta_info_gt, burst.shape[0])

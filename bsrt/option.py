@@ -1,9 +1,12 @@
 import argparse
 from dataclasses import dataclass
+import dataclasses
 from typing import Tuple
 from typing_extensions import Literal
+from pytorch_lightning import Trainer
 
 parser = argparse.ArgumentParser(description="BSRT")
+parser = Trainer.add_argparse_args(parser)
 
 parser.add_argument(
     "--data_type",
@@ -59,7 +62,6 @@ parser.add_argument(
 
 # Hardware specifications
 parser.add_argument("--seed", type=int, default=1, help="random seed")
-parser.add_argument("--fp16", action="store_true", help="use fp16 only")
 parser.add_argument(
     "--use_checkpoint",
     action="store_true",
@@ -90,13 +92,6 @@ parser.add_argument(
     "--shift_mean", type=bool, default=True, help="subtract pixel mean from the input"
 )
 parser.add_argument("--dilation", action="store_true", help="use dilated convolution")
-parser.add_argument(
-    "--precision",
-    type=str,
-    default="single",
-    choices=("single", "half"),
-    help="FP precision for test (single | half)",
-)
 
 
 # Option for Residual channel attention network (RCAN)
@@ -154,7 +149,7 @@ parser.add_argument(
     help="skipping batch that has large error",
 )
 
-@dataclass
+@dataclass(init=False)
 class Config:
     data_type: Literal["synthetic", "real"]
     n_resblocks: int
@@ -175,7 +170,6 @@ class Config:
     finetune_spynet: bool
 
     seed: int
-    fp16: bool
     use_checkpoint: bool
 
     root: str
@@ -190,7 +184,6 @@ class Config:
     res_scale: float
     shift_mean: bool
     dilation: bool
-    precision: str
 
     n_resgroups: int
     reduction: int
@@ -213,6 +206,10 @@ class Config:
 
     loss: str
     skip_threshold: float
+
+    def __init__(self, **kwargs):
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
 
 args = parser.parse_args()

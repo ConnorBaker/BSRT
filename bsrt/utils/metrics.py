@@ -102,7 +102,7 @@ class L2(nn.Module):
         super().__init__()
         self.boundary_ignore = boundary_ignore
         self.ssim = SSIM()
-        self.loss_fn = LPIPS(net="alex").cuda()
+        self.loss_fn = LPIPS(net="alex")
 
     def forward(self, pred: Tensor, gt: Tensor, valid: Optional[Tensor]=None) -> Tuple[Tensor, Tensor, Tensor]: # type: ignore
         if self.boundary_ignore is not None:
@@ -258,7 +258,7 @@ class AlignedL2(nn.Module):
         self.sr_factor = sr_factor
         self.boundary_ignore = boundary_ignore
         self.alignment_net = alignment_net
-        self.loss_fn = LPIPS(net="alex").cuda()
+        self.loss_fn = LPIPS(net="alex")
         self.ssim = SSIM()
 
         self.gauss_kernel, self.ksz = sca_utils.get_gaussian_kernel(sd=1.5)
@@ -470,7 +470,7 @@ class AlignedLPIPS(nn.Module):
         self.sr_factor = sr_factor
         self.boundary_ignore = boundary_ignore
         self.alignment_net = alignment_net
-        self.loss_fn = LPIPS(net="alex").cuda()
+        self.loss_fn = LPIPS(net="alex")
 
         self.gauss_kernel, self.ksz = sca_utils.get_gaussian_kernel(sd=1.5)
 
