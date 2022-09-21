@@ -18,6 +18,7 @@ def reduce_mean(tensor: Tensor, nprocs: int) -> Tensor:
     rt /= nprocs
     return rt
 
+
 def gradient(data):
     D_dy = data[:, :, 1:] - data[:, :, :-1]
     D_dx = data[:, :, :, 1:] - data[:, :, :, :-1]

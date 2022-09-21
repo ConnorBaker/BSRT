@@ -9,16 +9,20 @@ from utils.spatial_color_alignment import get_gaussian_kernel, match_colors
 from utils.warp import warp
 from loss.Charbonnier import CharbonnierLoss as CBLoss
 from typing import Tuple
-from torchmetrics.image.ssim import MultiScaleStructuralSimilarityIndexMeasure as MSSSIM, StructuralSimilarityIndexMeasure as SSIM
+from torchmetrics.image.ssim import (
+    MultiScaleStructuralSimilarityIndexMeasure as MSSSIM,
+    StructuralSimilarityIndexMeasure as SSIM,
+)
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity as LPIPS
 
+
 class MSSSIMLoss(nn.Module):
-    def __init__(self, boundary_ignore: Optional[int]=None):
+    def __init__(self, boundary_ignore: Optional[int] = None):
         super().__init__()
         self.boundary_ignore = boundary_ignore
         self.msssim = MSSSIM()
 
-    def forward(self, pred: Tensor, gt: Tensor) -> Tensor: # type: ignore
+    def forward(self, pred: Tensor, gt: Tensor) -> Tensor:  # type: ignore
         if self.boundary_ignore is not None:
             pred = pred[
                 ...,
@@ -37,12 +41,12 @@ class MSSSIMLoss(nn.Module):
 
 
 class CharbonnierLoss(nn.Module):
-    def __init__(self, boundary_ignore: Optional[int]=None):
+    def __init__(self, boundary_ignore: Optional[int] = None):
         super().__init__()
         self.boundary_ignore = boundary_ignore
         self.charbonnier_loss = CBLoss(reduce=True)
 
-    def forward(self, pred: Tensor, gt: Tensor) -> Tensor: # type: ignore
+    def forward(self, pred: Tensor, gt: Tensor) -> Tensor:  # type: ignore
         if self.boundary_ignore is not None:
             pred = pred[
                 ...,
@@ -61,11 +65,11 @@ class CharbonnierLoss(nn.Module):
 
 
 class L1(nn.Module):
-    def __init__(self, boundary_ignore: Optional[int]=None):
+    def __init__(self, boundary_ignore: Optional[int] = None):
         super().__init__()
         self.boundary_ignore = boundary_ignore
 
-    def forward(self, pred: Tensor, gt: Tensor, valid: Optional[Tensor]=None) -> Tensor: # type: ignore
+    def forward(self, pred: Tensor, gt: Tensor, valid: Optional[Tensor] = None) -> Tensor:  # type: ignore
         if self.boundary_ignore is not None:
             pred = pred[
                 ...,
@@ -98,13 +102,13 @@ class L1(nn.Module):
 
 
 class L2(nn.Module):
-    def __init__(self, boundary_ignore: Optional[int]=None):
+    def __init__(self, boundary_ignore: Optional[int] = None):
         super().__init__()
         self.boundary_ignore = boundary_ignore
         self.ssim = SSIM()
         self.loss_fn = LPIPS(net="alex")
 
-    def forward(self, pred: Tensor, gt: Tensor, valid: Optional[Tensor]=None) -> Tuple[Tensor, Tensor, Tensor]: # type: ignore
+    def forward(self, pred: Tensor, gt: Tensor, valid: Optional[Tensor] = None) -> Tuple[Tensor, Tensor, Tensor]:  # type: ignore
         if self.boundary_ignore is not None:
             pred = pred[
                 ...,
@@ -142,7 +146,7 @@ class L2(nn.Module):
 
 
 class PSNR(nn.Module):
-    def __init__(self, boundary_ignore: Optional[int]=None, max_value: float=1.0):
+    def __init__(self, boundary_ignore: Optional[int] = None, max_value: float = 1.0):
         super().__init__()
         self.l2 = L2(boundary_ignore=boundary_ignore)
         self.max_value = max_value

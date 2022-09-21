@@ -70,13 +70,9 @@ parser.add_argument(
 
 # Data specifications
 parser.add_argument(
-    "--root",
+    "--data_dir",
     type=str,
-    default="/data/dataset/ntire21/burstsr/real",
     help="dataset directory",
-)
-parser.add_argument(
-    "--val_root", type=str, default="../test_set", help="dataset directory"
 )
 parser.add_argument("--models_root", type=str, help="models directory")
 parser.add_argument("--mode", type=str, default="train", help="demo image directory")
@@ -149,6 +145,7 @@ parser.add_argument(
     help="skipping batch that has large error",
 )
 
+
 @dataclass(init=False)
 class Config:
     data_type: Literal["synthetic", "real"]
@@ -172,8 +169,7 @@ class Config:
     seed: int
     use_checkpoint: bool
 
-    root: str
-    val_root: str
+    data_dir: str
     models_root: str
     mode: str
     scale: int
