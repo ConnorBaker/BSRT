@@ -74,7 +74,6 @@ parser.add_argument(
     type=str,
     help="dataset directory",
 )
-parser.add_argument("--models_root", type=str, help="models directory")
 parser.add_argument("--mode", type=str, default="train", help="demo image directory")
 parser.add_argument("--scale", type=int, default=4, help="super resolution scale")
 parser.add_argument("--patch_size", type=int, default=256, help="output patch size")
@@ -170,7 +169,6 @@ class Config:
     use_checkpoint: bool
 
     data_dir: str
-    models_root: str
     mode: str
     scale: int
     patch_size: int

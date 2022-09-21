@@ -1,4 +1,6 @@
 # Based on run.py from PWCNet
+from pathlib import Path
+from typing import Optional
 import torch
 
 import getopt
@@ -233,18 +235,17 @@ class Network(torch.nn.Module):
 
 
 class PWCNet(torch.nn.Module):
-    def __init__(self, load_pretrained=True, weights_path=None, rgb2bgr=False):
+    def __init__(self, weights_path: Optional[str] = None, rgb2bgr=False):
         super(PWCNet, self).__init__()
         self.net = Network()
         self.rgb2bgr = rgb2bgr
 
-        if load_pretrained:
-            if weights_path is None:
-                raise Exception
-            else:
-                weights_dict = torch.load(weights_path)
-                self.net.load_state_dict({strKey.replace('module', 'net'): tenWeight for strKey, tenWeight
-                                          in weights_dict.items()})
+        try:
+            weights_dict = self.load_state_dict(torch.load(weights_path))
+        except:
+            weights_dict = torch.hub.load_state_dict_from_url('http://content.sniklaus.com/github/pytorch-pwc/network-default.pytorch')    
+        
+        self.net.load_state_dict({strKey.replace('module', 'net'): tenWeight for strKey, tenWeight in weights_dict.items()})
 
 
     def forward(self, source_img, target_img):

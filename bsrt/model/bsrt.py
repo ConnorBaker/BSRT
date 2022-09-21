@@ -205,8 +205,7 @@ class BSRT(pl.LightningModule):
         self.mlp_ratio = mlp_ratio
 
         # print(self.model, file=ckp.log_file)
-        spynet_path = config.models_root + '/spynet_sintel_final-3d2a1287.pth'
-        self.spynet = SpyNet(spynet_path, [3, 4, 5])
+        self.spynet = SpyNet([3, 4, 5])
         self.conv_flow = nn.Conv2d(1, 3, kernel_size=3, stride=1, padding=1)
         self.flow_ps = nn.PixelShuffle(2)
 
@@ -237,10 +236,7 @@ class BSRT(pl.LightningModule):
             self.psnr_fn = PSNR(boundary_ignore=40)
         elif config.data_type == "real":
             self.postprocess_fn = BurstSRPostProcess(return_np=True)
-            self.alignment_net = PWCNet(
-                load_pretrained=True,
-                weights_path=config.models_root + "/pwcnet-network-default.pth",
-            )
+            self.alignment_net = PWCNet()
             for param in self.alignment_net.parameters():
                 param.requires_grad = False
             self.psnr_fn = AlignedPSNR(
@@ -578,12 +574,6 @@ class BSRT(pl.LightningModule):
             raise Exception(
                 "Unexpected data_type: expected either synthetic or real"
             )
-
-        # if self.config.n_GPUs > 1:
-        #     torch.distributed.barrier()
-        #     psnr_score = utility.reduce_mean(psnr_score, self.config.n_GPUs)
-        #     ssim_score = utility.reduce_mean(ssim_score, self.config.n_GPUs)
-        #     lpips_score = utility.reduce_mean(lpips_score, self.config.n_GPUs)
 
         return psnr_score, ssim_score, lpips_score
 
