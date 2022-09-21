@@ -1,4 +1,0 @@
-matplotlib
-imageio
-opencv-python
-tensorboardX

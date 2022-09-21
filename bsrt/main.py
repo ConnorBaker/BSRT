@@ -21,7 +21,7 @@ def main():
         config.batch_size,
         num_workers,
     )
-    trainer = pl.Trainer(accelerator="gpu", devices=1)
+    trainer = pl.Trainer(accelerator="gpu", devices=-1, strategy="ddp")
     trainer.fit(_model, datamodule=data_module)
 
 
