@@ -23,5 +23,6 @@ dependencies:
 
   - pip:
     - bagua-cuda116
-    - torchmetrics[image]
+    - lpips
+    - torchmetrics
     - torchsummaryX

@@ -11,7 +11,12 @@ from datasets.synthetic_burst.val_dataset import ValData
 from pwcnet.pwcnet import PWCNet
 from utils.postprocessing_functions import BurstSRPostProcess, SimplePostProcess
 from loss.Charbonnier import CharbonnierLoss
-from utils.metrics import L1, L2, PSNR, AlignedL1, AlignedPSNR, MSSSIMLoss
+from metrics.l1 import L1
+from metrics.l2 import L2
+from metrics.psnr import PSNR
+from metrics.aligned_l1 import AlignedL1
+from metrics.aligned_psnr import AlignedPSNR
+from metrics.ms_ssim_loss import MSSSIMLoss
 from torch.optim import lr_scheduler
 from option import Config
 import model.arch_util as arch_util
@@ -237,7 +242,7 @@ class BSRT(pl.LightningModule):
         use_swin_checkpoint=False,
         upscale=4,
         non_local=False,
-        **kwargs
+        **kwargs,
     ):
         super(BSRT, self).__init__()
         num_in_ch = in_chans
@@ -283,7 +288,7 @@ class BSRT(pl.LightningModule):
         elif "MSE" in config.loss:
             self.aligned_loss = L2(boundary_ignore=None)
         elif "CB" in config.loss:
-            self.aligned_loss = CharbonnierLoss(boundary_ignore=None)
+            self.aligned_loss = CharbonnierLoss()
         elif "MSSSIM" in config.loss:
             self.aligned_loss = MSSSIMLoss(boundary_ignore=None)
 
@@ -647,6 +652,13 @@ class BSRT(pl.LightningModule):
             raise Exception("Unexpected data_type: expected either synthetic or real")
 
         sr = self(burst)
+        min = sr.min()
+        if min < -1:
+            print(f"training - sr min < -1: {min}")
+
+        max = sr.max()
+        if max > 1:
+            print(f"training - sr max > 1: {max}")
 
         if self.config.data_type == "synthetic":
             loss = self.aligned_loss(sr, gt)
@@ -670,6 +682,19 @@ class BSRT(pl.LightningModule):
 
         with torch.no_grad():
             sr = self(burst)
+
+        # TODO: Does this only happen in the second epoch after running the validation step?
+        # TODO: Does this happen in the first epoch if we let it go longer?
+        # TODO: Does this happen in the second epoch if we don't run a validation step?
+        min = sr.min()
+        if min < -1:
+            print(f"validation - sr min < -1: {min}")
+            # sr = torch.clamp(sr, min=-1, max=1)
+            # return 0.0, 0.0, 1.0
+        max = sr.max()
+        if max > 1:
+            print(f"validation - sr max > 1: {max}")
+            # return 0.0, 0.0, 1.0
 
         if self.config.data_type == "synthetic":
             psnr_score, ssim_score, lpips_score = self.psnr_fn(sr, gt)

@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import torch
 import model.bsrt as bsrt
 from option import Config
 from pytorch_lightning.trainer import Trainer
@@ -16,6 +17,10 @@ def main(config: Config):
     num_workers = os.cpu_count()
     num_workers = num_workers // 2 if num_workers is not None else 0
 
+    # from torchmetrics.utilities.checks import check_forward_full_state_property
+    # import metrics.l1
+    # check_forward_full_state_property(metric_class=metrics.l1.L1, init_args = {"boundary_ignore": 16}, input_args={"pred": torch.rand(1, 3, 64, 64), "gt": torch.rand(1, 3, 64, 64)})
+    
     _model = bsrt.make_model(config)
 
     train_module = ZurichRaw2RgbDataModule(
@@ -42,7 +47,7 @@ def main(config: Config):
         benchmark=True,
         accelerator="auto",
         strategy=BaguaStrategy(),
-        profiler="simple",
+        # profiler="simple",
     )
     trainer.fit(_model, datamodule=data_module)
 

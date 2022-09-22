@@ -12,7 +12,12 @@ class CharbonnierLoss(nn.Module):
         self.reduce = reduce
 
     def forward(self, X, Y):
+        # diff = X - Y
         diff = torch.add(X, -Y)
+        # error = sqrt(diff * diff + eps)
+        # error = sqrt(diff * diff + epsilon^2)
+        # = sqrt(diff^2 + epsilon^2)
+        # = sqrt((X-Y)^2 + epsilon^2))
         error = torch.sqrt(diff * diff + self.eps)
         if self.reduce:
             loss = torch.mean(error)

@@ -1,4 +1,5 @@
 import math
+from typing import Tuple
 import torch
 import torch.nn.functional as F
 
@@ -48,7 +49,7 @@ def apply_kernel(im, ksz, gauss_kernel):
     return im_mean
 
 
-def match_colors(im_ref, im_q, im_test, ksz, gauss_kernel):
+def match_colors(im_ref, im_q, im_test, ksz, gauss_kernel) -> Tuple[torch.Tensor, torch.Tensor]:
     """Estimates a color transformation matrix between im_ref and im_q. Applies the estimated transformation to
     im_test
     """
