@@ -1,12 +1,8 @@
 # Based on run.py from PWCNet
-from pathlib import Path
 from typing import Optional
 import torch
-
-import getopt
+from utils.bilinear_upsample_2d import bilinear_upsample_2d
 import math
-import numpy
-import PIL.Image
 import sys
 
 try:
@@ -544,25 +540,19 @@ class PWCNet(torch.nn.Module):
         int_preprocessed_height = int(math.floor(math.ceil(int_height / 64.0) * 64.0))
 
         # Make size multiple of 64
-        source_img_re = torch.nn.functional.interpolate(
-            input=source_img,
+        source_img_re = bilinear_upsample_2d(
+            source_img,
             size=(int_preprocessed_height, int_preprocessed_width),
-            mode="bilinear",
-            align_corners=False,
         )
-        target_img_re = torch.nn.functional.interpolate(
-            input=target_img,
+        target_img_re = bilinear_upsample_2d(
+            target_img,
             size=(int_preprocessed_height, int_preprocessed_width),
-            mode="bilinear",
-            align_corners=False,
         )
 
         flow = self.net(target_img_re, source_img_re)
-        flow = 20.0 * torch.nn.functional.interpolate(
-            input=flow,
+        flow = 20.0 * bilinear_upsample_2d(
+            flow,
             size=(int_height, int_width),
-            mode="bilinear",
-            align_corners=False,
         )
 
         scale_factor_x = float(int_width) / float(int_preprocessed_width)

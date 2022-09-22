@@ -1,7 +1,7 @@
 import torch
 import torch.nn
 import torch.nn.functional
-
+from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 class Debayer3x3(torch.nn.Module):
     """Demosaicing of Bayer images using 3x3 convolutions.
@@ -131,8 +131,8 @@ class Debayer2x2(torch.nn.Module):
         """
 
         x = torch.nn.functional.conv2d(x, self.kernels, stride=2)
-        x = torch.nn.functional.interpolate(
-            x, scale_factor=2, mode="bilinear", align_corners=False
+        x = bilinear_upsample_2d(
+            x, scale_factor=2
         )
         return x
 
@@ -176,12 +176,12 @@ class DebayerSplit(torch.nn.Module):
 
         return torch.cat(
             (
-                torch.nn.functional.interpolate(
-                    red, size=(H, W), mode="bilinear", align_corners=False
+                bilinear_upsample_2d(
+                    red, size=(H, W)
                 ),
                 green,
-                torch.nn.functional.interpolate(
-                    blue, size=(H, W), mode="bilinear", align_corners=False
+                bilinear_upsample_2d(
+                    blue, size=(H, W)
                 ),
             ),
             dim=1,

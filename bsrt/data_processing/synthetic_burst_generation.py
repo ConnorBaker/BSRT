@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from data_processing.camera_pipeline import *
 from utils.data_format_utils import torch_to_numpy, numpy_to_torch
 from torch import Tensor
-
+from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 @dataclass
 class ImageTransformationParams:
@@ -83,11 +83,9 @@ def random_crop(frames, crop_sz):
 
     # Resize to crop_sz
     if scale_factor < 1.0:
-        frames_crop = F.interpolate(
+        frames_crop = bilinear_upsample_2d(
             frames_crop.unsqueeze(0),
             size=crop_sz.int().tolist(),
-            mode="bilinear",
-            align_corners=False,
         ).squeeze(0)
     return frames_crop
 

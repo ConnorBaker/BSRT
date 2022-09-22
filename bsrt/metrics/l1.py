@@ -9,7 +9,7 @@ from metrics.utils.ignore_boundry import ignore_boundary
 
 class L1(Metric):
     full_state_update = False
-    
+
     def __init__(self, boundary_ignore: Optional[int] = None) -> None:
         super().__init__()
         self.boundary_ignore = boundary_ignore

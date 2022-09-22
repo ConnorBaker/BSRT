@@ -1,9 +1,10 @@
 from dataclasses import dataclass
+import dataclasses
 from typing import Tuple
 from typing_extensions import Literal
 
 
-@dataclass(init=False)
+@dataclass
 class Config:
     data_type: Literal["synthetic", "real"]
     n_resblocks: int
@@ -23,7 +24,6 @@ class Config:
     finetune_upconv: bool
     finetune_spynet: bool
 
-    seed: int
     use_checkpoint: bool
 
     data_dir: str
@@ -43,7 +43,7 @@ class Config:
     CA: bool
     non_local: bool
 
-    epochs: int
+    seed: int
     batch_size: int
     gan_k: int
 
@@ -56,9 +56,10 @@ class Config:
     weight_decay: float
     gclip: float
 
-    loss: str
-    skip_threshold: float
+    loss: Literal["L1", "MSE", "CB", "MSSIM"]
 
-    def __init__(self, **kwargs):
-        for k, v in kwargs.items():
-            setattr(self, k, v)
+    @classmethod
+    def from_dict(cls, d) -> "Config":
+        field_names = set(f.name for f in dataclasses.fields(cls))
+        c = Config(**{k:v for k,v in d.items() if k in field_names})
+        return c

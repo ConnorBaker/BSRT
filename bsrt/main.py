@@ -1,18 +1,31 @@
 import os
+import torch.backends.cuda
+import torch.backends.cudnn
 from pathlib import Path
-import torch
 import model.bsrt as bsrt
 from option import Config
 from pytorch_lightning.trainer import Trainer
-import argparse
+from argparse import ArgumentParser, Namespace
 import pytorch_lightning as pl
 from pytorch_lightning.strategies.bagua import BaguaStrategy
 from data_modules.zurich_raw2rgb_data_module import ZurichRaw2RgbDataModule
 from data_modules.synthetic_burst_data_module import SyntheticBurstDataModule
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAveraging
+
+# from pytorch_lightning.callbacks.quantization import QuantizationAwareTraining
 
 
-def main(config: Config):
+def main(config: Config, args: Namespace):
+
     pl.seed_everything(config.seed, workers=True)
+
+    os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
+    torch.backends.cudnn.allow_tf32 = True
+    torch.backends.cudnn.deterministic = False
+    torch.backends.cudnn.benchmark = True
 
     num_workers = os.cpu_count()
     num_workers = num_workers // 2 if num_workers is not None else 0
@@ -20,7 +33,7 @@ def main(config: Config):
     # from torchmetrics.utilities.checks import check_forward_full_state_property
     # import metrics.l1
     # check_forward_full_state_property(metric_class=metrics.l1.L1, init_args = {"boundary_ignore": 16}, input_args={"pred": torch.rand(1, 3, 64, 64), "gt": torch.rand(1, 3, 64, 64)})
-    
+
     _model = bsrt.make_model(config)
 
     train_module = ZurichRaw2RgbDataModule(
@@ -42,45 +55,71 @@ def main(config: Config):
     )
 
     # auto_lr_find=True?
-    trainer = Trainer(
+    trainer = Trainer.from_argparse_args(
+        args,
         deterministic=False,
         benchmark=True,
-        accelerator="auto",
+        accelerator="gpu",
         strategy=BaguaStrategy(),
-        # profiler="simple",
+        callbacks=[
+            # SWA
+            StochasticWeightAveraging(swa_lrs=1e-2),
+            # Quantization
+            # QuantizationAwareTraining(qconfig="fbgemm", observer_type="histogram"),
+            # Larger min_delta because they are larger numbers
+            EarlyStopping(
+                "mse_L1", mode="max", min_delta=1e-2, verbose=True, patience=10
+            ),
+            EarlyStopping("psnr", mode="max", min_delta=1e-2, verbose=True, patience=5),
+            # Between zero and one so we use a smaller min_delta
+            EarlyStopping("ssim", mode="max", min_delta=1e-4, verbose=True, patience=5),
+            EarlyStopping(
+                "lpips", mode="min", min_delta=1e-4, verbose=True, patience=5
+            ),
+        ],
     )
     trainer.fit(_model, datamodule=data_module)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="BSRT")
-    parser = Trainer.add_argparse_args(parser)
-    parser.add_argument(
+    parser = ArgumentParser(description="BSRT")
+
+    ################## bsrt ##################
+    bsrt_group = parser.add_argument_group("bsrt")
+    bsrt_group.add_argument("--seed", type=int, default=1, help="random seed")
+    bsrt_group.add_argument(
         "--data_type",
         type=str,
         choices=("synthetic", "real"),
         help="whether operating on synthetic or real data",
     )
-    parser.add_argument(
+    bsrt_group.add_argument(
         "--n_resblocks", type=int, default=16, help="number of residual blocks"
     )
-    parser.add_argument(
+    bsrt_group.add_argument(
         "--n_feats", type=int, default=64, help="number of feature maps"
     )
-    parser.add_argument(
+    bsrt_group.add_argument(
         "--n_colors", type=int, default=3, help="number of color channels to use"
     )
-    parser.add_argument("--lr", type=float, default=1e-4, help="learning rate")
-    parser.add_argument("--burst_size", type=int, default=14, help="burst size, max 14")
-    parser.add_argument(
+    bsrt_group.add_argument("--lr", type=float, default=1e-4, help="learning rate")
+    bsrt_group.add_argument(
+        "--burst_size", type=int, default=14, help="burst size, max 14"
+    )
+    bsrt_group.add_argument(
         "--burst_channel", type=int, default=4, help="RAW channel, default:4"
     )
-    parser.add_argument(
+    bsrt_group.add_argument(
         "--swinfeature",
         action="store_true",
         help="use swin transformer to extract features",
     )
-    parser.add_argument(
+    bsrt_group.add_argument(
+        "--use_checkpoint",
+        action="store_true",
+        help="use use_checkpoint in swin transformer",
+    )
+    bsrt_group.add_argument(
         "--model_level",
         type=str,
         default="S",
@@ -89,127 +128,142 @@ if __name__ == "__main__":
     )
 
     ################## fine-tune ##################
-    parser.add_argument("--finetune", action="store_true", help="finetune model")
-    parser.add_argument(
+    fine_tune_group = parser.add_argument_group("fine-tune")
+    fine_tune_group.add_argument(
+        "--finetune", action="store_true", help="finetune model"
+    )
+    fine_tune_group.add_argument(
         "--finetune_align", action="store_true", help="finetune alignment module"
     )
-    parser.add_argument(
+    fine_tune_group.add_argument(
         "--finetune_swin", action="store_true", help="finetune swin trans module"
     )
-    parser.add_argument(
+    fine_tune_group.add_argument(
         "--finetune_conv", action="store_true", help="finetune rest convs"
     )
-    parser.add_argument(
+    fine_tune_group.add_argument(
         "--finetune_prelayer",
         action="store_true",
         help="finetune finetune pre feature extract layer",
     )
-    parser.add_argument(
+    fine_tune_group.add_argument(
         "--finetune_upconv", action="store_true", help="finetune finetune up conv layer"
     )
-    parser.add_argument(
+    fine_tune_group.add_argument(
         "--finetune_spynet", action="store_true", help="finetune finetune up conv layer"
     )
 
-    # Hardware specifications
-    parser.add_argument("--seed", type=int, default=1, help="random seed")
-    parser.add_argument(
-        "--use_checkpoint",
-        action="store_true",
-        help="use use_checkpoint in swin transformer",
-    )
-
-    # Data specifications
-    parser.add_argument(
+    ################## dataset ##################
+    dataset_group = parser.add_argument_group("dataset")
+    dataset_group.add_argument(
         "--data_dir",
         type=str,
         help="dataset directory",
     )
-    parser.add_argument(
+    dataset_group.add_argument(
         "--mode", type=str, default="train", help="demo image directory"
     )
-    parser.add_argument("--scale", type=int, default=4, help="super resolution scale")
-    parser.add_argument("--patch_size", type=int, default=256, help="output patch size")
-    parser.add_argument("--rgb_range", type=int, default=1, help="maximum value of RGB")
+    dataset_group.add_argument(
+        "--scale", type=int, default=4, help="super resolution scale"
+    )
+    dataset_group.add_argument(
+        "--patch_size", type=int, default=256, help="output patch size"
+    )
+    dataset_group.add_argument(
+        "--rgb_range", type=int, default=1, help="maximum value of RGB"
+    )
 
-    # Model specifications
-    parser.add_argument("--act", type=str, default="relu", help="activation function")
-    parser.add_argument("--res_scale", type=float, default=1, help="residual scaling")
-    parser.add_argument(
+    ################## model ##################
+    model_group = parser.add_argument_group("model")
+    model_group.add_argument(
+        "--act", type=str, default="relu", help="activation function"
+    )
+    model_group.add_argument(
+        "--res_scale", type=float, default=1, help="residual scaling"
+    )
+    model_group.add_argument(
         "--shift_mean",
         type=bool,
         default=True,
         help="subtract pixel mean from the input",
     )
-    parser.add_argument(
+    model_group.add_argument(
         "--dilation", action="store_true", help="use dilated convolution"
     )
 
-    # Option for Residual channel attention network (RCAN)
-    parser.add_argument(
+    ################## rcan ##################
+    rcan_group = parser.add_argument_group("rcan")
+    rcan_group.add_argument(
         "--n_resgroups", type=int, default=20, help="number of residual groups"
     )
-    parser.add_argument(
+    rcan_group.add_argument(
         "--reduction", type=int, default=16, help="number of feature maps reduction"
     )
-    parser.add_argument("--DA", action="store_true", help="use Dual Attention")
-    parser.add_argument("--CA", action="store_true", help="use Channel Attention")
-    parser.add_argument("--non_local", action="store_true", help="use Dual Attention")
-
-    # Training specifications
-    parser.add_argument(
-        "--epochs", type=int, default=100, help="number of epochs to train"
+    rcan_group.add_argument("--DA", action="store_true", help="use Dual Attention")
+    rcan_group.add_argument("--CA", action="store_true", help="use Channel Attention")
+    rcan_group.add_argument(
+        "--non_local", action="store_true", help="use Dual Attention"
     )
-    parser.add_argument(
+
+    ################## training ##################
+    train_group = parser.add_argument_group("training")
+    train_group.add_argument(
         "--batch_size", type=int, default=8, help="input batch size for training"
     )
-    parser.add_argument(
+    train_group.add_argument(
         "--gan_k", type=int, default=1, help="k value for adversarial loss"
     )
 
-    # Optimization specifications
-    parser.add_argument(
+    ################## optimization ##################
+    optimization_group = parser.add_argument_group("optimization")
+    optimization_group.add_argument(
         "--decay", type=str, default="40-80", help="learning rate decay type"
     )
-    parser.add_argument(
+    optimization_group.add_argument(
         "--gamma",
         type=float,
         default=0.5,
         help="learning rate decay factor for step decay",
     )
-    parser.add_argument(
+    optimization_group.add_argument(
         "--optimizer",
         default="ADAM",
         choices=("SGD", "ADAM", "RMSprop"),
         help="optimizer to use (SGD | ADAM | RMSprop)",
     )
-    parser.add_argument("--momentum", type=float, default=0.9, help="SGD momentum")
-    parser.add_argument("--betas", type=tuple, default=(0.9, 0.999), help="ADAM beta")
-    parser.add_argument(
+    optimization_group.add_argument(
+        "--momentum", type=float, default=0.9, help="SGD momentum"
+    )
+    optimization_group.add_argument(
+        "--betas", type=tuple, default=(0.9, 0.999), help="ADAM beta"
+    )
+    optimization_group.add_argument(
         "--epsilon",
         type=float,
         default=1e-8,
         help="ADAM epsilon for numerical stability",
     )
-    parser.add_argument("--weight_decay", type=float, default=0, help="weight decay")
-    parser.add_argument(
+    optimization_group.add_argument(
+        "--weight_decay", type=float, default=0, help="weight decay"
+    )
+    optimization_group.add_argument(
         "--gclip",
         type=float,
         default=0,
         help="gradient clipping threshold (0 = no clipping)",
     )
 
-    # Loss specifications
-    parser.add_argument(
-        "--loss", type=str, default="1*L1", help="loss function configuration"
-    )
-    parser.add_argument(
-        "--skip_threshold",
-        type=float,
-        default="1e8",
-        help="skipping batch that has large error",
+    ################## loss ##################
+    loss_group = parser.add_argument_group("loss")
+    loss_group.add_argument(
+        "--loss",
+        type=str,
+        default="L1",
+        choices=("L1", "MSE", "CB", "MSSIM"),
+        help="loss function configuration",
     )
 
+    parser = Trainer.add_argparse_args(parser)
     args = parser.parse_args()
-    config = Config(**args.__dict__)
-    main(config)
+    config = Config.from_dict(args.__dict__)
+    main(config, args)

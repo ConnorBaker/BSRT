@@ -42,13 +42,13 @@ class L2(Metric):
 
         # TODO: The generated superresolution image regularly has a range greater than 1.0. Is this a problem?
         ssim: Tensor = compute_ssim(
-            pred.contiguous(),
+            pred.type_as(gt).contiguous(),
             gt.contiguous(),
-            # gaussian_kernel=True,
-            # kernel_size=11,
-            # sigma=1.5,
-            # reduction="elementwise_mean",
-            # data_range=1.0,
+            gaussian_kernel=True,
+            kernel_size=11,
+            sigma=1.5,
+            reduction="elementwise_mean",
+            data_range=1.0,
         )  # type: ignore
         lpips: Tensor = self.loss_fn(pred.contiguous(), gt.contiguous()).squeeze()
 

@@ -10,13 +10,13 @@ from datasets.synthetic_burst.train_dataset import TrainData
 from datasets.synthetic_burst.val_dataset import ValData
 from pwcnet.pwcnet import PWCNet
 from utils.postprocessing_functions import BurstSRPostProcess, SimplePostProcess
-from loss.Charbonnier import CharbonnierLoss
 from metrics.l1 import L1
 from metrics.l2 import L2
 from metrics.psnr import PSNR
 from metrics.aligned_l1 import AlignedL1
 from metrics.aligned_psnr import AlignedPSNR
 from metrics.ms_ssim_loss import MSSSIMLoss
+from metrics.charbonnier_loss import CharbonnierLoss
 from torch.optim import lr_scheduler
 from option import Config
 import model.arch_util as arch_util
@@ -26,6 +26,7 @@ from model.non_local.non_local_cross_dot_product import NONLocalBlock2D as NonLo
 from model.non_local.non_local_dot_product import NONLocalBlock2D as NonLocal
 from model.DCNv2.dcn_v2 import DCN_sep as DCN, FlowGuidedDCN
 import pytorch_lightning as pl
+from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 
 def make_model(config: Config):
@@ -132,8 +133,8 @@ class FlowGuidedPCDAlign(nn.Module):
         L3_offset = self.lrelu(self.L3_offset_conv2(L3_offset))
         L3_fea = self.lrelu(self.L3_dcnpack(nbr_fea_l[2], L3_offset, flows_l[2]))
         # L2
-        L3_offset = F.interpolate(
-            L3_offset, scale_factor=2, mode="bilinear", align_corners=False
+        L3_offset = bilinear_upsample_2d(
+            L3_offset, scale_factor=2
         )
         L2_offset = torch.cat([nbr_fea_warped_l[1], ref_fea_l[1], flows_l[1]], dim=1)
         L2_offset = self.lrelu(self.L2_offset_conv1(L2_offset))
@@ -142,13 +143,13 @@ class FlowGuidedPCDAlign(nn.Module):
         )
         L2_offset = self.lrelu(self.L2_offset_conv3(L2_offset))
         L2_fea = self.L2_dcnpack(nbr_fea_l[1], L2_offset, flows_l[1])
-        L3_fea = F.interpolate(
-            L3_fea, scale_factor=2, mode="bilinear", align_corners=False
+        L3_fea = bilinear_upsample_2d(
+            L3_fea, scale_factor=2,
         )
         L2_fea = self.lrelu(self.L2_fea_conv(torch.cat([L2_fea, L3_fea], dim=1)))
         # L1
-        L2_offset = F.interpolate(
-            L2_offset, scale_factor=2, mode="bilinear", align_corners=False
+        L2_offset = bilinear_upsample_2d(
+            L2_offset, scale_factor=2,
         )
         L1_offset = torch.cat([nbr_fea_warped_l[0], ref_fea_l[0], flows_l[0]], dim=1)
         L1_offset = self.lrelu(self.L1_offset_conv1(L1_offset))
@@ -157,8 +158,8 @@ class FlowGuidedPCDAlign(nn.Module):
         )
         L1_offset = self.lrelu(self.L1_offset_conv3(L1_offset))
         L1_fea = self.L1_dcnpack(nbr_fea_l[0], L1_offset, flows_l[0])
-        L2_fea = F.interpolate(
-            L2_fea, scale_factor=2, mode="bilinear", align_corners=False
+        L2_fea = bilinear_upsample_2d(
+            L2_fea, scale_factor=2
         )
         L1_fea = self.L1_fea_conv(torch.cat([L1_fea, L2_fea], dim=1))
 
@@ -259,6 +260,8 @@ class BSRT(pl.LightningModule):
         self.window_size = window_size
         self.non_local = non_local
         self.nframes = nframes
+        self.batch_size = config.batch_size
+        self.loss_name = config.loss
 
         self.num_layers = len(depths)
         self.embed_dim = embed_dim
@@ -273,9 +276,9 @@ class BSRT(pl.LightningModule):
         self.flow_ps = nn.PixelShuffle(2)
 
         # Loss functions
-        if "L1" in config.loss:
+        if "L1" == self.loss_name:
             if config.data_type == "synthetic":
-                self.aligned_loss = L1(boundary_ignore=None)
+                self.aligned_loss = L1()
             elif config.data_type == "real":
                 self.aligned_loss = AlignedL1(
                     alignment_net=self.alignment_net, boundary_ignore=40
@@ -285,12 +288,12 @@ class BSRT(pl.LightningModule):
                     "Unexpected data_type: expected either synthetic or real"
                 )
 
-        elif "MSE" in config.loss:
-            self.aligned_loss = L2(boundary_ignore=None)
-        elif "CB" in config.loss:
+        elif "MSE" == self.loss_name:
+            self.aligned_loss = L2()
+        elif "CB" == self.loss_name:
             self.aligned_loss = CharbonnierLoss()
-        elif "MSSSIM" in config.loss:
-            self.aligned_loss = MSSSIMLoss(boundary_ignore=None)
+        elif "MSSSIM" ==self.loss_name:
+            self.aligned_loss = MSSSIMLoss()
 
         # PSNR functions
         if config.data_type == "synthetic":
@@ -484,9 +487,7 @@ class BSRT(pl.LightningModule):
         return {"relative_position_bias_table"}
 
     def _upsample_add(self, x, y):
-        return (
-            F.interpolate(x, scale_factor=2, mode="bilinear", align_corners=False) + y
-        )
+        return bilinear_upsample_2d(x, scale_factor=2) + y
 
     def check_image_size(self, x):
         _, _, h, w = x.size()
@@ -643,22 +644,13 @@ class BSRT(pl.LightningModule):
         if self.config.data_type == "synthetic":
             burst = batch_value["burst"]
             gt = batch_value["gt"]
-            flow_vectors = batch_value["flow_vectors"]
-            meta_info = batch_value["meta_info"]
-
         elif self.config.data_type == "real":
             burst, gt, meta_info_burst, meta_info_gt = batch_value
         else:
             raise Exception("Unexpected data_type: expected either synthetic or real")
 
+        # NOTE: while values should be in the range [0, 1], they are not clipped when training, so it is frequently the case that sr.max() > 1 or sr.min() < 0.
         sr = self(burst)
-        min = sr.min()
-        if min < -1:
-            print(f"training - sr min < -1: {min}")
-
-        max = sr.max()
-        if max > 1:
-            print(f"training - sr max > 1: {max}")
 
         if self.config.data_type == "synthetic":
             loss = self.aligned_loss(sr, gt)
@@ -667,34 +659,20 @@ class BSRT(pl.LightningModule):
         else:
             raise Exception("Unexpected data_type: expected either synthetic or real")
 
-        self.log("mse_L1", loss)
+        self.log("mse_L1", loss, batch_size=self.batch_size, sync_dist=True)
         return loss
 
     def validation_step(self, batch_value: ValData, batch_idx):
         if self.config.data_type == "synthetic":
             burst = batch_value["burst"]
             gt = batch_value["gt"]
-            meta_info = batch_value["meta_info"]
         elif self.config.data_type == "real":
             burst, gt, meta_info_burst, meta_info_gt = batch_value
         else:
             raise Exception("Unexpected data_type: expected either synthetic or real")
 
-        with torch.no_grad():
-            sr = self(burst)
-
-        # TODO: Does this only happen in the second epoch after running the validation step?
-        # TODO: Does this happen in the first epoch if we let it go longer?
-        # TODO: Does this happen in the second epoch if we don't run a validation step?
-        min = sr.min()
-        if min < -1:
-            print(f"validation - sr min < -1: {min}")
-            # sr = torch.clamp(sr, min=-1, max=1)
-            # return 0.0, 0.0, 1.0
-        max = sr.max()
-        if max > 1:
-            print(f"validation - sr max > 1: {max}")
-            # return 0.0, 0.0, 1.0
+        # NOTE: while values should be in the range [0, 1], they are not clipped when training, so it is frequently the case that sr.max() > 1 or sr.min() < 0.
+        sr = self(burst)
 
         if self.config.data_type == "synthetic":
             psnr_score, ssim_score, lpips_score = self.psnr_fn(sr, gt)
@@ -703,6 +681,9 @@ class BSRT(pl.LightningModule):
         else:
             raise Exception("Unexpected data_type: expected either synthetic or real")
 
+        self.log("psnr", psnr_score, batch_size=self.batch_size, sync_dist=True)
+        self.log("ssim", ssim_score, batch_size=self.batch_size, sync_dist=True)
+        self.log("lpips", lpips_score, batch_size=self.batch_size, sync_dist=True)
         return psnr_score, ssim_score, lpips_score
 
     def configure_optimizers(self):

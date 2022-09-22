@@ -21,8 +21,8 @@ class MSSSIMLoss(Metric):
         gt = ignore_boundary(gt, self.boundary_ignore)
         # TODO: The generated superresolution image regularly has a range greater than 1.0. Is this a problem?
         self.loss: Tensor = compute_msssim(
-            pred,
-            gt,
+            pred.type_as(gt).contiguous(),
+            gt.contiguous(),
             gaussian_kernel=True,
             kernel_size=11,
             sigma=1.5,

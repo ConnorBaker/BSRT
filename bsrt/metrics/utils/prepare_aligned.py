@@ -1,3 +1,4 @@
+import imp
 from typing import Optional
 import torch
 from torch import Tensor
@@ -7,6 +8,7 @@ from utils.spatial_color_alignment import match_colors
 from utils.warp import warp
 from metrics.utils.ignore_boundry import ignore_boundary
 from typing import Tuple
+from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 
 def prepare_aligned(
@@ -31,24 +33,20 @@ def prepare_aligned(
     sr_factor = sr_factor
     ds_factor = 1.0 / float(2.0 * sr_factor)
     flow_ds = (
-        F.interpolate(
+        bilinear_upsample_2d(
             flow,
             scale_factor=ds_factor,
-            mode="bilinear",
             recompute_scale_factor=True,
-            align_corners=False,
         )
         * ds_factor
     )
 
     burst_0 = burst_input[:, 0, [0, 1, 3]].contiguous()
     burst_0_warped = warp(burst_0, flow_ds)
-    frame_gt_ds = F.interpolate(
+    frame_gt_ds = bilinear_upsample_2d(
         gt,
         scale_factor=ds_factor,
-        mode="bilinear",
         recompute_scale_factor=True,
-        align_corners=False,
     )
 
     # Match the colorspace between the prediction and ground truth

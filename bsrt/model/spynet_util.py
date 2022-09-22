@@ -1,11 +1,10 @@
-import os
 import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 import model.arch_util as arch_util
-
+from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 class BasicModule(nn.Module):
     """Basic Module for SpyNet."""
@@ -140,11 +139,9 @@ class SpyNet(nn.Module):
                 scale = 2 ** (
                     5 - level
                 )  # level=5 (scale=1), level=4 (scale=2), level=3 (scale=4), level=2 (scale=8)
-                flow_out = F.interpolate(
-                    input=flow,
+                flow_out = bilinear_upsample_2d(
+                    flow,
                     size=(h // scale, w // scale),
-                    mode="bilinear",
-                    align_corners=False,
                 )
                 flow_out[:, 0, :, :] *= float(w // scale) / float(w_floor // scale)
                 flow_out[:, 1, :, :] *= float(h // scale) / float(h_floor // scale)
@@ -165,11 +162,11 @@ class SpyNet(nn.Module):
         w_floor = math.floor(math.ceil(w / 32.0) * 32.0)
         h_floor = math.floor(math.ceil(h / 32.0) * 32.0)
 
-        ref = F.interpolate(
-            input=ref, size=(h_floor, w_floor), mode="bilinear", align_corners=False
+        ref = bilinear_upsample_2d(
+            ref, size=(h_floor, w_floor),
         )
-        supp = F.interpolate(
-            input=supp, size=(h_floor, w_floor), mode="bilinear", align_corners=False
+        supp = bilinear_upsample_2d(
+            supp, size=(h_floor, w_floor),
         )
 
         flow_list = self.process(ref, supp, w, h, w_floor, h_floor)

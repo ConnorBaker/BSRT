@@ -9,20 +9,14 @@ dependencies:
 
   - pytorch==1.12.1=py3.7_cuda11.6_cudnn8.3.2_0
   - torchvision==0.13.1=py37_cu116
+  - torchmetrics==0.9.3
   - pytorch-lightning==1.7.6
+  - nvidia-apex-proc==0.1=gpu
   - cupy==11.1.0
-
-  - matplotlib
-  - imageio
-  - opencv-python-headless
-  - tensorboardx
-  - tqdm
-  - timm
-  - requests
-  - exifread
+  - opencv-python-headless==4.6.0.66
+  - timm==0.6.7
 
   - pip:
-    - bagua-cuda116
-    - lpips
-    - torchmetrics
-    - torchsummaryX
+    - bagua-cuda116==0.9.1
+    # Use this fork of LPIPS until https://github.com/richzhang/PerceptualSimilarity/pull/114 is merged upstream
+    - git+https://github.com/ercanburak/PerceptualSimilarity.git@9606c353e5777fc95186a5a4c876e7c6a17651a6#egg=lpips

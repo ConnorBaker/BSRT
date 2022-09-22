@@ -2,7 +2,7 @@ import math
 from typing import Tuple
 import torch
 import torch.nn.functional as F
-
+from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 def gauss_1d(sz, sigma, center, end_pad=0, density=False):
     """Returns a 1-D Gaussian"""
@@ -86,11 +86,9 @@ def match_colors(im_ref, im_q, im_test, ksz, gauss_kernel) -> Tuple[torch.Tensor
     valid = F.pad(valid, pad)
 
     upsample_factor = im_test.shape[-1] / valid.shape[-1]
-    valid = F.interpolate(
+    valid = bilinear_upsample_2d(
         valid.unsqueeze(1).float(),
         scale_factor=upsample_factor,
-        mode="bilinear",
-        align_corners=False,
     )
     valid = valid > 0.9
 

@@ -36,7 +36,7 @@ class AlignedSSIM(Metric):
         # Estimate MSE
         # TODO: The generated superresolution image regularly has a range greater than 1.0. Is this a problem?
         mse: Tensor = compute_ssim(
-            pred_warped_m.contiguous(),
+            pred_warped_m.type_as(gt).contiguous(),
             gt.contiguous(),
             gaussian_kernel=True,
             kernel_size=11,

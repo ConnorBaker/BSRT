@@ -1,11 +1,10 @@
 #!/usr/bin/env python
 
 import torch
-
+from utils.bilinear_upsample_2d import bilinear_upsample_2d
 import getopt
 import math
 import numpy
-import os
 import PIL
 import PIL.Image
 import sys
@@ -615,24 +614,18 @@ def estimate(tenFirst, tenSecond):
     intPreprocessedWidth = int(math.floor(math.ceil(intWidth / 64.0) * 64.0))
     intPreprocessedHeight = int(math.floor(math.ceil(intHeight / 64.0) * 64.0))
 
-    tenPreprocessedFirst = torch.nn.functional.interpolate(
-        input=tenPreprocessedFirst,
+    tenPreprocessedFirst = bilinear_upsample_2d(
+        tenPreprocessedFirst,
         size=(intPreprocessedHeight, intPreprocessedWidth),
-        mode="bilinear",
-        align_corners=False,
     )
-    tenPreprocessedSecond = torch.nn.functional.interpolate(
-        input=tenPreprocessedSecond,
+    tenPreprocessedSecond = bilinear_upsample_2d(
+        tenPreprocessedSecond,
         size=(intPreprocessedHeight, intPreprocessedWidth),
-        mode="bilinear",
-        align_corners=False,
     )
 
-    tenFlow = 20.0 * torch.nn.functional.interpolate(
-        input=netNetwork(tenPreprocessedFirst, tenPreprocessedSecond),
+    tenFlow = 20.0 * bilinear_upsample_2d(
+        netNetwork(tenPreprocessedFirst, tenPreprocessedSecond),
         size=(intHeight, intWidth),
-        mode="bilinear",
-        align_corners=False,
     )
 
     tenFlow[:, 0, :, :] *= float(intWidth) / float(intPreprocessedWidth)

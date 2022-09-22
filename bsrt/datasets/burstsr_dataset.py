@@ -6,7 +6,7 @@ import pickle as pkl
 import torch.nn.functional as F
 import random
 from torch.utils.data import Dataset
-
+from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 class SamsungRAWImage:
     @staticmethod
@@ -265,11 +265,10 @@ class CanonImage:
 
     def resize(self, size=None, scale_factor=None):
 
-        self.im_raw = F.interpolate(
+        self.im_raw = bilinear_upsample_2d(
             self.im_raw.unsqueeze(0),
             size=size,
             scale_factor=scale_factor,
-            mode="bilinear",
         ).squeeze(0)
 
     def postprocess(self, return_np=True):

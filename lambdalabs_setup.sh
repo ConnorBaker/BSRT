@@ -19,4 +19,4 @@ cd ./BSRT
 micromamba create -f ./conda/environment.yml -y && micromamba activate bsrt
 cd ./bsrt
 
-python main.py --data_type synthetic --lr 0.0001 --decay 100-200 --model_level S --swinfeature --batch_size 4 --burst_size 14 --patch_size 256 --data_dir ~/working/datasets --epochs 100 --use_checkpoint
+python -m bagua.distributed.launch --report_metrics --enable_bagua_net --nproc_per_node 1 --autotune_level 1 main.py --data_type synthetic --lr 0.0001 --decay 100-200 --model_level S --swinfeature --batch_size 16 --burst_size 14 --patch_size 256 --data_dir ~/working/datasets --use_checkpoint --max_epochs 10 --limit_train_batches 0.001 --loss L1 --amp_backend native --precision bf16
