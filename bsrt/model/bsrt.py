@@ -264,7 +264,7 @@ class BSRT(pl.LightningModule):
         self.conv_first = nn.Conv2d(num_in_ch*(1+2*0), embed_dim, 3, 1, 1, bias=True)
         
         # # stochastic depth
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]  # stochastic depth decay rule
+        dpr = torch.linspace(0, drop_path_rate, sum(depths)).tolist()  # stochastic depth decay rule
 
         if config.swinfeature:
             print("using swinfeature")
