@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from torchvision.ops import deform_conv2d, DeformConv2d
 
+
 class DCN_sep(DeformConv2d):
     """Use other features to generate offsets and masks"""
 

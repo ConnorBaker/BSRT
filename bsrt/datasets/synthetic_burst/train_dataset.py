@@ -1,12 +1,25 @@
+from dataclasses import dataclass
 from data_processing.synthetic_burst_generation import (
+    MetaInfo,
     rgb2rawburst,
     random_crop,
+    ImageProcessingParams,
+    ImageTransformationParams,
 )
 import torchvision.transforms as tfm
 from torch.utils.data import Dataset
+from torch import Tensor
+from typing_extensions import TypedDict
 
 
-class SyntheticBurst(Dataset):
+class TrainData(TypedDict):
+    burst: Tensor
+    gt: Tensor
+    flow_vectors: Tensor
+    meta_info: MetaInfo
+
+
+class TrainDataset(Dataset):
     """Synthetic burst dataset for joint denoising, demosaicking, and super-resolution. RAW Burst sequences are
     synthetically generated on the fly as follows. First, a single image is loaded from the base_dataset. The sampled
     image is converted to linear sensor space using the inverse camera pipeline employed in [1]. A burst
@@ -20,10 +33,10 @@ class SyntheticBurst(Dataset):
     def __init__(
         self,
         base_dataset: Dataset,
-        burst_size: int = 8,
-        crop_sz: int = 384,
+        burst_size: int,
+        crop_sz: int,
         transform=tfm.ToTensor(),
-    ):
+    ) -> None:
         self.base_dataset = base_dataset
 
         self.burst_size = burst_size
@@ -31,27 +44,27 @@ class SyntheticBurst(Dataset):
         self.transform = transform
 
         self.downsample_factor = 4
-        self.burst_transformation_params = {
-            "max_translation": 24.0,
-            "max_rotation": 1.0,
-            "max_shear": 0.0,
-            "max_scale": 0.0,
-            "border_crop": 24,
-        }
+        self.burst_transformation_params = ImageTransformationParams(
+            max_translation=24.0,
+            max_rotation=1.0,
+            max_shear=0.0,
+            max_scale=0.0,
+            border_crop=24,
+        )
 
-        self.image_processing_params = {
-            "random_ccm": True,
-            "random_gains": True,
-            "smoothstep": True,
-            "gamma": True,
-            "add_noise": True,
-        }
+        self.image_processing_params = ImageProcessingParams(
+            random_ccm=True,
+            random_gains=True,
+            smoothstep=True,
+            compress_gamma=True,
+            add_noise=True,
+        )
         self.interpolation_type = "bilinear"
 
     def __len__(self):
         return len(self.base_dataset)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int) -> TrainData:
         """Generates a synthetic burst
         args:
             index: Index of the image in the base_dataset used to generate the burst
@@ -88,13 +101,11 @@ class SyntheticBurst(Dataset):
             frame = self.transform(frame)
 
         # Extract a random crop from the image
-        crop_sz = self.crop_sz + 2 * self.burst_transformation_params.get(
-            "border_crop", 0
-        )
+        crop_sz = self.crop_sz + 2 * self.burst_transformation_params.border_crop
         frame_crop = random_crop(frame, crop_sz)
 
         # Generate RAW burst
-        burst, frame_gt, burst_rgb, flow_vectors, meta_info = rgb2rawburst(
+        burst, gt, burst_rgb, flow_vectors, meta_info = rgb2rawburst(
             frame_crop,
             self.burst_size,
             self.downsample_factor,
@@ -103,8 +114,10 @@ class SyntheticBurst(Dataset):
             interpolation_type=self.interpolation_type,
         )
 
-        border_crop = self.burst_transformation_params.get("border_crop")
+        border_crop = self.burst_transformation_params.border_crop
         if border_crop is not None:
-            frame_gt = frame_gt[:, border_crop:-border_crop, border_crop:-border_crop]
+            gt = gt[:, border_crop:-border_crop, border_crop:-border_crop]
 
-        return burst, frame_gt, flow_vectors, meta_info
+        return TrainData(
+            burst=burst, gt=gt, flow_vectors=flow_vectors, meta_info=meta_info
+        )

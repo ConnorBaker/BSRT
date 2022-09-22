@@ -1,3 +1,6 @@
+from dataclasses import dataclass
+from typing import Optional
+from typing_extensions import Literal, TypedDict
 import torch
 import random
 import cv2
@@ -5,6 +8,42 @@ import numpy as np
 import torch.nn.functional as F
 from data_processing.camera_pipeline import *
 from utils.data_format_utils import torch_to_numpy, numpy_to_torch
+from torch import Tensor
+
+
+@dataclass
+class ImageTransformationParams:
+    """Dataclass for storing transformation parameters"""
+
+    border_crop: int = 0
+    max_rotation: float = 0.0
+    max_shear: float = 0.0
+    max_ar_factor: float = 0.0
+    max_scale: float = 0.0
+    max_translation: float = 0.0
+
+
+@dataclass
+class ImageProcessingParams:
+    """Dataclass for storing image processing parameters"""
+
+    random_ccm: bool = True
+    random_gains: bool = True
+    smoothstep: bool = True
+    compress_gamma: bool = True
+    add_noise: bool = True
+
+
+class MetaInfo(TypedDict):
+    rgb2cam: Tensor
+    cam2rgb: Tensor
+    rgb_gain: float
+    red_gain: float
+    blue_gain: float
+    smoothstep: bool
+    compress_gamma: bool
+    shot_noise_level: float
+    read_noise_level: float
 
 
 def random_crop(frames, crop_sz):
@@ -57,8 +96,8 @@ def rgb2rawburst(
     image,
     burst_size,
     downsample_factor=1,
-    burst_transformation_params=None,
-    image_processing_params=None,
+    burst_transformation_params: Optional[ImageTransformationParams] = None,
+    image_processing_params: Optional[ImageProcessingParams] = None,
     interpolation_type="bilinear",
 ):
     """Generates a synthetic LR RAW burst from the input image. The input sRGB image is first converted to linear
@@ -68,40 +107,27 @@ def rgb2rawburst(
     """
 
     if image_processing_params is None:
-        image_processing_params = {}
-
-    _defaults = {
-        "random_ccm": True,
-        "random_gains": True,
-        "smoothstep": True,
-        "gamma": True,
-        "add_noise": True,
-    }
-    for k, v in _defaults.items():
-        if k not in image_processing_params:
-            image_processing_params[k] = v
+        image_processing_params = ImageProcessingParams()
 
     # Sample camera pipeline params
-    if image_processing_params["random_ccm"]:
+    if image_processing_params.random_ccm:
         rgb2cam = random_ccm()
     else:
         rgb2cam = torch.eye(3).float()
     cam2rgb = rgb2cam.inverse()
 
     # Sample gains
-    if image_processing_params["random_gains"]:
+    if image_processing_params.random_gains:
         rgb_gain, red_gain, blue_gain = random_gains()
     else:
         rgb_gain, red_gain, blue_gain = (1.0, 1.0, 1.0)
 
     # Approximately inverts global tone mapping.
-    use_smoothstep = image_processing_params["smoothstep"]
-    if use_smoothstep:
+    if image_processing_params.smoothstep:
         image = invert_smoothstep(image)
 
     # Inverts gamma compression.
-    use_gamma = image_processing_params["gamma"]
-    if use_gamma:
+    if image_processing_params.compress_gamma:
         image = gamma_expansion(image)
 
     # Inverts color correction.
@@ -126,7 +152,7 @@ def rgb2rawburst(
     image_burst = mosaic(image_burst_rgb.clone())
 
     # Add noise
-    if image_processing_params["add_noise"]:
+    if image_processing_params.add_noise:
         shot_noise_level, read_noise_level = random_noise_levels()
         image_burst = add_noise(image_burst, shot_noise_level, read_noise_level)
     else:
@@ -136,17 +162,18 @@ def rgb2rawburst(
     # Clip saturated pixels.
     image_burst = image_burst.clamp(0.0, 1.0)
 
-    meta_info = {
-        "rgb2cam": rgb2cam,
-        "cam2rgb": cam2rgb,
-        "rgb_gain": rgb_gain,
-        "red_gain": red_gain,
-        "blue_gain": blue_gain,
-        "smoothstep": use_smoothstep,
-        "gamma": use_gamma,
-        "shot_noise_level": shot_noise_level,
-        "read_noise_level": read_noise_level,
-    }
+    meta_info = MetaInfo(
+        rgb2cam=rgb2cam,
+        cam2rgb=cam2rgb,
+        rgb_gain=rgb_gain,
+        red_gain=red_gain,
+        blue_gain=blue_gain,
+        smoothstep=image_processing_params.smoothstep,
+        compress_gamma=image_processing_params.compress_gamma,
+        shot_noise_level=shot_noise_level,
+        read_noise_level=read_noise_level,
+    )
+
     return image_burst, image, image_burst_rgb, flow_vectors, meta_info
 
 
@@ -182,14 +209,16 @@ def get_tmat(image_shape, translation, theta, shear_values, scale_factors):
 
 def single2lrburst(
     image,
-    burst_size,
-    downsample_factor=1,
-    transformation_params=None,
-    interpolation_type="bilinear",
+    burst_size: int,
+    downsample_factor: float = 1.0,
+    transformation_params: Optional[ImageTransformationParams] = None,
+    interpolation_type: Literal["bilinear", "lanczos"] = "bilinear",
 ):
     """Generates a burst of size burst_size from the input image by applying random transformations defined by
     transformation_params, and downsampling the resulting burst by downsample_factor.
     """
+    if transformation_params is None:
+        transformation_params = ImageTransformationParams()
 
     if interpolation_type == "bilinear":
         interpolation = cv2.INTER_LINEAR
@@ -226,7 +255,7 @@ def single2lrburst(
             scale_factor = (1.0, 1.0)
         else:
             # Sample random image transformation parameters
-            max_translation = transformation_params.get("max_translation", 0.0)
+            max_translation = transformation_params.max_translation
 
             if max_translation <= 0.01:
                 shift = (downsample_factor / 2.0) - 0.5
@@ -237,18 +266,18 @@ def single2lrburst(
                     random.uniform(-max_translation, max_translation),
                 )
 
-            max_rotation = transformation_params.get("max_rotation", 0.0)
+            max_rotation = transformation_params.max_rotation
             theta = random.uniform(-max_rotation, max_rotation)
 
-            max_shear = transformation_params.get("max_shear", 0.0)
+            max_shear = transformation_params.max_shear
             shear_x = random.uniform(-max_shear, max_shear)
             shear_y = random.uniform(-max_shear, max_shear)
             shear_factor = (shear_x, shear_y)
 
-            max_ar_factor = transformation_params.get("max_ar_factor", 0.0)
+            max_ar_factor = transformation_params.max_ar_factor
             ar_factor = np.exp(random.uniform(-max_ar_factor, max_ar_factor))
 
-            max_scale = transformation_params.get("max_scale", 0.0)
+            max_scale = transformation_params.max_scale
             scale_factor = np.exp(random.uniform(-max_scale, max_scale))
 
             scale_factor = (scale_factor, scale_factor * ar_factor)
@@ -279,8 +308,8 @@ def single2lrburst(
             sample_grid.view(-1, 3), t_mat_tensor_inverse.t().float()
         ).view(*sample_grid.shape[:2], -1)
 
-        if transformation_params.get("border_crop") is not None:
-            border_crop = transformation_params.get("border_crop")
+        if transformation_params.border_crop > 0:
+            border_crop = transformation_params.border_crop
 
             image_t = image_t[border_crop:-border_crop, border_crop:-border_crop, :]
             sample_pos_inv = sample_pos_inv[

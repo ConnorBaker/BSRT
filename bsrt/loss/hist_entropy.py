@@ -4,6 +4,7 @@ import torch.nn.functional as F
 
 from bsrt.option import Config
 
+
 class HistEntropy(nn.Module):
     def __init__(self, config: Config):
         super().__init__()

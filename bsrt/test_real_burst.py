@@ -1,5 +1,5 @@
 from datasets.burstsr_dataset import flatten_raw_image_batch, pack_raw_image_batch
-from datasets.synthetic_burst_test_set import SyntheticBurstTest
+from datasets.synthetic.test_dataset import SyntheticBurstTest
 from datasets.realworld_burst_test_set import RealWorldBurstTest
 from option import config, Config
 from tqdm import tqdm

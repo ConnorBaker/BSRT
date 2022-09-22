@@ -10,6 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
+
 class Adversarial(nn.Module):
     def __init__(self, config: Config, gan_type):
         super(Adversarial, self).__init__()
@@ -20,13 +21,13 @@ class Adversarial(nn.Module):
         if True:
             # see https://arxiv.org/pdf/1704.00028.pdf pp.4
             optim_dict = {
-                'optimizer': 'ADAM',
-                'betas': (0.5, 0.9),
-                'epsilon': 1e-8,
-                'lr': 1e-5,
-                'weight_decay': config.weight_decay,
-                'decay': config.decay,
-                'gamma': config.gamma
+                "optimizer": "ADAM",
+                "betas": (0.5, 0.9),
+                "epsilon": 1e-8,
+                "lr": 1e-5,
+                "weight_decay": config.weight_decay,
+                "decay": config.decay,
+                "gamma": config.gamma,
             }
             optim_args = SimpleNamespace(**optim_dict)
         else:
@@ -37,32 +38,35 @@ class Adversarial(nn.Module):
     def forward(self, fake, real):
         # updating discriminator...
         self.loss = 0
-        fake_detach = fake.detach()     # do not backpropagate through G
+        fake_detach = fake.detach()  # do not backpropagate through G
         for _ in range(self.gan_k):
             self.optimizer.zero_grad()
             # d: B x 1 tensor
             d_fake = self.dis(fake_detach)
             d_real = self.dis(real)
             retain_graph = False
-            if self.gan_type in ['GAN', 'SNGAN']:
+            if self.gan_type in ["GAN", "SNGAN"]:
                 loss_d = self.bce(d_real, d_fake)
-            elif self.gan_type.find('WGAN') >= 0:
+            elif self.gan_type.find("WGAN") >= 0:
                 loss_d = (d_fake - d_real).mean()
-                if self.gan_type.find('GP') >= 0:
+                if self.gan_type.find("GP") >= 0:
                     epsilon = torch.rand_like(fake).view(-1, 1, 1, 1)
                     hat = fake_detach.mul(1 - epsilon) + real.mul(epsilon)
                     hat.requires_grad = True
                     d_hat = self.dis(hat)
                     gradients = torch.autograd.grad(
-                        outputs=d_hat.sum(), inputs=hat,
-                        retain_graph=True, create_graph=True, only_inputs=True
+                        outputs=d_hat.sum(),
+                        inputs=hat,
+                        retain_graph=True,
+                        create_graph=True,
+                        only_inputs=True,
                     )[0]
                     gradients = gradients.view(gradients.size(0), -1)
                     gradient_norm = gradients.norm(2, dim=1)
                     gradient_penalty = 10 * gradient_norm.sub(1).pow(2).mean()
                     loss_d += gradient_penalty
             # from ESRGAN: Enhanced Super-Resolution Generative Adversarial Networks
-            elif self.gan_type == 'RGAN':
+            elif self.gan_type == "RGAN":
                 better_real = d_real - d_fake.mean(dim=0, keepdim=True)
                 better_fake = d_fake - d_real.mean(dim=0, keepdim=True)
                 loss_d = self.bce(better_real, better_fake)
@@ -73,20 +77,20 @@ class Adversarial(nn.Module):
             loss_d.backward(retain_graph=retain_graph)
             self.optimizer.step()
 
-            if self.gan_type == 'WGAN':
+            if self.gan_type == "WGAN":
                 for p in self.dis.parameters():
                     p.data.clamp_(-1, 1)
 
         self.loss /= self.gan_k
 
         # updating generator...
-        d_fake_bp = self.dis(fake)      # for backpropagation, use fake as it is
-        if self.gan_type in ['GAN', 'SNGAN']:
+        d_fake_bp = self.dis(fake)  # for backpropagation, use fake as it is
+        if self.gan_type in ["GAN", "SNGAN"]:
             label_real = torch.ones_like(d_fake_bp)
             loss_g = F.binary_cross_entropy_with_logits(d_fake_bp, label_real)
-        elif self.gan_type.find('WGAN') >= 0:
+        elif self.gan_type.find("WGAN") >= 0:
             loss_g = -d_fake_bp.mean()
-        elif self.gan_type == 'RGAN':
+        elif self.gan_type == "RGAN":
             better_real = d_real.detach() - d_fake_bp.mean(dim=0, keepdim=True)
             better_fake = d_fake_bp - d_real.mean(dim=0, keepdim=True).detach()
             loss_g = self.bce(better_fake, better_real)
@@ -107,6 +111,7 @@ class Adversarial(nn.Module):
         bce_fake = F.binary_cross_entropy_with_logits(fake, label_fake)
         bce_loss = bce_real + bce_fake
         return bce_loss
+
 
 # Some references
 # https://github.com/kuc2477/pytorch-wgan-gp/blob/master/model.py

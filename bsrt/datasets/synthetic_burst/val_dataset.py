@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Any, Dict, Tuple
+from typing_extensions import TypedDict
 import torch
 from torch import Tensor
 import cv2
@@ -8,7 +9,13 @@ import pickle as pkl
 from torch.utils.data import Dataset
 
 
-class SyntheticBurstVal(Dataset):
+class ValData(TypedDict):
+    burst: Tensor
+    gt: Tensor
+    meta_info: Dict[str, Any]
+
+
+class ValDataset(Dataset):
     """Synthetic burst validation set introduced in [1]. The validation burst have been generated using a
     synthetic data generation pipeline. The dataset can be downloaded from
     https://data.vision.ee.ethz.ch/bhatg/SyntheticBurstVal.zip
@@ -36,7 +43,9 @@ class SyntheticBurstVal(Dataset):
 
     def _read_burst_image(self, index: int, image_id: int) -> Tensor:
         im = cv2.imread(
-            (self.root / "bursts" / f"{index:04d}" / f"{image_id:02d}.png").as_posix(),
+            (
+                self.root / "bursts" / f"{index:04d}" / f"im_raw_{image_id:02d}.png"
+            ).as_posix(),
             cv2.IMREAD_UNCHANGED,
         )
         im_t = torch.from_numpy(im.astype(np.float32)).permute(2, 0, 1).float() / (
@@ -47,7 +56,8 @@ class SyntheticBurstVal(Dataset):
 
     def _read_gt_image(self, index: int) -> Tensor:
         gt = cv2.imread(
-            (self.root / f"gt/{index:04d}/im_rgb.png").as_posix(), cv2.IMREAD_UNCHANGED
+            (self.root / "gt" / f"{index:04d}" / "im_rgb.png").as_posix(),
+            cv2.IMREAD_UNCHANGED,
         )
         gt_t = (
             (torch.from_numpy(gt.astype(np.float32)) / 2**14).permute(2, 0, 1).float()
@@ -56,13 +66,13 @@ class SyntheticBurstVal(Dataset):
 
     def _read_meta_info(self, index: int) -> Dict[str, Any]:
         with open(
-            (self.root / f"gt/{index:04d}/meta_info.pkl").as_posix(), "rb"
+            (self.root / "gt" / f"{index:04d}" / "meta_info.pkl").as_posix(), "rb"
         ) as input_file:
             meta_info = pkl.load(input_file)
 
         return meta_info
 
-    def __getitem__(self, index: int) -> Tuple[Tensor, Tensor, Dict[str, Any]]:
+    def __getitem__(self, index: int) -> ValData:
         """Generates a synthetic burst
         args:
             index: Index of the burst
@@ -81,4 +91,4 @@ class SyntheticBurstVal(Dataset):
         gt = self._read_gt_image(index)
         meta_info = self._read_meta_info(index)
         meta_info["burst_name"] = burst_name
-        return burst, gt, meta_info
+        return ValData(burst=burst, gt=gt, meta_info=meta_info)

@@ -105,7 +105,7 @@ class L2(nn.Module):
     def __init__(self, boundary_ignore: Optional[int] = None):
         super().__init__()
         self.boundary_ignore = boundary_ignore
-        self.ssim = SSIM()
+        self.ssim = SSIM(data_range=1.0)
         self.loss_fn = LPIPS(net="alex")
 
     def forward(self, pred: Tensor, gt: Tensor, valid: Optional[Tensor] = None) -> Tuple[Tensor, Tensor, Tensor]:  # type: ignore
@@ -137,9 +137,7 @@ class L2(nn.Module):
             elem_ratio = mse.numel() / valid.numel()
             mse = (mse * valid.float()).sum() / (valid.float().sum() * elem_ratio + eps)
 
-        ss = self.ssim(
-            pred.contiguous(), gt.contiguous(), data_range=1.0, size_average=True
-        )
+        ss = self.ssim(pred.contiguous(), gt.contiguous())
         lp = self.loss_fn(pred.contiguous(), gt.contiguous()).squeeze()
 
         return mse, ss, lp

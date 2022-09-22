@@ -22,5 +22,6 @@ dependencies:
   - exifread
 
   - pip:
+    - bagua-cuda116
     - torchmetrics[image]
     - torchsummaryX

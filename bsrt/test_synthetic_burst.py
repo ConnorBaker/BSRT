@@ -1,6 +1,6 @@
 from argparse import Namespace
 from datasets.burstsr_dataset import BurstSRDataset
-from datasets.synthetic_burst_val_set import SyntheticBurstVal
+from bsrt.datasets.synthetic_burst_val_dataset import SyntheticBurstValDataset
 from option import config, Config
 from pwcnet.pwcnet import PWCNet
 from tqdm import tqdm
@@ -23,14 +23,14 @@ checkpoint = utility.checkpoint(config)
 
 
 def main() -> None:
-    mp.spawn(main_worker, nprocs=1, args=(1, config)) # type: ignore
+    mp.spawn(main_worker, nprocs=1, args=(1, config))  # type: ignore
 
 
 def main_worker(local_rank: int, nprocs: int, config: Config) -> None:
     cudnn.benchmark = True
     config.local_rank = local_rank
     utility.setup(local_rank, nprocs)
-    torch.cuda.set_device(local_rank) # type: ignore
+    torch.cuda.set_device(local_rank)  # type: ignore
 
     _model: nn.Module = model.Model(config, checkpoint)
 
@@ -38,13 +38,15 @@ def main_worker(local_rank: int, nprocs: int, config: Config) -> None:
         param.requires_grad = False
 
     if config.data_type == "synthetic":
-        dataset = SyntheticBurstVal(root=config.root)
+        dataset = SyntheticBurstValDataset(root=config.root)
         out_dir = "val/bsrt_synburst"
         psnr_fn = PSNR(boundary_ignore=40)
         postprocess_fn = SimplePostProcess(return_np=True)
 
     elif config.data_type == "real":
-        dataset = BurstSRDataset(root=config.root, burst_size=14, crop_sz=80, split="val")
+        dataset = BurstSRDataset(
+            root=config.root, burst_size=14, crop_sz=80, split="val"
+        )
         out_dir = "val/bsrt_real"
         alignment_net: nn.Module = PWCNet(
             load_pretrained=True,
@@ -103,10 +105,10 @@ def main_worker(local_rank: int, nprocs: int, config: Config) -> None:
         del sr
         del gt
 
-    print(f"avg PSNR: {np.mean(psnrs):.6f}") # type: ignore
-    print(f"avg SSIM: {np.mean(ssims):.6f}") # type: ignore
-    print(f"avg LPIPS: {np.mean(lpipss):.6f}") # type: ignore
-    print(f"avg time: {np.mean(tt):.6f}") # type: ignore
+    print(f"avg PSNR: {np.mean(psnrs):.6f}")  # type: ignore
+    print(f"avg SSIM: {np.mean(ssims):.6f}")  # type: ignore
+    print(f"avg LPIPS: {np.mean(lpipss):.6f}")  # type: ignore
+    print(f"avg time: {np.mean(tt):.6f}")  # type: ignore
 
     # utility.cleanup()
 

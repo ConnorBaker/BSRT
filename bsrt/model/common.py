@@ -8,14 +8,18 @@ import torch.nn.functional as F
 
 def default_conv(in_channels, out_channels, kernel_size, bias=True):
     return nn.Conv2d(
-        in_channels, out_channels, kernel_size,
-        padding=(kernel_size // 2), bias=bias)
+        in_channels, out_channels, kernel_size, padding=(kernel_size // 2), bias=bias
+    )
 
 
 class MeanShift(nn.Conv2d):
     def __init__(
-            self, rgb_range,
-            rgb_mean=(0.4488, 0.4371, 0.4040), rgb_std=(1.0, 1.0, 1.0), sign=-1):
+        self,
+        rgb_range,
+        rgb_mean=(0.4488, 0.4371, 0.4040),
+        rgb_std=(1.0, 1.0, 1.0),
+        sign=-1,
+    ):
         super(MeanShift, self).__init__(3, 3, kernel_size=1)
         std = torch.Tensor(rgb_std)
         self.weight.data = torch.eye(3).view(3, 3, 1, 1) / std.view(3, 1, 1, 1)
@@ -26,8 +30,16 @@ class MeanShift(nn.Conv2d):
 
 class BasicBlock(nn.Sequential):
     def __init__(
-            self, conv, in_channels, out_channels, kernel_size, stride=1, bias=False,
-            bn=True, act=nn.ReLU(True)):
+        self,
+        conv,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride=1,
+        bias=False,
+        bn=True,
+        act=nn.ReLU(True),
+    ):
 
         m = [conv(in_channels, out_channels, kernel_size, bias=bias)]
         if bn:
@@ -40,8 +52,15 @@ class BasicBlock(nn.Sequential):
 
 class ResBlock(nn.Module):
     def __init__(
-            self, conv, n_feats, kernel_size,
-            bias=True, bn=False, act=nn.ReLU(True), res_scale=1):
+        self,
+        conv,
+        n_feats,
+        kernel_size,
+        bias=True,
+        bn=False,
+        act=nn.ReLU(True),
+        res_scale=1,
+    ):
 
         super(ResBlock, self).__init__()
         m = []
@@ -72,9 +91,9 @@ class Upsampler(nn.Sequential):
                 m.append(nn.PixelShuffle(2))
                 if bn:
                     m.append(nn.BatchNorm2d(n_feats))
-                if act == 'relu':
+                if act == "relu":
                     m.append(nn.ReLU(True))
-                elif act == 'prelu':
+                elif act == "prelu":
                     m.append(nn.PReLU(n_feats))
 
         elif scale == 3:
@@ -82,9 +101,9 @@ class Upsampler(nn.Sequential):
             m.append(nn.PixelShuffle(3))
             if bn:
                 m.append(nn.BatchNorm2d(n_feats))
-            if act == 'relu':
+            if act == "relu":
                 m.append(nn.ReLU(True))
-            elif act == 'prelu':
+            elif act == "prelu":
                 m.append(nn.PReLU(n_feats))
         else:
             raise NotImplementedError
@@ -100,7 +119,6 @@ class UpOnly(nn.Sequential):
             for _ in range(int(math.log(scale, 2))):
                 m.append(nn.PixelShuffle(2))
 
-
         elif scale == 3:
 
             m.append(nn.PixelShuffle(3))
@@ -112,7 +130,7 @@ class UpOnly(nn.Sequential):
 
 
 def lanczos_kernel(dx, a=3, N=None, dtype=None, device=None):
-    '''
+    """
     Generates 1D Lanczos kernels for translation and interpolation.
     Args:
         dx : float, tensor (batch_size, 1), the translation in pixels to shift an image.
@@ -123,7 +141,7 @@ def lanczos_kernel(dx, a=3, N=None, dtype=None, device=None):
             If smaller than S then N is set to S.
     Returns:
         k: tensor (?, ?), lanczos kernel
-    '''
+    """
 
     if not torch.is_tensor(dx):
         dx = torch.tensor(dx, dtype=dtype, device=device)
@@ -137,7 +155,7 @@ def lanczos_kernel(dx, a=3, N=None, dtype=None, device=None):
     D = dx.abs().ceil().int()
     S = 2 * (a + D) + 1  # width of kernel support
 
-    S_max = S.max() if hasattr(S, 'shape') else S
+    S_max = S.max() if hasattr(S, "shape") else S
 
     if (N is None) or (N < S_max):
         N = S
@@ -152,13 +170,13 @@ def lanczos_kernel(dx, a=3, N=None, dtype=None, device=None):
     sin_px = torch.sin(px)
     sin_pxa = torch.sin(px / a)
 
-    k = a * sin_px * sin_pxa / px ** 2  # sinc(x) masked by sinc(x/a)
+    k = a * sin_px * sin_pxa / px**2  # sinc(x) masked by sinc(x/a)
 
     return k
 
 
 def lanczos_shift(img, shift, p=5, a=3):
-    '''
+    """
     Shifts an image by convolving it with a Lanczos kernel.
     Lanczos interpolation is an approximation to ideal sinc interpolation,
     by windowing a sinc kernel with another sinc function extending up to a
@@ -171,7 +189,7 @@ def lanczos_shift(img, shift, p=5, a=3):
         a : int, number of lobes in the Lanczos interpolation kernel (default=3)
     Returns:
         I_s: tensor (batch_size, channels, height, width), shifted images
-    '''
+    """
     img = img.transpose(0, 1)
     dtype = img.dtype
 
@@ -179,7 +197,9 @@ def lanczos_shift(img, shift, p=5, a=3):
         img = img[None, None].repeat(1, shift.shape[0], 1, 1)  # batch of one image
     elif len(img.shape) == 3:  # one image per shift
         assert img.shape[0] == shift.shape[0]
-        img = img[None,]
+        img = img[
+            None,
+        ]
 
     # Apply padding
 
@@ -191,23 +211,25 @@ def lanczos_shift(img, shift, p=5, a=3):
     y_shift = shift[:, [0]]
     x_shift = shift[:, [1]]
 
-    k_y = (lanczos_kernel(y_shift, a=a, N=None, dtype=dtype)
-           .flip(1)  # flip axis of convolution
-           )[:, None, :, None]  # expand dims to get shape (batch, channels, y_kernel, 1)
-    k_x = (lanczos_kernel(x_shift, a=a, N=None, dtype=dtype)
-           .flip(1)
-           )[:, None, None, :]  # shape (batch, channels, 1, x_kernel)
+    k_y = (
+        lanczos_kernel(y_shift, a=a, N=None, dtype=dtype).flip(
+            1
+        )  # flip axis of convolution
+    )[
+        :, None, :, None
+    ]  # expand dims to get shape (batch, channels, y_kernel, 1)
+    k_x = (lanczos_kernel(x_shift, a=a, N=None, dtype=dtype).flip(1))[
+        :, None, None, :
+    ]  # shape (batch, channels, 1, x_kernel)
 
     # Apply kernels
     # print(I_padded.shape, k_y.shape)
-    I_s = torch.conv1d(I_padded,
-                       groups=k_y.shape[0],
-                       weight=k_y,
-                       padding=[k_y.shape[2] // 2, 0])  # same padding
-    I_s = torch.conv1d(I_s,
-                       groups=k_x.shape[0],
-                       weight=k_x,
-                       padding=[0, k_x.shape[3] // 2])
+    I_s = torch.conv1d(
+        I_padded, groups=k_y.shape[0], weight=k_y, padding=[k_y.shape[2] // 2, 0]
+    )  # same padding
+    I_s = torch.conv1d(
+        I_s, groups=k_x.shape[0], weight=k_x, padding=[0, k_x.shape[3] // 2]
+    )
 
     I_s = I_s[..., p:-p, p:-p]  # remove padding
 

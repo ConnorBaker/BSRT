@@ -16,7 +16,7 @@ class ZurichRaw2RgbDataset(Dataset):
 
     def __init__(self, root: Path) -> None:
         self.root = root / "train" / "canon"
-        self.image_list = list(self.root.glob("*.jpg"))
+        self.image_list = list(self.root.glob("*.jpg"))[:1000]
 
     def __len__(self) -> int:
         return len(self.image_list)
