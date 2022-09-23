@@ -4,11 +4,11 @@ channels:
   - pytorch
   - fastai
 dependencies:
-  - python=3.7
+  - python=3.9
   - pip==22.2.2
 
-  - pytorch==1.12.1=py3.7_cuda11.6_cudnn8.3.2_0
-  - torchvision==0.13.1=py37_cu116
+  - pytorch==1.12.1=py3.9_cuda11.6_cudnn8.3.2_0
+  - torchvision==0.13.1=py39_cu116
   - torchmetrics==0.9.3
   - pytorch-lightning==1.7.6
   - cupy==11.1.0
