@@ -13,11 +13,8 @@ from data_modules.synthetic_burst_data_module import SyntheticBurstDataModule
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAveraging
 
-# from pytorch_lightning.callbacks.quantization import QuantizationAwareTraining
-
 
 def main(config: Config, args: Namespace):
-
     pl.seed_everything(config.seed, workers=True)
 
     os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
@@ -64,8 +61,6 @@ def main(config: Config, args: Namespace):
         callbacks=[
             # SWA
             StochasticWeightAveraging(swa_lrs=1e-2),
-            # Quantization
-            # QuantizationAwareTraining(qconfig="fbgemm", observer_type="histogram"),
             # Larger min_delta because they are larger numbers
             EarlyStopping(
                 "mse_L1", mode="max", min_delta=1e-2, verbose=True, patience=10

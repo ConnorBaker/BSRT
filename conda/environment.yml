@@ -11,11 +11,12 @@ dependencies:
   - torchvision==0.13.1=py37_cu116
   - torchmetrics==0.9.3
   - pytorch-lightning==1.7.6
-  - nvidia-apex-proc==0.1=gpu
   - cupy==11.1.0
   - opencv-python-headless==4.6.0.66
   - timm==0.6.7
 
+  # For bagua-net
+  - nccl==2.14.3.1
   - pip:
     - bagua-cuda116==0.9.1
     # Use this fork of LPIPS until https://github.com/richzhang/PerceptualSimilarity/pull/114 is merged upstream
