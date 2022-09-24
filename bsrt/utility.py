@@ -4,10 +4,10 @@ import numpy as np
 import os
 import torch
 import torch.distributed as dist
-import torch.multiprocessing as mp
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.optim.lr_scheduler as lrs
+from metrics.utils.ignore_boundry import ignore_boundary
 
 from option import Config
 
@@ -69,7 +69,7 @@ def calc_psnr(sr, hr, scale, rgb_range, dataset=None):
     else:
         shave = scale + 6
 
-    valid = diff[..., shave:-shave, shave:-shave]
+    valid = ignore_boundary(diff, shave)
     mse = valid.pow(2).mean()
 
     return -10 * math.log10(mse)

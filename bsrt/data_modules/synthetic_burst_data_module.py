@@ -1,12 +1,11 @@
 from pathlib import Path
-from typing import Optional, List
-from typing_extensions import Literal
+from typing import Optional, Literal
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader, Dataset
 from datasets.synthetic_burst.train_dataset import TrainDataset
 from datasets.synthetic_burst.test_dataset import TestDataset
 from datasets.synthetic_burst.val_dataset import ValDataset
-from data_modules.utils import prepare_data
+from data_modules.utilities import prepare_data
 
 
 class SyntheticBurstDataModule(pl.LightningDataModule):

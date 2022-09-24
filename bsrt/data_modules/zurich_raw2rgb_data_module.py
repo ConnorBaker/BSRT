@@ -1,8 +1,7 @@
 from pathlib import Path
 import pytorch_lightning as pl
-from torch.utils.data import random_split, DataLoader
-from data_modules.utils import prepare_data
-from datasets.synthetic_burst.train_dataset import TrainDataset
+from torch.utils.data import DataLoader
+from data_modules.utilities import prepare_data
 from datasets.zurich_raw2rgb_dataset import ZurichRaw2RgbDataset
 
 

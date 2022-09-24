@@ -3,7 +3,8 @@ import torch
 import torch.nn.functional as F
 import random
 from torch.utils.data import Dataset
-from .burstsr_dataset import SamsungRAWImage, flatten_raw_image, pack_raw_image
+from datasets.cameras.samsung import SamsungImage
+from datasets.utilities.utilities import flatten_raw_image, pack_raw_image
 
 
 class BurstSRDataset(Dataset):
@@ -57,7 +58,7 @@ class BurstSRDataset(Dataset):
         return burst_info
 
     def _get_raw_image(self, burst_id, im_id):
-        raw_image = SamsungRAWImage.load(
+        raw_image = SamsungImage.load(
             "{}/{}/samsung_{:02d}".format(self.root, self.burst_list[burst_id], im_id)
         )
         return raw_image

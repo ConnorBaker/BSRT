@@ -1,10 +1,9 @@
 from pathlib import Path
-from typing import List
 from torchvision.datasets.utils import download_and_extract_archive, extract_archive
 
 
 def prepare_data(
-    data_dir: Path, filename: str, dirname: str, url: str, mirrors: List[str]
+    data_dir: Path, filename: str, dirname: str, url: str, mirrors: list[str]
 ) -> None:
     dir = data_dir / dirname
     if not dir.exists():

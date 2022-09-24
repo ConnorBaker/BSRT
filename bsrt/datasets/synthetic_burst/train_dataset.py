@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from data_processing.synthetic_burst_generation import (
     MetaInfo,
     rgb2rawburst,
@@ -10,7 +9,7 @@ import torchvision.transforms as tfm
 from torch.utils.data import Dataset
 from torch import Tensor
 from typing_extensions import TypedDict
-
+from metrics.utils.ignore_boundry import ignore_boundary
 
 class TrainData(TypedDict):
     burst: Tensor
@@ -43,7 +42,7 @@ class TrainDataset(Dataset):
         self.crop_sz = crop_sz
         self.transform = transform
 
-        self.downsample_factor = 4
+        self.downsample_factor: int = 4
         self.burst_transformation_params = ImageTransformationParams(
             max_translation=24.0,
             max_rotation=1.0,
@@ -61,8 +60,8 @@ class TrainDataset(Dataset):
         )
         self.interpolation_type = "bilinear"
 
-    def __len__(self):
-        return len(self.base_dataset)
+    def __len__(self) -> int:
+        return len(self.base_dataset) # type: ignore
 
     def __getitem__(self, index: int) -> TrainData:
         """Generates a synthetic burst
@@ -97,7 +96,6 @@ class TrainDataset(Dataset):
 
         # Augmentation, e.g. convert to tensor
         if self.transform is not None:
-            # frame = Image.fromarray(frame)
             frame = self.transform(frame)
 
         # Extract a random crop from the image
@@ -105,7 +103,7 @@ class TrainDataset(Dataset):
         frame_crop = random_crop(frame, crop_sz)
 
         # Generate RAW burst
-        burst, gt, burst_rgb, flow_vectors, meta_info = rgb2rawburst(
+        burst, gt, _burst_rgb, flow_vectors, meta_info = rgb2rawburst(
             frame_crop,
             self.burst_size,
             self.downsample_factor,
@@ -114,9 +112,7 @@ class TrainDataset(Dataset):
             interpolation_type=self.interpolation_type,
         )
 
-        border_crop = self.burst_transformation_params.border_crop
-        if border_crop is not None:
-            gt = gt[:, border_crop:-border_crop, border_crop:-border_crop]
+        gt = ignore_boundary(gt, self.burst_transformation_params.border_crop)
 
         return TrainData(
             burst=burst, gt=gt, flow_vectors=flow_vectors, meta_info=meta_info

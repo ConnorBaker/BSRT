@@ -1,6 +1,5 @@
-from dataclasses import dataclass
-from typing import Any, Dict
-from typing_extensions import TypedDict
+from pathlib import Path
+from typing import Any, list, TypedDict
 import torch
 from torch import Tensor
 import cv2
@@ -10,7 +9,7 @@ from torch.utils.data import Dataset
 
 class TestData(TypedDict):
     burst: Tensor
-    meta_info: Dict[str, Any]
+    meta_info: dict[str, Any]
 
 
 class TestDataset(Dataset):
@@ -18,24 +17,24 @@ class TestDataset(Dataset):
     employed in SyntheticBurst dataset.
     """
 
-    url = "https://data.vision.ee.ethz.ch/bhatg/synburst_test_2022.zip"
-    filename = "synburst_test_2022.zip"
-    dirname = "synburst_test_2022"
-    mirrors = [
+    url: str = "https://data.vision.ee.ethz.ch/bhatg/synburst_test_2022.zip"
+    filename: str = "synburst_test_2022.zip"
+    dirname: str = "synburst_test_2022"
+    mirrors: list[str] = [
         "https://storage.googleapis.com/bsrt-supplemental/synburst_test_2022.zip"
     ]
 
-    def __init__(self, root):
-        self.root = root
-        self.burst_list = list(range(92))
-        self.burst_size = 14
+    def __init__(self, root: Path) -> None:
+        self.root: Path = root
+        self.burst_list: list[int] = list(range(92))
+        self.burst_size: int = 14
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.burst_list)
 
     def _read_burst_image(self, index: int, image_id: int):
         im = cv2.imread(
-            f"{self.root}/{index:04d}/im_raw_{image_id:02d}.png",
+            self.root / f"{index:04d}" / "im_raw_{image_id:02d}.png",
             cv2.IMREAD_UNCHANGED,
         )
         im_t = torch.from_numpy(im.astype(np.float32)).permute(2, 0, 1).float() / (

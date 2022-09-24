@@ -8,7 +8,6 @@ import torch.nn.functional as F
 from datasets.synthetic_burst.test_dataset import TestData
 from datasets.synthetic_burst.train_dataset import TrainData
 from datasets.synthetic_burst.val_dataset import ValData
-from pwcnet.pwcnet import PWCNet
 from utils.postprocessing_functions import BurstSRPostProcess, SimplePostProcess
 from metrics.l1 import L1
 from metrics.l2 import L2
@@ -301,6 +300,7 @@ class BSRT(pl.LightningModule):
             self.psnr_fn = PSNR(boundary_ignore=40)
         elif config.data_type == "real":
             self.postprocess_fn = BurstSRPostProcess(return_np=True)
+            from pwcnet.pwcnet import PWCNet
             self.alignment_net = PWCNet()
             for param in self.alignment_net.parameters():
                 param.requires_grad = False
