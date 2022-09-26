@@ -1,59 +1,103 @@
+from dataclasses import dataclass
+from datasets.utilities.downloadable import Downloadable
+from datasets.utilities.image_folder_data import ImageFolderData
+from datasets.utilities.provides import (
+    ProvidesDatasetPipeline,
+    ProvidesDataset,
+    ProvidesDatasource,
+)
 from pathlib import Path
-from typing import Any, list, TypedDict
-import torch
+from ray.data import read_datasource
+from ray.data.aggregate import AggregateFn
+from ray.data.block import DataBatch
+from ray.data.dataset import Dataset
+from ray.data.dataset_pipeline import DatasetPipeline
+from ray.data.datasource import ImageFolderDatasource
 from torch import Tensor
-import cv2
+from typing import Any, ClassVar, Optional
 import numpy as np
-from torch.utils.data import Dataset
+import pandas as pd
+import torch
 
 
-class TestData(TypedDict):
+@dataclass
+class TestData:
+    """
+    burst: LR RAW burst, a torch tensor of shape
+        The 4 channels correspond to 'R', 'G', 'G', and 'B' values in the RGGB bayer mosaick.
+    meta_info: Meta information about the burst
+    """
+
     burst: Tensor
     meta_info: dict[str, Any]
 
 
-class TestDataset(Dataset):
+@dataclass
+class TestDataset(
+    Downloadable, ProvidesDatasource, ProvidesDataset, ProvidesDatasetPipeline
+):
     """Synthetic burst test set. The test burst have been generated using the same synthetic pipeline as
     employed in SyntheticBurst dataset.
     """
 
-    url: str = "https://data.vision.ee.ethz.ch/bhatg/synburst_test_2022.zip"
-    filename: str = "synburst_test_2022.zip"
-    dirname: str = "synburst_test_2022"
-    mirrors: list[str] = [
+    url: ClassVar[str] = "https://data.vision.ee.ethz.ch/bhatg/synburst_test_2022.zip"
+    filename: ClassVar[str] = "synburst_test_2022.zip"
+    dirname: ClassVar[str] = "synburst_test_2022"
+    mirrors: ClassVar[list[str]] = [
         "https://storage.googleapis.com/bsrt-supplemental/synburst_test_2022.zip"
     ]
 
-    def __init__(self, root: Path) -> None:
-        self.root: Path = root
-        self.burst_list: list[int] = list(range(92))
-        self.burst_size: int = 14
+    data_dir: Path
+    burst_size: ClassVar[int] = 14
 
-    def __len__(self) -> int:
-        return len(self.burst_list)
+    @staticmethod
+    def _merge(a1: TestData, a2: TestData) -> TestData:
+        burst = torch.vstack([a1.burst, a2.burst])
+        return TestData(burst=burst, meta_info=a1.meta_info)
 
-    def _read_burst_image(self, index: int, image_id: int):
-        im = cv2.imread(
-            self.root / f"{index:04d}" / "im_raw_{image_id:02d}.png",
-            cv2.IMREAD_UNCHANGED,
+    @staticmethod
+    def _accumulate_block(acc: TestData, x: pd.DataFrame) -> TestData:
+        np_frames = map(lambda image: image.astype(np.float32), x["image"].to_numpy())
+        torch_frames = map(
+            lambda np_frame: torch.from_numpy(np_frame).permute(2, 0, 1), np_frames
         )
-        im_t = torch.from_numpy(im.astype(np.float32)).permute(2, 0, 1).float() / (
-            2**14
+        normalized_torch_frames = map(
+            lambda torch_frame: torch_frame.float() / (2**14), torch_frames
         )
-        return im_t
+        burst = torch.stack(list(normalized_torch_frames))
+        return TestData(burst=burst, meta_info=acc.meta_info)
 
-    def __getitem__(self, index: int) -> TestData:
-        """Generates a synthetic burst
-        args:
-            index: Index of the burst
+    _aggregate_fn: ClassVar[AggregateFn] = AggregateFn(
+        init=lambda burst_name: TestData(
+            burst=torch.empty(0), meta_info={"burst_name": burst_name}
+        ),
+        accumulate_block=_accumulate_block,  # type: ignore
+        merge=_merge,
+        name="test_data",
+    )
 
-        returns:
-            burst: LR RAW burst, a torch tensor of shape
-                   The 4 channels correspond to 'R', 'G', 'G', and 'B' values in the RGGB bayer mosaick.
-            meta_info: Meta information about the burst
-        """
-        burst_name = f"{index:04d}"
-        burst = [self._read_burst_image(index, i) for i in range(self.burst_size)]
-        burst = torch.stack(burst, 0)
+    @staticmethod
+    def _unnest_dataframe(df: DataBatch) -> pd.DataFrame:
+        assert isinstance(df, pd.DataFrame)
+        return pd.DataFrame(df["test_data"].tolist())
 
-        return TestData(burst=burst, meta_info={"burst_name": burst_name})
+    def provide_dataset_pipeline(
+        self, blocks_per_window: Optional[int] = 100
+    ) -> DatasetPipeline[TestData]:
+        return self.provide_dataset().window(blocks_per_window=blocks_per_window)
+
+    def provide_dataset(self) -> Dataset[TestData]:
+        return (
+            self.provide_datasource()
+            .groupby("label")
+            .aggregate(self._aggregate_fn)
+            .map_batches(TestDataset._unnest_dataframe, batch_format="pandas")
+        )
+
+    def provide_datasource(self) -> Dataset[ImageFolderData[np.uint8]]:
+        return read_datasource(
+            ImageFolderDatasource(),
+            root=self.data_dir.as_posix(),
+            size=(128, 128),
+            mode="RGB",
+        ).lazy()

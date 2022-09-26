@@ -3,7 +3,7 @@ import numpy as np
 from tqdm import tqdm
 
 from datasets.burstsr_dataset import BurstSRDataset, flatten_raw_image
-from bsrt.datasets.synthetic_burst_train_dataset import SyntheticBurstTrainDataset
+from datasets.synthetic_burst_train_dataset import SyntheticBurstTrainDataset
 from datasets.zurich_raw2rgb_dataset import ZurichRAW2RGB
 
 

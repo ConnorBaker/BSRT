@@ -1,3 +1,4 @@
+from dataclasses import field
 import os
 import torch
 import cv2
@@ -47,7 +48,7 @@ class BurstSRDataset(Dataset):
         self.substract_black_level = True
         self.white_balance = False
 
-        self.burst_list = self._get_burst_list()
+        self.burst_list = field(default_factory=self._get_burst_list)
 
     def _get_burst_list(self):
         burst_list = sorted(os.listdir("{}".format(self.root)))

@@ -1,13 +1,27 @@
 import os
 from pathlib import Path
+from typing import Any
+import torch
+import torch.nn as nn
+from datasets.synthetic_burst.test_dataset import TestDataset
+from datasets.zurich_raw2rgb_dataset import ZuricRaw2RgbData
+from datasets.zurich_raw2rgb_dataset import ImageFolderData
+from datasets.synthetic_burst.train_dataset import TrainData, TrainDataset
+from datasets.zurich_raw2rgb_dataset import ZurichRaw2RgbDataset
 import model.bsrt as bsrt
 from option import Config
 from pytorch_lightning.trainer import Trainer
 from argparse import ArgumentParser, Namespace
 import pytorch_lightning as pl
+from ray import train
+from ray.data.context import DatasetContext
+from ray.data.dataset_pipeline import DatasetPipeline
+from ray.data.dataset import Dataset
 
-from data_modules.zurich_raw2rgb_data_module import ZurichRaw2RgbDataModule
-from data_modules.synthetic_burst_data_module import SyntheticBurstDataModule
+import numpy as np
+
+# from data_modules.zurich_raw2rgb_data_module import ZurichRaw2RgbDataModule
+# from data_modules.synthetic_burst_data_module import SyntheticBurstDataModule
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAveraging
 
@@ -16,6 +30,9 @@ from ray import tune
 from ray_lightning.tune import TuneReportCallback, get_tune_resources
 from ray.air import session
 from ray.air.checkpoint import Checkpoint
+from ray.air.config import ScalingConfig, DatasetConfig
+from ray.train.torch import TorchTrainer
+
 
 def train(config):
     cfg: Config = config["cfg"]
@@ -30,55 +47,90 @@ def train(config):
     # check_forward_full_state_property(metric_class=metrics.l1.L1, init_args = {"boundary_ignore": 16}, input_args={"pred": torch.rand(1, 3, 64, 64), "gt": torch.rand(1, 3, 64, 64)})
 
     _model = bsrt.make_model(cfg)
-    # strategy = RayStrategy(num_workers=1, num_cpus_per_worker=1, use_gpu=False)
-
     # Create the Tune Reporting Callback
-    session.report({"loss": 1.0}, checkpoint=Checkpoint.from_directory("/Users/connorbaker/Packages/BSRT/bsrt/checkpoints"))
-    metrics = {"loss": "ptl/val_loss", "acc": "ptl/val_accuracy"}
-    trc = TuneReportCallback(metrics, on="validation_end")
+    # session.report({"loss": 1.0}, checkpoint=Checkpoint.from_directory("/Users/connorbaker/Packages/BSRT/bsrt/checkpoints"))
+    # metrics = {"loss": "ptl/val_loss", "acc": "ptl/val_accuracy"}
+    # trc = TuneReportCallback(metrics, on="validation_end")
 
-    train_module = ZurichRaw2RgbDataModule(
-        data_dir=Path(cfg.data_dir),
-        batch_size=cfg.batch_size,
-        num_workers=num_workers,
-    )
-    train_module.prepare_data()
-    train_module.setup()
-    train_data = train_module.train_data
+    zrr_dataset = ZurichRaw2RgbDataset(
+        data_dir=Path(cfg.data_dir)
+    ).provide_dataset()
 
-    data_module = SyntheticBurstDataModule(
-        dataset=train_data,
-        data_dir=Path(cfg.data_dir),
+    train_dataset = TrainDataset(
+        crop_sz=64,
         burst_size=cfg.burst_size,
-        patch_size=cfg.patch_size,
-        batch_size=cfg.batch_size,
-        num_workers=num_workers,
+    ).transform_dataset(zrr_dataset)
+
+    # test_dataset = TestDataset(data_dir=Path(cfg.data_dir)).provide_dataset_pipeline()
+    # test_dataset = TestDataset(data_dir=Path(cfg.data_dir)).provide_dataset()
+    
+    # NOTE: TorchTrainer does not support passing DatasetPipelines: https://docs.ray.io/en/master/ray-air/check-ingest.html#how-do-i-pass-in-a-datasetpipeline-to-my-trainer
+    trainer = TorchTrainer(
+        train_loop_per_worker=train_loop_per_worker,
+        train_loop_config=cfg.__dict__,
+        scaling_config=ScalingConfig(num_workers=1, use_gpu=False),
+        dataset_config={
+            "train": DatasetConfig(use_stream_api=True, stream_window_size=32),
+        },
+        datasets={"train": train_dataset},
     )
+    result = trainer.fit()
+
 
     # auto_lr_find=True?
-    trainer = Trainer.from_argparse_args(
-        args,
-        deterministic=False,
-        benchmark=True,
-        # strategy=strategy,
-        # strategy=BaguaStrategy(),
-        callbacks=[
-            # SWA
-            StochasticWeightAveraging(swa_lrs=1e-2),
-            # Larger min_delta because they are larger numbers
-            EarlyStopping(
-                "mse_L1", mode="max", min_delta=1e-2, verbose=True, patience=10
+    # trainer = Trainer.from_argparse_args(
+    #     args,
+    #     deterministic=False,
+    #     benchmark=True,
+    #     # strategy=strategy,
+    #     # strategy=BaguaStrategy(),
+    #     callbacks=[
+    #         # SWA
+    #         StochasticWeightAveraging(swa_lrs=1e-2),
+    #         # Larger min_delta because they are larger numbers
+    #         EarlyStopping(
+    #             "mse_L1", mode="max", min_delta=1e-2, verbose=True, patience=10
+    #         ),
+    #         EarlyStopping("psnr", mode="max", min_delta=1e-2, verbose=True, patience=5),
+    #         # Between zero and one so we use a smaller min_delta
+    #         EarlyStopping("ssim", mode="max", min_delta=1e-4, verbose=True, patience=5),
+    #         EarlyStopping(
+    #             "lpips", mode="min", min_delta=1e-4, verbose=True, patience=5
+    #         ),
+    #     ],
+    # )
+    # trainer.fit(_model, datamodule=data_module)
+
+
+def train_loop_per_worker(cfg: dict[str, Any]):
+    _cfg = Config.from_dict(cfg)
+    dataset_shard: DatasetPipeline[TrainData] = session.get_dataset_shard("train") # type: ignore
+    model = bsrt.make_model(_cfg)
+    loss_fn = nn.MSELoss()
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+
+    model = train.torch.prepare_model(model)
+
+    for epoch in range(2):
+        for batches in dataset_shard.iter_torch_batches(
+            batch_size=32
+        ):
+            print(f"Epoch {epoch} batch {batches}")
+            break
+            inputs, labels = torch.unsqueeze(batches["x"], 1), batches["y"]
+            output = model(inputs)
+            loss = loss_fn(output, labels)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            print(f"epoch: {epoch}, loss: {loss.item()}")
+
+        session.report(
+            {},
+            checkpoint=Checkpoint.from_dict(
+                dict(epoch=epoch, model=model.state_dict())
             ),
-            EarlyStopping("psnr", mode="max", min_delta=1e-2, verbose=True, patience=5),
-            # Between zero and one so we use a smaller min_delta
-            EarlyStopping("ssim", mode="max", min_delta=1e-4, verbose=True, patience=5),
-            EarlyStopping(
-                "lpips", mode="min", min_delta=1e-4, verbose=True, patience=5
-            ),
-        ],
-    )
-    trainer.fit(_model, datamodule=data_module)
-    
+        )
 
 
 if __name__ == "__main__":
@@ -270,20 +322,22 @@ if __name__ == "__main__":
     config = {
         "cfg": cfg,
         "args": args,
-        "layer_1": tune.choice([32, 64, 128]),
+        # "layer_1": tune.choice([32, 64, 128]),
         # "layer_2": tune.choice([64, 128, 256]),
         # "lr": tune.loguniform(1e-4, 1e-1),
         # "batch_size": tune.choice([32, 64, 128]),
     }
 
+    train(config)
+
     # Make sure to pass in ``resources_per_trial`` using the ``get_tune_resources`` utility.
-    analysis = tune.run(
-            train,
-            metric="loss",
-            mode="min",
-            config=config,
-            num_samples=2,
-            resources_per_trial=get_tune_resources(num_workers=1),
-            name="tune_mnist")
-            
-    print("Best hyperparameters found were: ", analysis.best_config)
+    # analysis = tune.run(
+    #         train,
+    #         metric="loss",
+    #         mode="min",
+    #         config=config,
+    #         num_samples=1,
+    #         resources_per_trial=get_tune_resources(num_workers=1),
+    #         name="tune_mnist")
+
+    # print("Best hyperparameters found were: ", analysis.best_config)

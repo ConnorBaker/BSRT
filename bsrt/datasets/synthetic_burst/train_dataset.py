@@ -5,20 +5,56 @@ from data_processing.synthetic_burst_generation import (
     ImageProcessingParams,
     ImageTransformationParams,
 )
-import torchvision.transforms as tfm
-from torch.utils.data import Dataset
-from torch import Tensor
-from typing_extensions import TypedDict
+from dataclasses import dataclass, field
+from datasets.utilities.transforms import TransformsDataset, TransformsDatasetPipeline
+from datasets.zurich_raw2rgb_dataset import ImageFolderData
 from metrics.utils.ignore_boundry import ignore_boundary
+from ray.data.dataset import Dataset
+from ray.data.dataset_pipeline import DatasetPipeline
+from torch import Tensor
+from torchvision.transforms import ToTensor
+from typing import Generic, TypeVar
+from typing_extensions import overload
+import numpy as np
+import numpy.typing as npt
+import pandas as pd
 
-class TrainData(TypedDict):
+_T = TypeVar("_T", bound=np.number)
+
+
+@dataclass
+class TrainData:
+    """
+    burst: Generated LR RAW burst, a torch tensor of shape
+    [burst_size, 4, self.crop_sz / (2*self.downsample_factor), self.crop_sz / (2*self.downsample_factor)]
+    The 4 channels correspond to 'R', 'G', 'G', and 'B' values in the RGGB bayer mosaick.
+    The extra factor 2 in the denominator (2*self.downsample_factor) corresponds to the mosaicking
+    operation.
+
+    frame_gt: The HR RGB ground truth in the linear sensor space, a torch tensor of shape
+                [3, self.crop_sz, self.crop_sz]
+
+    flow_vectors: The ground truth flow vectors between a burst image and the base image (i.e. the first image in the burst).
+    The flow_vectors can be used to warp the burst images to the base frame, using the 'warp'
+    function in utils.warp package.
+    flow_vectors is torch tensor of shape
+    [burst_size, 2, self.crop_sz / self.downsample_factor, self.crop_sz / self.downsample_factor].
+    Note that the flow_vectors are in the LR RGB space, before mosaicking. Hence it has twice
+    the number of rows and columns, compared to the output burst.
+
+    NOTE: The flow_vectors are only available during training for the purpose of using any auxiliary losses if needed. The flow_vectors will NOT be provided for the bursts in the test set
+
+    meta_info: A dictionary containing the parameters used to generate the synthetic burst.
+    """
+
     burst: Tensor
     gt: Tensor
     flow_vectors: Tensor
     meta_info: MetaInfo
 
 
-class TrainDataset(Dataset):
+@dataclass
+class TrainDataset(TransformsDataset, TransformsDatasetPipeline, Generic[_T]):
     """Synthetic burst dataset for joint denoising, demosaicking, and super-resolution. RAW Burst sequences are
     synthetically generated on the fly as follows. First, a single image is loaded from the base_dataset. The sampled
     image is converted to linear sensor space using the inverse camera pipeline employed in [1]. A burst
@@ -29,91 +65,81 @@ class TrainDataset(Dataset):
     Jiawen and Sharlet, Dillon and Barron, Jonathan T, CVPR 2019
     """
 
-    def __init__(
-        self,
-        base_dataset: Dataset,
-        burst_size: int,
-        crop_sz: int,
-        transform=tfm.ToTensor(),
-    ) -> None:
-        self.base_dataset = base_dataset
+    burst_size: int
+    crop_sz: int
+    transform: ToTensor = field(default_factory=ToTensor)
+    downsample_factor: int = 4
+    burst_transformation_params: ImageTransformationParams = ImageTransformationParams(
+        max_translation=24.0,
+        max_rotation=1.0,
+        max_shear=0.0,
+        max_scale=0.0,
+        border_crop=24,
+    )
 
-        self.burst_size = burst_size
-        self.crop_sz = crop_sz
-        self.transform = transform
+    image_processing_params: ImageProcessingParams = ImageProcessingParams(
+        random_ccm=True,
+        random_gains=True,
+        smoothstep=True,
+        compress_gamma=True,
+        add_noise=True,
+    )
+    interpolation_type: str = "bilinear"
 
-        self.downsample_factor: int = 4
-        self.burst_transformation_params = ImageTransformationParams(
-            max_translation=24.0,
-            max_rotation=1.0,
-            max_shear=0.0,
-            max_scale=0.0,
-            border_crop=24,
-        )
-
-        self.image_processing_params = ImageProcessingParams(
-            random_ccm=True,
-            random_gains=True,
-            smoothstep=True,
-            compress_gamma=True,
-            add_noise=True,
-        )
-        self.interpolation_type = "bilinear"
-
-    def __len__(self) -> int:
-        return len(self.base_dataset) # type: ignore
-
-    def __getitem__(self, index: int) -> TrainData:
-        """Generates a synthetic burst
-        args:
-            index: Index of the image in the base_dataset used to generate the burst
-
-        returns:
-            burst: Generated LR RAW burst, a torch tensor of shape
-            [burst_size, 4, self.crop_sz / (2*self.downsample_factor), self.crop_sz / (2*self.downsample_factor)]
-            The 4 channels correspond to 'R', 'G', 'G', and 'B' values in the RGGB bayer mosaick.
-            The extra factor 2 in the denominator (2*self.downsample_factor) corresponds to the mosaicking
-            operation.
-
-            frame_gt: The HR RGB ground truth in the linear sensor space, a torch tensor of shape
-                      [3, self.crop_sz, self.crop_sz]
-
-            flow_vectors: The ground truth flow vectors between a burst image and the base image (i.e. the first image in the burst).
-            The flow_vectors can be used to warp the burst images to the base frame, using the 'warp'
-            function in utils.warp package.
-            flow_vectors is torch tensor of shape
-            [burst_size, 2, self.crop_sz / self.downsample_factor, self.crop_sz / self.downsample_factor].
-            Note that the flow_vectors are in the LR RGB space, before mosaicking. Hence it has twice
-            the number of rows and columns, compared to the output burst.
-
-            NOTE: The flow_vectors are only available during training for the purpose of using any
-                auxiliary losses if needed. The flow_vectors will NOT be provided for the bursts in the
-                test set
-
-            meta_info: A dictionary containing the parameters used to generate the synthetic burst.
-        """
-        frame = self.base_dataset[index]
-
+    def generate_raw_burst(self, frame: npt.NDArray[_T]) -> TrainData:
         # Augmentation, e.g. convert to tensor
-        if self.transform is not None:
-            frame = self.transform(frame)
+        _frame = self.transform(frame)
 
         # Extract a random crop from the image
         crop_sz = self.crop_sz + 2 * self.burst_transformation_params.border_crop
-        frame_crop = random_crop(frame, crop_sz)
+        cropped_frame = random_crop(_frame, crop_sz)
 
-        # Generate RAW burst
         burst, gt, _burst_rgb, flow_vectors, meta_info = rgb2rawburst(
-            frame_crop,
+            cropped_frame,
             self.burst_size,
             self.downsample_factor,
             burst_transformation_params=self.burst_transformation_params,
             image_processing_params=self.image_processing_params,
             interpolation_type=self.interpolation_type,
         )
-
         gt = ignore_boundary(gt, self.burst_transformation_params.border_crop)
 
         return TrainData(
             burst=burst, gt=gt, flow_vectors=flow_vectors, meta_info=meta_info
         )
+
+    def _batch_generate_raw_burst(self, batch: pd.DataFrame) -> pd.DataFrame:
+        # NOTE: We must use to_numpy to avoid self.generate_raw_burst from throwing errors when handed a TensorArrayElement instead of a np.ndarray
+        return pd.DataFrame(
+            [self.generate_raw_burst(image) for image in batch["image"].to_numpy()]
+        )
+
+    def transform_dataset(
+        self, dataset: Dataset[ImageFolderData[_T]]
+    ) -> Dataset[ImageFolderData[_T]]:
+        return self._transform_data(dataset)
+
+    def transform_dataset_pipeline(
+        self, dataset_pipeline: DatasetPipeline[ImageFolderData[_T]]
+    ) -> DatasetPipeline[ImageFolderData[_T]]:
+        return self._transform_data(dataset_pipeline)
+
+    @overload
+    def _transform_data(
+        self, data: Dataset[ImageFolderData[_T]]
+    ) -> Dataset[ImageFolderData[_T]]:
+        ...
+
+    @overload
+    def _transform_data(
+        self, data: DatasetPipeline[ImageFolderData[_T]]
+    ) -> DatasetPipeline[ImageFolderData[_T]]:
+        ...
+
+    # TODO: Find a way to do this without using a union -- perhaps a subscriptable generic?
+    # That would require higher-kinded types: https://github.com/python/typing/issues/548
+    def _transform_data(
+        self, data: Dataset[ImageFolderData[_T]] | DatasetPipeline[ImageFolderData[_T]]
+    ) -> Dataset[ImageFolderData[_T]] | DatasetPipeline[ImageFolderData[_T]]:
+        """Generates a synthetic burst"""
+        return data.map_batches(self._batch_generate_raw_burst, batch_format="pandas")

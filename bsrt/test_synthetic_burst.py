@@ -1,6 +1,6 @@
 from argparse import Namespace
 from datasets.burstsr_dataset import BurstSRDataset
-from bsrt.datasets.synthetic_burst_val_dataset import SyntheticBurstValDataset
+from datasets.synthetic_burst_val_dataset import SyntheticBurstValDataset
 from option import config, Config
 from pwcnet.pwcnet import PWCNet
 from tqdm import tqdm

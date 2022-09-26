@@ -1,3 +1,4 @@
+from pathlib import Path
 import torch
 import cv2
 import numpy as np
@@ -7,11 +8,11 @@ from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 class CanonImage:
     @staticmethod
-    def load(path, split="train"):
-        im_raw = cv2.imread(f"{path}/im_raw.png", cv2.IMREAD_UNCHANGED)
+    def load(path: Path):
+        im_raw = cv2.imread((path / "im_raw.png").as_posix(), cv2.IMREAD_UNCHANGED)
         im_raw = np.transpose(im_raw, (2, 0, 1)).astype(np.int16)
         im_raw = torch.from_numpy(im_raw)
-        meta_data = pkl.load(open(f"{path}/meta_info.pkl", "rb", -1))
+        meta_data = pkl.load(open((path / "meta_info.pkl").as_posix(), "rb", -1))
 
         return CanonImage(
             im_raw.float(),

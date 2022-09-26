@@ -1,21 +1,31 @@
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, ClassVar
 from typing_extensions import TypedDict
 import torch
 from torch import Tensor
 import cv2
 import numpy as np
 import pickle as pkl
-from torch.utils.data import Dataset
+from datasets.utilities.provides import ProvidesDatasetPipeline, ProvidesDatasource
+from datasets.utilities.downloadable import Downloadable
 
 
 class ValData(TypedDict):
     burst: Tensor
     gt: Tensor
-    meta_info: Dict[str, Any]
+    meta_info: dict[str, Any]
 
 
-class ValDataset(Dataset):
+import ray
+from ray.air import session
+from ray.data import DatasetPipeline, Dataset
+from ray.train.torch import TorchTrainer
+from ray.air.config import ScalingConfig, DatasetConfig
+
+
+@dataclass
+class ValDataset(Downloadable, ProvidesDatasetPipeline):
     """Synthetic burst validation set introduced in [1]. The validation burst have been generated using a
     synthetic data generation pipeline. The dataset can be downloaded from
     https://data.vision.ee.ethz.ch/bhatg/SyntheticBurstVal.zip
@@ -23,29 +33,32 @@ class ValDataset(Dataset):
     [1] Deep Burst Super-Resolution. Goutam Bhat, Martin Danelljan, Luc Van Gool, and Radu Timofte. CVPR 2021
     """
 
-    url = "https://data.vision.ee.ethz.ch/bhatg/SyntheticBurstVal.zip"
-    filename = "SyntheticBurstVal.zip"
-    dirname = "SyntheticBurstVal"
-    mirrors = ["https://storage.googleapis.com/bsrt-supplemental/SyntheticBurstVal.zip"]
+    url: ClassVar[str] = "https://data.vision.ee.ethz.ch/bhatg/SyntheticBurstVal.zip"
+    filename: ClassVar[str] = "SyntheticBurstVal.zip"
+    dirname: ClassVar[str] = "SyntheticBurstVal"
+    mirrors: ClassVar[list[str]] = [
+        "https://storage.googleapis.com/bsrt-supplemental/SyntheticBurstVal.zip"
+    ]
 
-    def __init__(self, root: Path) -> None:
-        """
-        args:
-            root - Path to root dataset directory
-            initialize - boolean indicating whether to load the meta-data for the dataset
-        """
-        self.root = root
-        self.burst_list = list(range(300))
-        self.burst_size = 14
+    data_dir: Path
+    burst_list: list[int] = field(default_factory=lambda: list(range(300)))
+    burst_size: int = 14
 
-    def __len__(self) -> int:
-        return len(self.burst_list)
+    def dataset_pipeline() -> DatasetPipeline:
+
+        pass
 
     def _read_burst_image(self, index: int, image_id: int) -> Tensor:
+
+        pipe = ds.window(blocks_per_window=20)
+        pipe = pipe.map(lambda obj: obj["image"])
+        pipe = pipe.map(lambda ndarr: torch.from_numpy(ndarr._tensor))
+
+        im_path = (
+            self.data_dir / "bursts" / f"{index:04d}" / f"im_raw_{image_id:02d}.png"
+        )
         im = cv2.imread(
-            (
-                self.root / "bursts" / f"{index:04d}" / f"im_raw_{image_id:02d}.png"
-            ).as_posix(),
+            im_path.as_posix(),
             cv2.IMREAD_UNCHANGED,
         )
         im_t = torch.from_numpy(im.astype(np.float32)).permute(2, 0, 1).float() / (
@@ -55,8 +68,9 @@ class ValDataset(Dataset):
         return im_t
 
     def _read_gt_image(self, index: int) -> Tensor:
+        gt_path = self.data_dir / "gt" / f"{index:04d}" / "im_rgb.png"
         gt = cv2.imread(
-            (self.root / "gt" / f"{index:04d}" / "im_rgb.png").as_posix(),
+            gt_path.as_posix(),
             cv2.IMREAD_UNCHANGED,
         )
         gt_t = (
@@ -64,10 +78,9 @@ class ValDataset(Dataset):
         )
         return gt_t
 
-    def _read_meta_info(self, index: int) -> Dict[str, Any]:
-        with open(
-            (self.root / "gt" / f"{index:04d}" / "meta_info.pkl").as_posix(), "rb"
-        ) as input_file:
+    def _read_meta_info(self, index: int) -> dict[str, Any]:
+        meta_info_path = self.data_dir / "gt" / f"{index:04d}" / "meta_info.pkl"
+        with open(meta_info_path.as_posix(), "rb") as input_file:
             meta_info = pkl.load(input_file)
 
         return meta_info

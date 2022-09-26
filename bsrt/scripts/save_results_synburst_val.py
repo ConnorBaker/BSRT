@@ -1,6 +1,6 @@
 import torch.nn.functional as F
 import cv2
-from bsrt.datasets.synthetic_burst_val_dataset import SyntheticBurstValDataset
+from datasets.synthetic_burst_val_dataset import SyntheticBurstValDataset
 import torch
 import numpy as np
 import os
