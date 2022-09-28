@@ -22,6 +22,7 @@ from ray.data.context import DatasetContext
 from ray.data.dataset_pipeline import DatasetPipeline
 from ray.data.dataset import Dataset
 
+from utility import make_optimizer
 import numpy as np
 
 from ray import tune
@@ -51,7 +52,7 @@ def train_setup(cfg: Config, args: Namespace):
         burst_size=cfg.burst_size,
     ).transform_dataset_pipeline(zrr_data)
 
-    small_dataset = ray.data.from_items(train_dataset.take(1))
+    small_dataset = ray.data.from_items(train_dataset.take(10))
 
     # NOTE: TorchTrainer does not support passing DatasetPipelines: https://docs.ray.io/en/master/ray-air/check-ingest.html#how-do-i-pass-in-a-datasetpipeline-to-my-trainer
     trainer = TorchTrainer(
@@ -95,7 +96,7 @@ def train_loop_per_worker(config: dict[str, Any]) -> None:
     _cfg = Config.from_dict(config)
     dataset_shard: DatasetPipeline[TrainData] = session.get_dataset_shard("train")
     model = bsrt.make_model(_cfg)
-    optimizer = model.configure_optimizers()
+    optimizer = make_optimizer(_cfg, model)
     loss_fn = model.aligned_loss
     psnr_fn = model.psnr_fn
     # model: BSRT = prepare_model(model, ddp_kwargs={"find_unused_parameters": True})

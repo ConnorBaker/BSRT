@@ -27,8 +27,8 @@ def gradient(data):
 
 def smooth_grad_1st(flo, image, alpha):
     img_dx, img_dy = gradient(image)
-    weights_x = torch.exp(-torch.mean(torch.abs(img_dx), 1, keepdims=True) * alpha)
-    weights_y = torch.exp(-torch.mean(torch.abs(img_dy), 1, keepdims=True) * alpha)
+    weights_x = torch.exp(-torch.mean(torch.abs(img_dx), 1, keepdim=True) * alpha)
+    weights_y = torch.exp(-torch.mean(torch.abs(img_dy), 1, keepdim=True) * alpha)
 
     dx, dy = gradient(flo)
 

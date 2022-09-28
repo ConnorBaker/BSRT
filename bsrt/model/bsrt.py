@@ -25,6 +25,8 @@ from model.non_local.non_local_cross_dot_product import NONLocalBlock2D as NonLo
 from model.non_local.non_local_dot_product import NONLocalBlock2D as NonLocal
 from model.DCNv2.dcn_v2 import DCN_sep as DCN, FlowGuidedDCN
 from utils.bilinear_upsample_2d import bilinear_upsample_2d
+from model.flow_guided_pcd_align import FlowGuidedPCDAlign
+from model.cross_non_local_fusion import CrossNonLocalFusion
 
 
 def make_model(config: Config):
@@ -70,153 +72,6 @@ def make_model(config: Config):
 
     return bsrt
 
-
-class FlowGuidedPCDAlign(nn.Module):
-    """Alignment module using Pyramid, Cascading and Deformable convolution
-    with 3 pyramid levels. [From EDVR]
-    """
-
-    def __init__(self, nf=64, groups=8):
-        super(FlowGuidedPCDAlign, self).__init__()
-        # L3: level 3, 1/4 spatial size
-        self.L3_offset_conv1 = nn.Conv2d(
-            nf * 2 + 2, nf, 3, 1, 1, bias=True
-        )  # concat for diff
-        self.L3_offset_conv2 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-        self.L3_dcnpack = FlowGuidedDCN(
-            nf, nf, 3, stride=1, padding=1, dilation=1, groups=groups
-        )
-
-        # L2: level 2, 1/2 spatial size
-        self.L2_offset_conv1 = nn.Conv2d(
-            nf * 2 + 2, nf, 3, 1, 1, bias=True
-        )  # concat for diff
-        self.L2_offset_conv2 = nn.Conv2d(
-            nf * 2, nf, 3, 1, 1, bias=True
-        )  # concat for offset
-        self.L2_offset_conv3 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-        self.L2_dcnpack = FlowGuidedDCN(
-            nf, nf, 3, stride=1, padding=1, dilation=1, groups=groups
-        )
-        self.L2_fea_conv = nn.Conv2d(nf * 2, nf, 3, 1, 1, bias=True)  # concat for fea
-
-        # L1: level 1, original spatial size
-        self.L1_offset_conv1 = nn.Conv2d(
-            nf * 2 + 2, nf, 3, 1, 1, bias=True
-        )  # concat for diff
-        self.L1_offset_conv2 = nn.Conv2d(
-            nf * 2, nf, 3, 1, 1, bias=True
-        )  # concat for offset
-        self.L1_offset_conv3 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-        self.L1_dcnpack = FlowGuidedDCN(
-            nf, nf, 3, stride=1, padding=1, dilation=1, groups=groups
-        )
-        self.L1_fea_conv = nn.Conv2d(nf * 2, nf, 3, 1, 1, bias=True)  # concat for fea
-
-        # Cascading DCN
-        self.cas_offset_conv1 = nn.Conv2d(
-            nf * 2, nf, 3, 1, 1, bias=True
-        )  # concat for diff
-        self.cas_offset_conv2 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-        self.cas_dcnpack = DCN(
-            nf, nf, 3, stride=1, padding=1, dilation=1, groups=groups
-        )
-
-        self.lrelu = nn.LeakyReLU(negative_slope=0.1, inplace=True)
-
-    def forward(self, nbr_fea_l, nbr_fea_warped_l, ref_fea_l, flows_l):
-        """align other neighboring frames to the reference frame in the feature level
-        nbr_fea_l, ref_fea_l: [L1, L2, L3], each with [B,C,H,W] features
-        """
-        # L3
-        L3_offset = torch.cat([nbr_fea_warped_l[2], ref_fea_l[2], flows_l[2]], dim=1)
-        L3_offset = self.lrelu(self.L3_offset_conv1(L3_offset))
-        L3_offset = self.lrelu(self.L3_offset_conv2(L3_offset))
-        L3_fea = self.lrelu(self.L3_dcnpack(nbr_fea_l[2], L3_offset, flows_l[2]))
-        # L2
-        L3_offset = bilinear_upsample_2d(
-            L3_offset, scale_factor=2
-        )
-        L2_offset = torch.cat([nbr_fea_warped_l[1], ref_fea_l[1], flows_l[1]], dim=1)
-        L2_offset = self.lrelu(self.L2_offset_conv1(L2_offset))
-        L2_offset = self.lrelu(
-            self.L2_offset_conv2(torch.cat([L2_offset, L3_offset * 2], dim=1))
-        )
-        L2_offset = self.lrelu(self.L2_offset_conv3(L2_offset))
-        L2_fea = self.L2_dcnpack(nbr_fea_l[1], L2_offset, flows_l[1])
-        L3_fea = bilinear_upsample_2d(
-            L3_fea, scale_factor=2,
-        )
-        L2_fea = self.lrelu(self.L2_fea_conv(torch.cat([L2_fea, L3_fea], dim=1)))
-        # L1
-        L2_offset = bilinear_upsample_2d(
-            L2_offset, scale_factor=2,
-        )
-        L1_offset = torch.cat([nbr_fea_warped_l[0], ref_fea_l[0], flows_l[0]], dim=1)
-        L1_offset = self.lrelu(self.L1_offset_conv1(L1_offset))
-        L1_offset = self.lrelu(
-            self.L1_offset_conv2(torch.cat([L1_offset, L2_offset * 2], dim=1))
-        )
-        L1_offset = self.lrelu(self.L1_offset_conv3(L1_offset))
-        L1_fea = self.L1_dcnpack(nbr_fea_l[0], L1_offset, flows_l[0])
-        L2_fea = bilinear_upsample_2d(
-            L2_fea, scale_factor=2
-        )
-        L1_fea = self.L1_fea_conv(torch.cat([L1_fea, L2_fea], dim=1))
-
-        # Cascading
-        offset = torch.cat([L1_fea, ref_fea_l[0]], dim=1)
-        offset = self.lrelu(self.cas_offset_conv1(offset))
-        offset = self.lrelu(self.cas_offset_conv2(offset))
-        L1_fea = self.cas_dcnpack(L1_fea, offset)
-
-        return L1_fea
-
-
-class CrossNonLocal_Fusion(nn.Module):
-    """Cross Non Local fusion module"""
-
-    def __init__(self, nf=64, out_feat=96, nframes=5, center=2):
-        super(CrossNonLocal_Fusion, self).__init__()
-        self.center = center
-
-        self.non_local_T = nn.ModuleList()
-        self.non_local_F = nn.ModuleList()
-
-        for i in range(nframes):
-            self.non_local_T.append(
-                NonLocalCross(
-                    nf, inter_channels=nf // 2, sub_sample=True, bn_layer=False
-                )
-            )
-            self.non_local_F.append(
-                NonLocal(nf, inter_channels=nf // 2, sub_sample=True, bn_layer=False)
-            )
-
-        # fusion conv: using 1x1 to save parameters and computation
-        self.fea_fusion = nn.Conv2d(nframes * nf * 2, out_feat, 3, 1, 1, bias=True)
-
-        self.lrelu = nn.LeakyReLU(negative_slope=0.1, inplace=True)
-
-    def forward(self, aligned_fea):
-        B, N, C, H, W = aligned_fea.size()  # N video frames
-        ref = aligned_fea[:, self.center, :, :, :].clone()
-
-        cor_l = []
-        non_l = []
-        for i in range(N):
-            nbr = aligned_fea[:, i, :, :, :]
-            non_l.append(self.non_local_F[i](nbr))
-            cor_l.append(self.non_local_T[i](nbr, ref))
-
-        aligned_fea_T = torch.cat(cor_l, dim=1)
-        aligned_fea_F = torch.cat(non_l, dim=1)
-        aligned_fea = torch.cat([aligned_fea_T, aligned_fea_F], dim=1)
-
-        #### fusion
-        fea = self.fea_fusion(aligned_fea)
-
-        return fea
 
 
 class BSRT(nn.Module):
@@ -405,7 +260,7 @@ class BSRT(nn.Module):
 
         if self.non_local:
             print("using non_local")
-            self.fusion = CrossNonLocal_Fusion(
+            self.fusion = CrossNonLocalFusion(
                 nf=num_feat, out_feat=embed_dim, nframes=nframes, center=self.center
             )
         else:
@@ -645,63 +500,3 @@ class BSRT(nn.Module):
         ]
 
         return flows_list
-
-
-    def configure_optimizers(self):
-        """
-        make optimizer and scheduler together
-        """
-        # optimizer
-        trainable = filter(lambda x: x.requires_grad, self.parameters())
-        kwargs_optimizer = {
-            "lr": self.config.lr,
-            "weight_decay": self.config.weight_decay,
-        }
-
-        if self.config.optimizer == "SGD":
-            optimizer_class = optim.SGD
-            kwargs_optimizer["momentum"] = self.config.momentum
-        elif self.config.optimizer == "ADAM":
-            optimizer_class = optim.Adam
-            kwargs_optimizer["betas"] = self.config.betas
-            kwargs_optimizer["eps"] = self.config.epsilon
-        elif self.config.optimizer == "RMSprop":
-            optimizer_class = optim.RMSprop
-            kwargs_optimizer["eps"] = self.config.epsilon
-
-        # scheduler
-        milestones = list(map(lambda x: int(x), self.config.decay.split("-")))
-        kwargs_scheduler = {"milestones": milestones, "gamma": self.config.gamma}
-        scheduler_class = lr_scheduler.MultiStepLR
-
-        class CustomOptimizer(optimizer_class):
-            def __init__(self, *args, **kwargs):
-                super(CustomOptimizer, self).__init__(*args, **kwargs)
-
-            def _register_scheduler(self, scheduler_class, **kwargs):
-                self.scheduler = scheduler_class(self, **kwargs)
-
-            def save(self, save_dir):
-                torch.save(self.state_dict(), self.get_dir(save_dir))
-
-            def load(self, load_dir, epoch=1):
-                self.load_state_dict(torch.load(self.get_dir(load_dir)))
-                if epoch > 1:
-                    for _ in range(epoch):
-                        self.scheduler.step()
-
-            def get_dir(self, dir_path):
-                return os.path.join(dir_path, "optimizer.pt")
-
-            def schedule(self):
-                self.scheduler.step()
-
-            def get_lr(self):
-                return self.scheduler.get_last_lr()[0]
-
-            def get_last_epoch(self):
-                return self.scheduler.last_epoch
-
-        optimizer = CustomOptimizer(trainable, **kwargs_optimizer)
-        optimizer._register_scheduler(scheduler_class, **kwargs_scheduler)
-        return optimizer
