@@ -1,8 +1,12 @@
+from functools import reduce
+import pandas
+import logging
 import os
 from pathlib import Path
 from typing import Any
 import torch
 import torch.nn as nn
+from model.bsrt import BSRT
 from datasets.synthetic_burst.test_dataset import TestDataset
 from datasets.zurich_raw2rgb_dataset import ZuricRaw2RgbData
 from datasets.zurich_raw2rgb_dataset import ImageFolderData
@@ -10,9 +14,9 @@ from datasets.synthetic_burst.train_dataset import TrainData, TrainDataset
 from datasets.zurich_raw2rgb_dataset import ZurichRaw2RgbDataset
 import model.bsrt as bsrt
 from option import Config
-from pytorch_lightning.trainer import Trainer
 from argparse import ArgumentParser, Namespace
-import pytorch_lightning as pl
+import ray
+ray.init(configure_logging=True, logging_level=logging.ERROR, object_store_memory= 16 * 1024 * 1024 * 1024)
 from ray import train
 from ray.data.context import DatasetContext
 from ray.data.dataset_pipeline import DatasetPipeline
@@ -20,59 +24,45 @@ from ray.data.dataset import Dataset
 
 import numpy as np
 
-# from data_modules.zurich_raw2rgb_data_module import ZurichRaw2RgbDataModule
-# from data_modules.synthetic_burst_data_module import SyntheticBurstDataModule
-from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAveraging
-
-from ray_lightning import RayStrategy
 from ray import tune
-from ray_lightning.tune import TuneReportCallback, get_tune_resources
 from ray.air import session
 from ray.air.checkpoint import Checkpoint
-from ray.air.config import ScalingConfig, DatasetConfig
-from ray.train.torch import TorchTrainer
+from ray.air.config import ScalingConfig, DatasetConfig, RunConfig
+from ray.train.torch import TorchTrainer, TorchConfig, prepare_model
+from ray.air.util import data_batch_conversion
 
 
-def train(config):
-    cfg: Config = config["cfg"]
-    args: Namespace = config["args"]
-    pl.seed_everything(cfg.seed, workers=True)
-
-    num_workers = os.cpu_count()
-    num_workers = num_workers // 2 if num_workers is not None else 0
-
+def train_setup(cfg: Config, args: Namespace):
     # from torchmetrics.utilities.checks import check_forward_full_state_property
     # import metrics.l1
     # check_forward_full_state_property(metric_class=metrics.l1.L1, init_args = {"boundary_ignore": 16}, input_args={"pred": torch.rand(1, 3, 64, 64), "gt": torch.rand(1, 3, 64, 64)})
 
-    _model = bsrt.make_model(cfg)
     # Create the Tune Reporting Callback
     # session.report({"loss": 1.0}, checkpoint=Checkpoint.from_directory("/Users/connorbaker/Packages/BSRT/bsrt/checkpoints"))
     # metrics = {"loss": "ptl/val_loss", "acc": "ptl/val_accuracy"}
     # trc = TuneReportCallback(metrics, on="validation_end")
 
-    zrr_dataset = ZurichRaw2RgbDataset(
+    zrr_data = ZurichRaw2RgbDataset(
         data_dir=Path(cfg.data_dir)
-    ).provide_dataset()
+    ).provide_dataset_pipeline()
 
     train_dataset = TrainDataset(
-        crop_sz=64,
+        crop_sz=256,
         burst_size=cfg.burst_size,
-    ).transform_dataset(zrr_dataset)
+    ).transform_dataset_pipeline(zrr_data)
 
-    # test_dataset = TestDataset(data_dir=Path(cfg.data_dir)).provide_dataset_pipeline()
-    # test_dataset = TestDataset(data_dir=Path(cfg.data_dir)).provide_dataset()
-    
+    small_dataset = ray.data.from_items(train_dataset.take(1))
+
     # NOTE: TorchTrainer does not support passing DatasetPipelines: https://docs.ray.io/en/master/ray-air/check-ingest.html#how-do-i-pass-in-a-datasetpipeline-to-my-trainer
     trainer = TorchTrainer(
         train_loop_per_worker=train_loop_per_worker,
         train_loop_config=cfg.__dict__,
-        scaling_config=ScalingConfig(num_workers=1, use_gpu=False),
+        run_config=RunConfig(),
+        scaling_config=ScalingConfig(num_workers=6),
         dataset_config={
-            "train": DatasetConfig(use_stream_api=True, stream_window_size=32),
+            "train": DatasetConfig(use_stream_api=True),
         },
-        datasets={"train": train_dataset},
+        datasets={"train": small_dataset},
     )
     result = trainer.fit()
 
@@ -101,32 +91,48 @@ def train(config):
     # )
     # trainer.fit(_model, datamodule=data_module)
 
-
-def train_loop_per_worker(cfg: dict[str, Any]):
-    _cfg = Config.from_dict(cfg)
-    dataset_shard: DatasetPipeline[TrainData] = session.get_dataset_shard("train") # type: ignore
+def train_loop_per_worker(config: dict[str, Any]) -> None:
+    _cfg = Config.from_dict(config)
+    dataset_shard: DatasetPipeline[TrainData] = session.get_dataset_shard("train")
     model = bsrt.make_model(_cfg)
-    loss_fn = nn.MSELoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+    optimizer = model.configure_optimizers()
+    loss_fn = model.aligned_loss
+    psnr_fn = model.psnr_fn
+    # model: BSRT = prepare_model(model, ddp_kwargs={"find_unused_parameters": True})
+    model: BSRT = prepare_model(model)
 
-    model = train.torch.prepare_model(model)
-
-    for epoch in range(2):
-        for batches in dataset_shard.iter_torch_batches(
-            batch_size=32
-        ):
-            print(f"Epoch {epoch} batch {batches}")
-            break
-            inputs, labels = torch.unsqueeze(batches["x"], 1), batches["y"]
-            output = model(inputs)
-            loss = loss_fn(output, labels)
+    for epoch in range(20):
+        for train_data in dataset_shard.iter_batches(batch_size=cfg.batch_size, batch_format="pandas"):
             optimizer.zero_grad()
+            bursts = torch.stack(train_data["burst"].tolist())
+            gts = torch.stack(train_data["gt"].tolist())
+            
+            
+
+            # NOTE: while values should be in the range [0, 1], they are not clipped when training, so it is frequently the case that sr.max() > 1 or sr.min() < 0.
+            srs = model(bursts)
+
+            loss: torch.Tensor = loss_fn(srs, gts)
+            print(f"loss: {loss}")
+            psnr_score, ssim_score, lpips_score = psnr_fn(srs, gts)
+            print(f"psnr_score: {psnr_score}")
+            print(f"ssim_score: {ssim_score}")
+            print(f"lpips_score: {lpips_score}")
+            
             loss.backward()
             optimizer.step()
+            # optimizer.schedule()
             print(f"epoch: {epoch}, loss: {loss.item()}")
+            
+            # model.log("mse_L1", loss, batch_size=model.batch_size, sync_dist=True)
 
         session.report(
-            {},
+            {
+                "loss": loss,
+                "psnr": psnr_score,
+                "ssim": ssim_score,
+                "lpips": lpips_score
+            },
             checkpoint=Checkpoint.from_dict(
                 dict(epoch=epoch, model=model.state_dict())
             ),
@@ -315,20 +321,10 @@ if __name__ == "__main__":
         help="loss function configuration",
     )
 
-    parser = Trainer.add_argparse_args(parser)
     args = parser.parse_args()
     cfg = Config.from_dict(args.__dict__)
-
-    config = {
-        "cfg": cfg,
-        "args": args,
-        # "layer_1": tune.choice([32, 64, 128]),
-        # "layer_2": tune.choice([64, 128, 256]),
-        # "lr": tune.loguniform(1e-4, 1e-1),
-        # "batch_size": tune.choice([32, 64, 128]),
-    }
-
-    train(config)
+    train_setup(cfg, args)
+    
 
     # Make sure to pass in ``resources_per_trial`` using the ``get_tune_resources`` utility.
     # analysis = tune.run(

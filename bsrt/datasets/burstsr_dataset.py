@@ -9,6 +9,7 @@ from datasets.cameras.samsung import SamsungImage
 from datasets.cameras.canon import CanonImage
 from datasets.utilities.utilities import flatten_raw_image, pack_raw_image
 
+
 class BurstSRDataset(Dataset):
     """Real-world burst super-resolution dataset."""
 

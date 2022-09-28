@@ -76,6 +76,7 @@ class SpyNet(nn.Module):
         # ref = [ref]
         # supp = [supp]
 
+        # FIXME: By repeatedly averaging these values, we can end up with a tensor where the width and height are one.
         for level in range(5):
             ref.insert(
                 0,
@@ -94,16 +95,17 @@ class SpyNet(nn.Module):
             [
                 ref[0].size(0),
                 2,
-                int(math.floor(ref[0].size(2) / 2.0)),
-                int(math.floor(ref[0].size(3) / 2.0)),
+
+                # FIXME: Continued: taking the floor of these values can yield a tensor of width or height zero.
+                ref[0].size(2) // 2,
+                ref[0].size(3) // 2,
             ]
         )
 
         for level in range(len(ref)):
+            # FIXME: Continued: we cannot upsample a tensor with width or height zero.
             upsampled_flow = (
-                F.interpolate(
-                    input=flow, scale_factor=2, mode="bilinear", align_corners=True
-                )
+                bilinear_upsample_2d(flow, scale_factor=2, align_corners=True)
                 * 2.0
             )
 

@@ -94,7 +94,7 @@ def gamma_compression(image):
     return image.clamp(1e-8) ** (1.0 / 2.2)
 
 
-def apply_ccm(image, ccm):
+def apply_ccm(image: torch.Tensor, ccm):
     """Applies a color correction matrix."""
     assert image.dim() == 3 and image.shape[0] == 3
 

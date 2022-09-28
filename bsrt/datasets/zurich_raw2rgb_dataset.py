@@ -4,7 +4,11 @@ from typing import Optional
 from typing_extensions import ClassVar
 from datasets.utilities.image_folder_data import ImageFolderData
 from datasets.utilities.downloadable import Downloadable
-from datasets.utilities.provides import ProvidesDataset, ProvidesDatasetPipeline, ProvidesDatasource
+from datasets.utilities.provides import (
+    ProvidesDataset,
+    ProvidesDatasetPipeline,
+    ProvidesDatasource,
+)
 from ray.data.datasource import ImageFolderDatasource
 from ray.data.dataset import Dataset
 from ray.data.dataset_pipeline import DatasetPipeline
@@ -15,7 +19,9 @@ ZuricRaw2RgbData = ImageFolderData[np.uint8]
 
 
 @dataclass
-class ZurichRaw2RgbDataset(Downloadable, ProvidesDatasource, ProvidesDataset, ProvidesDatasetPipeline):
+class ZurichRaw2RgbDataset(
+    Downloadable, ProvidesDatasource, ProvidesDataset, ProvidesDatasetPipeline
+):
     """Canon RGB images from the "Zurich RAW to RGB mapping" dataset. You can download the full
     dataset (22 GB) from http://people.ee.ethz.ch/~ihnatova/pynet.html#dataset. Alternatively, you can only download the
     Canon RGB images (5.5 GB) from https://data.vision.ee.ethz.ch/bhatg/zurich-raw-to-rgb.zip

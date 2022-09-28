@@ -11,6 +11,7 @@ from utils.data_format_utils import torch_to_numpy, numpy_to_torch
 from torch import Tensor
 from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
+
 @dataclass
 class ImageTransformationParams:
     """Dataclass for storing transformation parameters"""

@@ -1,10 +1,10 @@
 import torch
 from torch import Tensor
 import torch.nn.functional as F
-from typing import Optional, Union, List
+from typing import Optional, Union
 
 # TODO: Remove when https://github.com/pytorch/pytorch/pull/80340 is merged
-def bilinear_upsample_2d(t: Tensor, scale_factor: Optional[float] = None, size: Union[None, int, List[int]] = None, align_corners: Optional[bool] = False, recompute_scale_factor: Optional[bool] = None) -> Tensor:
+def bilinear_upsample_2d(t: Tensor, scale_factor: Optional[float] = None, size: Optional[tuple[int, int]] = None, align_corners: Optional[bool] = False, recompute_scale_factor: Optional[bool] = None) -> Tensor:
     orig_precision = t.dtype
     if orig_precision == torch.bfloat16:
         t = t.to(torch.float16)

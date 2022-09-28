@@ -22,23 +22,30 @@ class PSNR(Metric):
         self.add_state("lpips", default=torch.tensor(0), dist_reduce_fx="mean")
 
     def update(self, pred: Tensor, gt: Tensor, valid: Optional[Tensor] = None) -> None:
-        assert pred.dim() == 4 and pred.shape == gt.shape
-        if valid is None:
-            all_scores = [
-                compute_psnr(self.l2, self.max_value, p.unsqueeze(0), g.unsqueeze(0))
-                for p, g in zip(pred, gt)
-            ]
-        else:
-            all_scores = [
-                compute_psnr(
-                    self.l2,
-                    self.max_value,
-                    p.unsqueeze(0),
-                    g.unsqueeze(0),
-                    v.unsqueeze(0),
-                )
-                for p, g, v in zip(pred, gt, valid)
-            ]
+        """
+        Args:
+            pred: (B, C, H, W)
+            gt: (B, C, H, W)
+            valid: (B, C, H, W)
+        """
+        assert (
+            pred.dim() == 4
+        ), f"pred must be a 4D tensor, actual shape was {pred.shape}"
+        assert (
+            pred.shape == gt.shape
+        ), f"pred and gt must have the same shape, got {pred.shape} and {gt.shape}"
+        all_scores = [
+            compute_psnr(
+                self.l2,
+                self.max_value,
+                p.unsqueeze(0),
+                g.unsqueeze(0),
+                v.unsqueeze(0) if v is not None else None,
+            )
+            for p, g, v in zip(
+                pred, gt, valid if valid is not None else [None] * len(pred)
+            )
+        ]
         # psnr, ss, lp = sum(psnr_all) / len(psnr_all)
         self.psnr: Tensor = sum([score[0] for score in all_scores]) / len(all_scores)  # type: ignore
         self.ssim: Tensor = sum([score[1] for score in all_scores]) / len(all_scores)  # type: ignore

@@ -1,0 +1,25 @@
+name: bsrt-mac
+channels:
+  - conda-forge
+  # - pytorch
+  - pytorch-nightly
+  - fastai
+dependencies:
+  - python=3.10
+  - pip==22.2.2
+
+  # - pytorch==1.12.1
+  - pytorch==1.13.0.dev20220927=py3.10_0
+  # - torchvision==0.13.1
+  - torchvision==0.14.0.dev20220927=py310_cpu
+  - torchmetrics==0.9.3
+  - opencv==4.6.0
+  - timm==0.6.7
+  - grpcio==1.48.1
+
+  # Note: Must manually uninstall grpcio from pip and install grpcio with conda
+  - pip:
+    - ray[all]==2.0.0
+
+    # Use this fork of LPIPS until https://github.com/richzhang/PerceptualSimilarity/pull/114 is merged upstream
+    - git+https://github.com/ercanburak/PerceptualSimilarity.git@9606c353e5777fc95186a5a4c876e7c6a17651a6#egg=lpips

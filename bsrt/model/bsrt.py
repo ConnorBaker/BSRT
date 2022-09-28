@@ -24,14 +24,15 @@ from model.spynet_util import SpyNet
 from model.non_local.non_local_cross_dot_product import NONLocalBlock2D as NonLocalCross
 from model.non_local.non_local_dot_product import NONLocalBlock2D as NonLocal
 from model.DCNv2.dcn_v2 import DCN_sep as DCN, FlowGuidedDCN
-import pytorch_lightning as pl
 from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 
 def make_model(config: Config):
     nframes = config.burst_size
     img_size = config.patch_size * 2
+    # FIXME: This overrides below?
     patch_size = 1
+    print("FIXME: Patch size is being ignored!")
     in_chans = config.burst_channel
     out_chans = config.n_colors
 
@@ -53,6 +54,7 @@ def make_model(config: Config):
         config=config,
         nframes=nframes,
         img_size=img_size,
+        # FIXME: Is this overriden above?
         patch_size=patch_size,
         in_chans=in_chans,
         out_chans=out_chans,
@@ -217,7 +219,7 @@ class CrossNonLocal_Fusion(nn.Module):
         return fea
 
 
-class BSRT(pl.LightningModule):
+class BSRT(nn.Module):
     def __init__(
         self,
         config: Config,
@@ -533,6 +535,11 @@ class BSRT(pl.LightningModule):
         return x
 
     def forward(self, x):
+        # B: batch size
+        # N: number of frames
+        # C: number of channels
+        # H: height
+        # W: width
         B, N, C, H, W = x.size()  # N video frames
         x_center = x[:, self.center, :, :, :].contiguous()
 
@@ -622,7 +629,6 @@ class BSRT(pl.LightningModule):
 
     def get_ref_flows(self, x):
         """Get flow between frames ref and other"""
-
         b, n, c, h, w = x.size()
         x_nbr = x.reshape(-1, c, h, w)
         x_ref = (
@@ -640,51 +646,6 @@ class BSRT(pl.LightningModule):
 
         return flows_list
 
-    def training_step(self, batch_value: TrainData, batch_idx):
-        if self.config.data_type == "synthetic":
-            burst = batch_value["burst"]
-            gt = batch_value["gt"]
-        elif self.config.data_type == "real":
-            burst, gt, meta_info_burst, meta_info_gt = batch_value
-        else:
-            raise Exception("Unexpected data_type: expected either synthetic or real")
-
-        # NOTE: while values should be in the range [0, 1], they are not clipped when training, so it is frequently the case that sr.max() > 1 or sr.min() < 0.
-        sr = self(burst)
-
-        if self.config.data_type == "synthetic":
-            loss = self.aligned_loss(sr, gt)
-        elif self.config.data_type == "real":
-            loss = self.aligned_loss(sr, gt, burst)
-        else:
-            raise Exception("Unexpected data_type: expected either synthetic or real")
-
-        self.log("mse_L1", loss, batch_size=self.batch_size, sync_dist=True)
-        return loss
-
-    def validation_step(self, batch_value: ValData, batch_idx):
-        if self.config.data_type == "synthetic":
-            burst = batch_value["burst"]
-            gt = batch_value["gt"]
-        elif self.config.data_type == "real":
-            burst, gt, meta_info_burst, meta_info_gt = batch_value
-        else:
-            raise Exception("Unexpected data_type: expected either synthetic or real")
-
-        # NOTE: while values should be in the range [0, 1], they are not clipped when training, so it is frequently the case that sr.max() > 1 or sr.min() < 0.
-        sr = self(burst)
-
-        if self.config.data_type == "synthetic":
-            psnr_score, ssim_score, lpips_score = self.psnr_fn(sr, gt)
-        elif self.config.data_type == "real":
-            psnr_score, ssim_score, lpips_score = self.psnr_fn(sr, gt, burst)
-        else:
-            raise Exception("Unexpected data_type: expected either synthetic or real")
-
-        self.log("psnr", psnr_score, batch_size=self.batch_size, sync_dist=True)
-        self.log("ssim", ssim_score, batch_size=self.batch_size, sync_dist=True)
-        self.log("lpips", lpips_score, batch_size=self.batch_size, sync_dist=True)
-        return psnr_score, ssim_score, lpips_score
 
     def configure_optimizers(self):
         """

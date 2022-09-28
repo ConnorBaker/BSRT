@@ -88,7 +88,7 @@ class TrainDataset(TransformsDataset, TransformsDatasetPipeline, Generic[_T]):
 
     def generate_raw_burst(self, frame: npt.NDArray[_T]) -> TrainData:
         # Augmentation, e.g. convert to tensor
-        _frame = self.transform(frame)
+        _frame: Tensor = self.transform(frame)
 
         # Extract a random crop from the image
         crop_sz = self.crop_sz + 2 * self.burst_transformation_params.border_crop
@@ -116,30 +116,28 @@ class TrainDataset(TransformsDataset, TransformsDatasetPipeline, Generic[_T]):
 
     def transform_dataset(
         self, dataset: Dataset[ImageFolderData[_T]]
-    ) -> Dataset[ImageFolderData[_T]]:
+    ) -> Dataset[TrainData]:
         return self._transform_data(dataset)
 
     def transform_dataset_pipeline(
         self, dataset_pipeline: DatasetPipeline[ImageFolderData[_T]]
-    ) -> DatasetPipeline[ImageFolderData[_T]]:
+    ) -> DatasetPipeline[TrainData]:
         return self._transform_data(dataset_pipeline)
 
     @overload
-    def _transform_data(
-        self, data: Dataset[ImageFolderData[_T]]
-    ) -> Dataset[ImageFolderData[_T]]:
+    def _transform_data(self, data: Dataset[ImageFolderData[_T]]) -> Dataset[TrainData]:
         ...
 
     @overload
     def _transform_data(
         self, data: DatasetPipeline[ImageFolderData[_T]]
-    ) -> DatasetPipeline[ImageFolderData[_T]]:
+    ) -> DatasetPipeline[TrainData]:
         ...
 
     # TODO: Find a way to do this without using a union -- perhaps a subscriptable generic?
     # That would require higher-kinded types: https://github.com/python/typing/issues/548
     def _transform_data(
         self, data: Dataset[ImageFolderData[_T]] | DatasetPipeline[ImageFolderData[_T]]
-    ) -> Dataset[ImageFolderData[_T]] | DatasetPipeline[ImageFolderData[_T]]:
+    ) -> Dataset[TrainData] | DatasetPipeline[TrainData]:
         """Generates a synthetic burst"""
         return data.map_batches(self._batch_generate_raw_burst, batch_format="pandas")

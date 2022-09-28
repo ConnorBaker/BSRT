@@ -21,7 +21,8 @@ class L2(Metric):
     def __init__(self, boundary_ignore: Optional[int] = None):
         super().__init__()
         self.boundary_ignore = boundary_ignore
-        self.loss_fn = LPIPS(net="alex")
+        # FIXME: Why does LPIPS have unused model parameters when lpips=True (the default setting)?
+        self.loss_fn = LPIPS(net="alex", lpips=False)
         self.add_state("mse", default=torch.tensor(0), dist_reduce_fx="mean")
         self.add_state("ssim", default=torch.tensor(0), dist_reduce_fx="mean")
         self.add_state("lpips", default=torch.tensor(0), dist_reduce_fx="mean")

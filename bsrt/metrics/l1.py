@@ -16,20 +16,43 @@ class L1(Metric):
         self.add_state("mse", default=torch.tensor(0), dist_reduce_fx="mean")
 
     def update(self, pred: Tensor, gt: Tensor, valid: Optional[Tensor] = None) -> None:
+        """
+        Args:
+            pred: (B, C, H, W)
+            gt: (B, C, H, W)
+            valid: (B, C, H, W)
+        """
+        assert (
+            pred.dim() == 4
+        ), f"pred must be a 4D tensor, actual shape was {pred.shape}"
+        assert (
+            pred.shape == gt.shape
+        ), f"pred and gt must have the same shape, got {pred.shape} and {gt.shape}"
+
         pred = ignore_boundary(pred, self.boundary_ignore)
         gt = ignore_boundary(gt, self.boundary_ignore)
         valid = ignore_boundary(valid, self.boundary_ignore)
 
-        if valid is None:
-            mse = F.l1_loss(pred, gt)
-        else:
-            mse = F.l1_loss(pred, gt, reduction="none")
+        mse: Tensor = torch.tensor(0.0)
+        acc: Tensor = torch.tensor(0.0)
+        for pred, gt, valid in zip(
+            pred, gt, valid if valid is not None else [None] * len(pred)
+        ):
+            if valid is None:
+                mse = F.l1_loss(pred, gt)
+            else:
+                mse_tensor: Tensor = F.l1_loss(pred, gt, reduction="none")
 
-            eps = 1e-12
-            elem_ratio = mse.numel() / valid.numel()
-            mse = (mse * valid.float()).sum() / (valid.float().sum() * elem_ratio + eps)
+                eps: float = 1e-12
+                elem_ratio: float = mse_tensor.numel() / valid.numel()
+                # TODO: Why is it necessary to cast to float?
+                mse = (mse_tensor * valid.float()).sum() / (
+                    valid.float().sum() * elem_ratio + eps
+                )
 
-        self.mse: Tensor = mse
+            acc += mse
+
+        self.mse = acc / len(pred)
 
     def compute(self) -> Tensor:
         return self.mse
