@@ -1,36 +1,22 @@
-from functools import reduce
-import pandas
-import logging
-import os
-from pathlib import Path
-from typing import Any
-import torch
-import torch.nn as nn
-from model.bsrt import BSRT
-from datasets.synthetic_burst.test_dataset import TestDataset
-from datasets.zurich_raw2rgb_dataset import ZuricRaw2RgbData
-from datasets.zurich_raw2rgb_dataset import ImageFolderData
-from datasets.synthetic_burst.train_dataset import TrainData, TrainDataset
-from datasets.zurich_raw2rgb_dataset import ZurichRaw2RgbDataset
-import model.bsrt as bsrt
-from option import Config
 from argparse import ArgumentParser, Namespace
+from datasets.synthetic_burst.train_dataset import TrainData, TrainDataProcessor
+from datasets.zurich_raw2rgb_dataset import ZurichRaw2RgbDataset
+from model.bsrt import BSRT
+from option import Config
+from pathlib import Path
 import ray
-ray.init(configure_logging=True, logging_level=logging.ERROR, object_store_memory= 16 * 1024 * 1024 * 1024)
-from ray import train
-from ray.data.context import DatasetContext
-from ray.data.dataset_pipeline import DatasetPipeline
-from ray.data.dataset import Dataset
-
-from utility import make_optimizer
-import numpy as np
-
-from ray import tune
 from ray.air import session
 from ray.air.checkpoint import Checkpoint
 from ray.air.config import ScalingConfig, DatasetConfig, RunConfig
-from ray.train.torch import TorchTrainer, TorchConfig, prepare_model
-from ray.air.util import data_batch_conversion
+from ray.data.dataset_pipeline import DatasetPipeline
+from ray.data.preprocessors.batch_mapper import BatchMapper
+from ray.data.preprocessors.chain import Chain
+from ray.train.torch import TorchTrainer, prepare_model
+from typing import Any
+from utility import make_optimizer
+import logging
+import model.bsrt as bsrt
+import torch
 
 
 def train_setup(cfg: Config, args: Namespace):
@@ -43,30 +29,25 @@ def train_setup(cfg: Config, args: Namespace):
     # metrics = {"loss": "ptl/val_loss", "acc": "ptl/val_accuracy"}
     # trc = TuneReportCallback(metrics, on="validation_end")
 
-    zrr_data = ZurichRaw2RgbDataset(
-        data_dir=Path(cfg.data_dir)
-    ).provide_dataset_pipeline()
-
-    train_dataset = TrainDataset(
-        crop_sz=256,
-        burst_size=cfg.burst_size,
-    ).transform_dataset_pipeline(zrr_data)
-
-    small_dataset = ray.data.from_items(train_dataset.take(10))
+    zrr_data = ZurichRaw2RgbDataset(data_dir=Path(cfg.data_dir)).provide_dataset()
+    preprocessor = Chain(
+        BatchMapper(lambda df: df.drop("label", axis="columns")),
+        TrainDataProcessor(crop_sz=256, burst_size=cfg.burst_size),
+    )
 
     # NOTE: TorchTrainer does not support passing DatasetPipelines: https://docs.ray.io/en/master/ray-air/check-ingest.html#how-do-i-pass-in-a-datasetpipeline-to-my-trainer
     trainer = TorchTrainer(
         train_loop_per_worker=train_loop_per_worker,
         train_loop_config=cfg.__dict__,
         run_config=RunConfig(),
-        scaling_config=ScalingConfig(num_workers=6),
+        scaling_config=ScalingConfig(num_workers=4),
         dataset_config={
             "train": DatasetConfig(use_stream_api=True),
         },
-        datasets={"train": small_dataset},
+        datasets={"train": zrr_data},
+        preprocessor=preprocessor,
     )
     result = trainer.fit()
-
 
     # auto_lr_find=True?
     # trainer = Trainer.from_argparse_args(
@@ -92,6 +73,7 @@ def train_setup(cfg: Config, args: Namespace):
     # )
     # trainer.fit(_model, datamodule=data_module)
 
+
 def train_loop_per_worker(config: dict[str, Any]) -> None:
     _cfg = Config.from_dict(config)
     dataset_shard: DatasetPipeline[TrainData] = session.get_dataset_shard("train")
@@ -103,12 +85,12 @@ def train_loop_per_worker(config: dict[str, Any]) -> None:
     model: BSRT = prepare_model(model)
 
     for epoch in range(20):
-        for train_data in dataset_shard.iter_batches(batch_size=cfg.batch_size, batch_format="pandas"):
+        for train_data in dataset_shard.iter_batches(
+            batch_size=cfg.batch_size, batch_format="pandas"
+        ):
             optimizer.zero_grad()
             bursts = torch.stack(train_data["burst"].tolist())
             gts = torch.stack(train_data["gt"].tolist())
-            
-            
 
             # NOTE: while values should be in the range [0, 1], they are not clipped when training, so it is frequently the case that sr.max() > 1 or sr.min() < 0.
             srs = model(bursts)
@@ -119,20 +101,18 @@ def train_loop_per_worker(config: dict[str, Any]) -> None:
             print(f"psnr_score: {psnr_score}")
             print(f"ssim_score: {ssim_score}")
             print(f"lpips_score: {lpips_score}")
-            
+
             loss.backward()
             optimizer.step()
-            # optimizer.schedule()
+            optimizer.schedule()
             print(f"epoch: {epoch}, loss: {loss.item()}")
-            
-            # model.log("mse_L1", loss, batch_size=model.batch_size, sync_dist=True)
 
         session.report(
             {
                 "loss": loss,
                 "psnr": psnr_score,
                 "ssim": ssim_score,
-                "lpips": lpips_score
+                "lpips": lpips_score,
             },
             checkpoint=Checkpoint.from_dict(
                 dict(epoch=epoch, model=model.state_dict())
@@ -324,17 +304,9 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     cfg = Config.from_dict(args.__dict__)
+    ray.init(
+        configure_logging=True,
+        logging_level=logging.ERROR,
+        object_store_memory=16 * 1024 * 1024 * 1024,
+    )
     train_setup(cfg, args)
-    
-
-    # Make sure to pass in ``resources_per_trial`` using the ``get_tune_resources`` utility.
-    # analysis = tune.run(
-    #         train,
-    #         metric="loss",
-    #         mode="min",
-    #         config=config,
-    #         num_samples=1,
-    #         resources_per_trial=get_tune_resources(num_workers=1),
-    #         name="tune_mnist")
-
-    # print("Best hyperparameters found were: ", analysis.best_config)

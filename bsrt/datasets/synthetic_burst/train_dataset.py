@@ -6,20 +6,13 @@ from data_processing.synthetic_burst_generation import (
     ImageTransformationParams,
 )
 from dataclasses import dataclass, field
-from datasets.utilities.transforms import TransformsDataset, TransformsDatasetPipeline
-from datasets.zurich_raw2rgb_dataset import ImageFolderData
 from metrics.utils.ignore_boundry import ignore_boundary
-from ray.data.dataset import Dataset
-from ray.data.dataset_pipeline import DatasetPipeline
 from torch import Tensor
 from torchvision.transforms import ToTensor
-from typing import Generic, TypeVar
-from typing_extensions import overload
-import numpy as np
-import numpy.typing as npt
-import pandas as pd
-
-_T = TypeVar("_T", bound=np.number)
+from typing import ClassVar
+from numpy.typing import NDArray
+from pandas import DataFrame
+from ray.data.preprocessors.batch_mapper import BatchMapper
 
 
 @dataclass
@@ -54,7 +47,7 @@ class TrainData:
 
 
 @dataclass
-class TrainDataset(TransformsDataset, TransformsDatasetPipeline, Generic[_T]):
+class TrainDataProcessor(BatchMapper):
     """Synthetic burst dataset for joint denoising, demosaicking, and super-resolution. RAW Burst sequences are
     synthetically generated on the fly as follows. First, a single image is loaded from the base_dataset. The sampled
     image is converted to linear sensor space using the inverse camera pipeline employed in [1]. A burst
@@ -65,6 +58,7 @@ class TrainDataset(TransformsDataset, TransformsDatasetPipeline, Generic[_T]):
     Jiawen and Sharlet, Dillon and Barron, Jonathan T, CVPR 2019
     """
 
+    _is_fittable: ClassVar[bool] = False
     burst_size: int
     crop_sz: int
     transform: ToTensor = field(default_factory=ToTensor)
@@ -76,7 +70,6 @@ class TrainDataset(TransformsDataset, TransformsDatasetPipeline, Generic[_T]):
         max_scale=0.0,
         border_crop=24,
     )
-
     image_processing_params: ImageProcessingParams = ImageProcessingParams(
         random_ccm=True,
         random_gains=True,
@@ -86,7 +79,7 @@ class TrainDataset(TransformsDataset, TransformsDatasetPipeline, Generic[_T]):
     )
     interpolation_type: str = "bilinear"
 
-    def generate_raw_burst(self, frame: npt.NDArray[_T]) -> TrainData:
+    def _transform_singleton(self, frame: NDArray) -> TrainData:
         # Augmentation, e.g. convert to tensor
         _frame: Tensor = self.transform(frame)
 
@@ -108,36 +101,5 @@ class TrainDataset(TransformsDataset, TransformsDatasetPipeline, Generic[_T]):
             burst=burst, gt=gt, flow_vectors=flow_vectors, meta_info=meta_info
         )
 
-    def _batch_generate_raw_burst(self, batch: pd.DataFrame) -> pd.DataFrame:
-        # NOTE: We must use to_numpy to avoid self.generate_raw_burst from throwing errors when handed a TensorArrayElement instead of a np.ndarray
-        return pd.DataFrame(
-            [self.generate_raw_burst(image) for image in batch["image"].to_numpy()]
-        )
-
-    def transform_dataset(
-        self, dataset: Dataset[ImageFolderData[_T]]
-    ) -> Dataset[TrainData]:
-        return self._transform_data(dataset)
-
-    def transform_dataset_pipeline(
-        self, dataset_pipeline: DatasetPipeline[ImageFolderData[_T]]
-    ) -> DatasetPipeline[TrainData]:
-        return self._transform_data(dataset_pipeline)
-
-    @overload
-    def _transform_data(self, data: Dataset[ImageFolderData[_T]]) -> Dataset[TrainData]:
-        ...
-
-    @overload
-    def _transform_data(
-        self, data: DatasetPipeline[ImageFolderData[_T]]
-    ) -> DatasetPipeline[TrainData]:
-        ...
-
-    # TODO: Find a way to do this without using a union -- perhaps a subscriptable generic?
-    # That would require higher-kinded types: https://github.com/python/typing/issues/548
-    def _transform_data(
-        self, data: Dataset[ImageFolderData[_T]] | DatasetPipeline[ImageFolderData[_T]]
-    ) -> Dataset[TrainData] | DatasetPipeline[TrainData]:
-        """Generates a synthetic burst"""
-        return data.map_batches(self._batch_generate_raw_burst, batch_format="pandas")
+    def _transform_pandas(self, df: DataFrame) -> DataFrame:
+        return DataFrame(list(map(self._transform_singleton, df["image"].to_numpy())))
