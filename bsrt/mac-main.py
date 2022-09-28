@@ -5,6 +5,7 @@ from model.bsrt import BSRT
 from option import Config
 from pathlib import Path
 import ray
+from ray.tune import CLIReporter
 from ray.air import session
 from ray.air.checkpoint import Checkpoint
 from ray.air.config import ScalingConfig, DatasetConfig, RunConfig
@@ -17,6 +18,8 @@ from utility import make_optimizer
 import logging
 import model.bsrt as bsrt
 import torch
+from pandas import DataFrame
+from ray.tune import Callback
 
 
 def train_setup(cfg: Config, args: Namespace):
@@ -29,17 +32,24 @@ def train_setup(cfg: Config, args: Namespace):
     # metrics = {"loss": "ptl/val_loss", "acc": "ptl/val_accuracy"}
     # trc = TuneReportCallback(metrics, on="validation_end")
 
-    zrr_data = ZurichRaw2RgbDataset(data_dir=Path(cfg.data_dir)).provide_dataset()
+    zrr_data = ZurichRaw2RgbDataset(data_dir=Path(cfg.data_dir)).provide_dataset().limit(10)
     preprocessor = Chain(
         BatchMapper(lambda df: df.drop("label", axis="columns")),
         TrainDataProcessor(crop_sz=256, burst_size=cfg.burst_size),
     )
+    progress_reporter=CLIReporter(metric_columns=["loss", "psnr", "ssim", "lpips"], print_intermediate_tables=True, metric="loss", mode="min", sort_by_metric=True)
 
     # NOTE: TorchTrainer does not support passing DatasetPipelines: https://docs.ray.io/en/master/ray-air/check-ingest.html#how-do-i-pass-in-a-datasetpipeline-to-my-trainer
     trainer = TorchTrainer(
         train_loop_per_worker=train_loop_per_worker,
         train_loop_config=cfg.__dict__,
-        run_config=RunConfig(),
+        run_config=RunConfig(
+            callbacks=[
+
+            ],
+            verbose=3,
+            progress_reporter=progress_reporter
+        ),
         scaling_config=ScalingConfig(num_workers=4),
         dataset_config={
             "train": DatasetConfig(use_stream_api=True),
@@ -76,7 +86,7 @@ def train_setup(cfg: Config, args: Namespace):
 
 def train_loop_per_worker(config: dict[str, Any]) -> None:
     _cfg = Config.from_dict(config)
-    dataset_shard: DatasetPipeline[TrainData] = session.get_dataset_shard("train")
+    data_shard: DatasetPipeline[TrainData] = session.get_dataset_shard("train")
     model = bsrt.make_model(_cfg)
     optimizer = make_optimizer(_cfg, model)
     loss_fn = model.aligned_loss
@@ -84,15 +94,15 @@ def train_loop_per_worker(config: dict[str, Any]) -> None:
     # model: BSRT = prepare_model(model, ddp_kwargs={"find_unused_parameters": True})
     model: BSRT = prepare_model(model)
 
-    for epoch in range(20):
-        for train_data in dataset_shard.iter_batches(
-            batch_size=cfg.batch_size, batch_format="pandas"
-        ):
-            optimizer.zero_grad()
-            bursts = torch.stack(train_data["burst"].tolist())
-            gts = torch.stack(train_data["gt"].tolist())
+    # Use iter_epochs(10) to iterate over 10 epochs of data.
+    for epoch_idx, epoch in enumerate(data_shard.iter_epochs(10)):
+        for batch_idx, batch in enumerate(epoch.iter_batches(batch_size=cfg.batch_size)):
+            assert isinstance(batch, DataFrame)
+            bursts = torch.stack(batch["burst"].tolist())
+            gts = torch.stack(batch["gt"].tolist())
 
             # NOTE: while values should be in the range [0, 1], they are not clipped when training, so it is frequently the case that sr.max() > 1 or sr.min() < 0.
+            optimizer.zero_grad()
             srs = model(bursts)
 
             loss: torch.Tensor = loss_fn(srs, gts)
@@ -105,19 +115,23 @@ def train_loop_per_worker(config: dict[str, Any]) -> None:
             loss.backward()
             optimizer.step()
             optimizer.schedule()
-            print(f"epoch: {epoch}, loss: {loss.item()}")
+            print(f"epoch: {epoch_idx}, batch: {batch_idx}, loss: {loss.item()}")
 
-        session.report(
-            {
-                "loss": loss,
-                "psnr": psnr_score,
-                "ssim": ssim_score,
-                "lpips": lpips_score,
-            },
-            checkpoint=Checkpoint.from_dict(
-                dict(epoch=epoch, model=model.state_dict())
-            ),
-        )
+            # session.report({"loss": loss})
+            session.report(
+                {
+                    "loss": loss.item(),
+                    "psnr": psnr_score.item(),
+                    "ssim": ssim_score.item(),
+                    "lpips": lpips_score.item(),
+                },
+                # checkpoint=Checkpoint.from_dict(
+                #     {"epoch": epoch, "model": model.state_dict()}
+                # ),
+            )
+
+    # View the stats for performance debugging.
+    print(data_shard.stats())
 
 
 if __name__ == "__main__":
@@ -306,7 +320,7 @@ if __name__ == "__main__":
     cfg = Config.from_dict(args.__dict__)
     ray.init(
         configure_logging=True,
-        logging_level=logging.ERROR,
+        logging_level=logging.INFO,
         object_store_memory=16 * 1024 * 1024 * 1024,
     )
     train_setup(cfg, args)
