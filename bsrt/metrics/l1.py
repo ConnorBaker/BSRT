@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Optional
 import torch
 from torch import Tensor
 import torch.nn.functional as F
@@ -10,12 +9,12 @@ from metrics.utils.ignore_boundry import ignore_boundary
 class L1(Metric):
     full_state_update = False
 
-    def __init__(self, boundary_ignore: Optional[int] = None) -> None:
+    def __init__(self, boundary_ignore: int | None = None) -> None:
         super().__init__()
         self.boundary_ignore = boundary_ignore
         self.add_state("mse", default=torch.tensor(0), dist_reduce_fx="mean")
 
-    def update(self, pred: Tensor, gt: Tensor, valid: Optional[Tensor] = None) -> None:
+    def update(self, pred: Tensor, gt: Tensor, valid: Tensor | None = None) -> None:
         """
         Args:
             pred: (B, C, H, W)

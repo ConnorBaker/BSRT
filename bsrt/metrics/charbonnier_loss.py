@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Optional
 import torch
 from torch import Tensor
 from metrics.utils.ignore_boundry import ignore_boundary
@@ -9,7 +8,7 @@ from torchmetrics.metric import Metric
 
 class CharbonnierLoss(Metric):
     # TODO: See if we need the full metric state (the property full_state_update=True)
-    def __init__(self, boundary_ignore: Optional[int] = None) -> None:
+    def __init__(self, boundary_ignore: int | None = None) -> None:
         super().__init__()
         self.boundary_ignore = boundary_ignore
         self.charbonnier_loss = CBLoss(reduce=True)

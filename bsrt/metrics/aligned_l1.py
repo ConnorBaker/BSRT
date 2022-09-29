@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Optional
 import torch
 from torch import Tensor
 import torch.nn as nn
@@ -17,7 +16,7 @@ class AlignedL1(Metric):
         self,
         alignment_net: nn.Module,
         sr_factor: int = 4,
-        boundary_ignore: Optional[int] = None,
+        boundary_ignore: int | None = None,
     ) -> None:
         super().__init__()
         self.sr_factor = sr_factor

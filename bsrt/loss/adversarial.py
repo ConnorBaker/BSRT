@@ -26,7 +26,7 @@ class Adversarial(nn.Module):
                 "epsilon": 1e-8,
                 "lr": 1e-5,
                 "weight_decay": config.weight_decay,
-                "decay": config.decay,
+                "decay_milestones": config.decay_milestones,
                 "gamma": config.gamma,
             }
             optim_args = SimpleNamespace(**optim_dict)

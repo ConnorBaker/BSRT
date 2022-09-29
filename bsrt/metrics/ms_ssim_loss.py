@@ -1,4 +1,3 @@
-from typing import Optional
 import torch
 from torch import Tensor
 from metrics.utils.ignore_boundry import ignore_boundary
@@ -11,7 +10,7 @@ from torchmetrics.metric import Metric
 class MSSSIMLoss(Metric):
     # TODO: See if we need the full metric state (the property full_state_update=True)
 
-    def __init__(self, boundary_ignore: Optional[int] = None) -> None:
+    def __init__(self, boundary_ignore: int | None = None) -> None:
         super().__init__()
         self.boundary_ignore = boundary_ignore
         self.add_state("loss", default=torch.tensor(0), dist_reduce_fx="mean")

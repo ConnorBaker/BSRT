@@ -1,11 +1,9 @@
 from __future__ import annotations
-from typing import Optional
 import torch
 from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
 from utils.spatial_color_alignment import get_gaussian_kernel
-from typing import Tuple
 from metrics.utils.prepare_aligned import prepare_aligned
 
 # NOTE: We specifically do not use the LPIPS module torchmetrics ships with since it requires that all inputs are in the range [-1,1] and our SR outputs during training are regularly greater than one.
@@ -23,7 +21,7 @@ class AlignedL2(Metric):
         self,
         alignment_net: nn.Module,
         sr_factor: int = 4,
-        boundary_ignore: Optional[int] = None,
+        boundary_ignore: int | None = None,
     ) -> None:
         super().__init__()
         self.sr_factor = sr_factor
@@ -71,5 +69,5 @@ class AlignedL2(Metric):
         self.ssim: Tensor = ssim
         self.lpips: Tensor = lpips
 
-    def compute(self) -> Tuple[Tensor, Tensor, Tensor]:
+    def compute(self) -> tuple[Tensor, Tensor, Tensor]:
         return self.mse, self.ssim, self.lpips

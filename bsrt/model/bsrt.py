@@ -1,77 +1,15 @@
-import os
-import functools
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.nn.parameter import Parameter
-import torch.nn.functional as F
-from datasets.synthetic_burst.test_dataset import TestData
-from datasets.synthetic_burst.train_dataset import TrainData
-from datasets.synthetic_burst.val_dataset import ValData
-from utils.postprocessing_functions import BurstSRPostProcess, SimplePostProcess
-from metrics.l1 import L1
-from metrics.l2 import L2
-from metrics.psnr import PSNR
-from metrics.aligned_l1 import AlignedL1
-from metrics.aligned_psnr import AlignedPSNR
-from metrics.ms_ssim_loss import MSSSIMLoss
-from metrics.charbonnier_loss import CharbonnierLoss
-from torch.optim import lr_scheduler
+from model.cross_non_local_fusion import CrossNonLocalFusion
+from model.flow_guided_pcd_align import FlowGuidedPCDAlign
+from model.spynet_util import SpyNet
 from option import Config
+from torch.nn.parameter import Parameter
+from utils.bilinear_upsample_2d import bilinear_upsample_2d
+import functools
 import model.arch_util as arch_util
 import model.swin_util as swu
-from model.spynet_util import SpyNet
-from model.non_local.non_local_cross_dot_product import NONLocalBlock2D as NonLocalCross
-from model.non_local.non_local_dot_product import NONLocalBlock2D as NonLocal
-from model.DCNv2.dcn_v2 import DCN_sep as DCN, FlowGuidedDCN
-from utils.bilinear_upsample_2d import bilinear_upsample_2d
-from model.flow_guided_pcd_align import FlowGuidedPCDAlign
-from model.cross_non_local_fusion import CrossNonLocalFusion
-
-
-def make_model(config: Config):
-    nframes = config.burst_size
-    img_size = config.patch_size * 2
-    # FIXME: This overrides below?
-    patch_size = 1
-    print("FIXME: Patch size is being ignored!")
-    in_chans = config.burst_channel
-    out_chans = config.n_colors
-
-    if config.model_level == "S":
-        depths = [6] * 1 + [6] * 4
-        num_heads = [6] * 1 + [6] * 4
-        embed_dim = 60
-    elif config.model_level == "L":
-        depths = [6] * 1 + [8] * 6
-        num_heads = [6] * 1 + [6] * 6
-        embed_dim = 180
-    window_size = 8
-    mlp_ratio = 2
-    upscale = config.scale
-    non_local = config.non_local
-    use_swin_checkpoint = config.use_checkpoint
-
-    bsrt = BSRT(
-        config=config,
-        nframes=nframes,
-        img_size=img_size,
-        # FIXME: Is this overriden above?
-        patch_size=patch_size,
-        in_chans=in_chans,
-        out_chans=out_chans,
-        embed_dim=embed_dim,  # type: ignore
-        depths=depths,  # type: ignore
-        num_heads=num_heads,  # type: ignore
-        window_size=window_size,
-        mlp_ratio=mlp_ratio,
-        upscale=upscale,
-        non_local=non_local,
-        use_swin_checkpoint=use_swin_checkpoint,
-    )
-
-    return bsrt
-
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 
 class BSRT(nn.Module):
@@ -126,46 +64,9 @@ class BSRT(nn.Module):
         self.num_features = embed_dim
         self.mlp_ratio = mlp_ratio
 
-        # print(self.model, file=ckp.log_file)
         self.spynet = SpyNet([3, 4, 5])
         self.conv_flow = nn.Conv2d(1, 3, kernel_size=3, stride=1, padding=1)
         self.flow_ps = nn.PixelShuffle(2)
-
-        # Loss functions
-        if "L1" == self.loss_name:
-            if config.data_type == "synthetic":
-                self.aligned_loss = L1()
-            elif config.data_type == "real":
-                self.aligned_loss = AlignedL1(
-                    alignment_net=self.alignment_net, boundary_ignore=40
-                )
-            else:
-                raise Exception(
-                    "Unexpected data_type: expected either synthetic or real"
-                )
-
-        elif "MSE" == self.loss_name:
-            self.aligned_loss = L2()
-        elif "CB" == self.loss_name:
-            self.aligned_loss = CharbonnierLoss()
-        elif "MSSSIM" ==self.loss_name:
-            self.aligned_loss = MSSSIMLoss()
-
-        # PSNR functions
-        if config.data_type == "synthetic":
-            self.postprocess_fn = SimplePostProcess(return_np=True)
-            self.psnr_fn = PSNR(boundary_ignore=40)
-        elif config.data_type == "real":
-            self.postprocess_fn = BurstSRPostProcess(return_np=True)
-            from pwcnet.pwcnet import PWCNet
-            self.alignment_net = PWCNet()
-            for param in self.alignment_net.parameters():
-                param.requires_grad = False
-            self.psnr_fn = AlignedPSNR(
-                alignment_net=self.alignment_net, boundary_ignore=40
-            )
-        else:
-            raise Exception("Unexpected data_type: expected either synthetic or real")
 
         # split image into non-overlapping patches
         self.patch_embed = swu.PatchEmbed(

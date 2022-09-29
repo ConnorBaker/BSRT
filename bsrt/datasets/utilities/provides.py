@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Generic, Optional, TypeVar
+from typing import Generic, TypeVar
 from abc import ABC
 from ray.data.dataset_pipeline import DatasetPipeline
 from ray.data.dataset import Dataset
@@ -11,7 +11,7 @@ _T = TypeVar("_T")
 class ProvidesDatasetPipeline(ABC, Generic[_T]):
     @abstractmethod
     def provide_dataset_pipeline(
-        self, blocks_per_window: Optional[int] = 100
+        self, blocks_per_window: int = 100
     ) -> DatasetPipeline[_T]:
         ...
 

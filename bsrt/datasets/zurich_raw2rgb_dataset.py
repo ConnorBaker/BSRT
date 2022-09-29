@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 from typing_extensions import ClassVar
 from datasets.utilities.image_folder_data import ImageFolderData
 from datasets.utilities.downloadable import Downloadable
@@ -37,7 +36,7 @@ class ZurichRaw2RgbDataset(
     data_dir: Path
 
     def provide_dataset_pipeline(
-        self, blocks_per_window: Optional[int] = 100
+        self, blocks_per_window: int = 100
     ) -> DatasetPipeline[ZuricRaw2RgbData]:
         return self.provide_datasource().window(blocks_per_window=blocks_per_window)
 

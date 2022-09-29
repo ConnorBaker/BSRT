@@ -1,7 +1,6 @@
 from __future__ import annotations
 import torch
 from torch import Tensor
-from typing import Tuple
 from metrics.aligned_l2 import AlignedL2
 from metrics.utils.compute_psnr import compute_psnr
 from torchmetrics.metric import Metric
@@ -32,5 +31,5 @@ class AlignedPSNR(Metric):
         self.ssim: Tensor = sum([score[1] for score in all_scores]) / len(all_scores)  # type: ignore
         self.lpips: Tensor = sum([score[2] for score in all_scores]) / len(all_scores)  # type: ignore
 
-    def compute(self) -> Tuple[Tensor, Tensor, Tensor]:
+    def compute(self) -> tuple[Tensor, Tensor, Tensor]:
         return self.psnr, self.ssim, self.lpips

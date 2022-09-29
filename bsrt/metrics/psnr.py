@@ -1,8 +1,6 @@
 from __future__ import annotations
-from typing import Optional
 import torch
 from torch import Tensor
-from typing import Tuple
 from metrics.utils.compute_psnr import compute_psnr
 from metrics.l2 import L2
 from torchmetrics.metric import Metric
@@ -12,7 +10,7 @@ class PSNR(Metric):
     full_state_update = False
 
     def __init__(
-        self, boundary_ignore: Optional[int] = None, max_value: float = 1.0
+        self, boundary_ignore: int | None = None, max_value: float = 1.0
     ) -> None:
         super().__init__()
         self.l2 = L2(boundary_ignore=boundary_ignore)
@@ -51,5 +49,5 @@ class PSNR(Metric):
         self.ssim: Tensor = sum([score[1] for score in all_scores]) / len(all_scores)  # type: ignore
         self.lpips: Tensor = sum([score[2] for score in all_scores]) / len(all_scores)  # type: ignore
 
-    def compute(self) -> Tuple[Tensor, Tensor, Tensor]:
+    def compute(self) -> tuple[Tensor, Tensor, Tensor]:
         return self.psnr, self.ssim, self.lpips

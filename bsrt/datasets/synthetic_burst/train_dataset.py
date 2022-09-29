@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from metrics.utils.ignore_boundry import ignore_boundary
 from torch import Tensor
 from torchvision.transforms import ToTensor
-from typing import ClassVar
+from typing_extensions import ClassVar
 from numpy.typing import NDArray
 from pandas import DataFrame
 from ray.data.preprocessors.batch_mapper import BatchMapper

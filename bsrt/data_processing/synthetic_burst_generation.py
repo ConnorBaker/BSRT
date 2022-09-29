@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Optional
 from typing_extensions import Literal, TypedDict
 import torch
 import random
@@ -95,8 +94,8 @@ def rgb2rawburst(
     image,
     burst_size,
     downsample_factor=1,
-    burst_transformation_params: Optional[ImageTransformationParams] = None,
-    image_processing_params: Optional[ImageProcessingParams] = None,
+    burst_transformation_params: ImageTransformationParams | None = None,
+    image_processing_params: ImageProcessingParams | None = None,
     interpolation_type="bilinear",
 ):
     """Generates a synthetic LR RAW burst from the input image. The input sRGB image is first converted to linear
@@ -210,7 +209,7 @@ def single2lrburst(
     image,
     burst_size: int,
     downsample_factor: float = 1.0,
-    transformation_params: Optional[ImageTransformationParams] = None,
+    transformation_params: ImageTransformationParams | None = None,
     interpolation_type: Literal["bilinear", "lanczos"] = "bilinear",
 ):
     """Generates a burst of size burst_size from the input image by applying random transformations defined by

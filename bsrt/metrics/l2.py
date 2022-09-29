@@ -1,9 +1,7 @@
 from __future__ import annotations
-from typing import Optional
 import torch
 from torch import Tensor
 import torch.nn.functional as F
-from typing import Tuple
 from metrics.utils.ignore_boundry import ignore_boundary
 
 # NOTE: We specifically do not use the LPIPS module torchmetrics ships with since it requires that all inputs are in the range [-1,1] and our SR outputs during training are regularly greater than one.
@@ -18,7 +16,7 @@ from lpips import LPIPS
 class L2(Metric):
     full_state_update = False
 
-    def __init__(self, boundary_ignore: Optional[int] = None):
+    def __init__(self, boundary_ignore: int | None = None):
         super().__init__()
         self.boundary_ignore = boundary_ignore
         # FIXME: Why does LPIPS have unused model parameters when lpips=True (the default setting)?
@@ -27,7 +25,7 @@ class L2(Metric):
         self.add_state("ssim", default=torch.tensor(0), dist_reduce_fx="mean")
         self.add_state("lpips", default=torch.tensor(0), dist_reduce_fx="mean")
 
-    def update(self, pred: Tensor, gt: Tensor, valid: Optional[Tensor] = None) -> None:
+    def update(self, pred: Tensor, gt: Tensor, valid: Tensor | None = None) -> None:
         pred = ignore_boundary(pred, self.boundary_ignore)
         gt = ignore_boundary(gt, self.boundary_ignore)
         valid = ignore_boundary(valid, self.boundary_ignore)
@@ -57,5 +55,5 @@ class L2(Metric):
         self.ssim: Tensor = ssim
         self.lpips: Tensor = lpips
 
-    def compute(self) -> Tuple[Tensor, Tensor, Tensor]:
+    def compute(self) -> tuple[Tensor, Tensor, Tensor]:
         return self.mse, self.ssim, self.lpips

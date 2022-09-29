@@ -1,6 +1,6 @@
 from abc import ABC
 from pathlib import Path
-from typing import ClassVar
+from typing_extensions import ClassVar
 from torchvision.datasets.utils import download_and_extract_archive, extract_archive
 
 

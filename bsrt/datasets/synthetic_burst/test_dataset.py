@@ -14,7 +14,8 @@ from ray.data.dataset import Dataset
 from ray.data.dataset_pipeline import DatasetPipeline
 from ray.data.datasource import ImageFolderDatasource
 from torch import Tensor
-from typing import Any, ClassVar, Optional
+from typing import Any
+from typing_extensions import ClassVar
 import numpy as np
 import pandas as pd
 import torch
@@ -82,7 +83,7 @@ class TestDataset(
         return pd.DataFrame(df["test_data"].tolist())
 
     def provide_dataset_pipeline(
-        self, blocks_per_window: Optional[int] = 100
+        self, blocks_per_window: int = 100
     ) -> DatasetPipeline[TestData]:
         return self.provide_dataset().window(blocks_per_window=blocks_per_window)
 

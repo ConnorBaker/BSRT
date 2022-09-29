@@ -4,20 +4,21 @@ channels:
   - pytorch
   - fastai
 dependencies:
-  - python=3.9
+  - python=3.10
   - pip==22.2.2
 
-  - pytorch==1.12.1=py3.9_cuda11.6_cudnn8.3.2_0
-  - torchvision==0.13.1=py39_cu116
+  - pytorch==1.12.1=py3.10_cuda11.6_cudnn8.3.2_0
+  - torchvision==0.13.1=py310_cu116
   - torchmetrics==0.9.3
-  - pytorch-lightning==1.7.6
   - cupy==11.1.0
+  - nccl==2.14.3.1
   - opencv-python-headless==4.6.0.66
   - timm==0.6.7
-
-  # For bagua-net
-  - nccl==2.14.3.1
+  - gcsfs==2022.8.2
+  - optuna==3.0.2
   - pip:
-    - bagua-cuda116==0.9.1
+    - ray[all]==2.0.0
+    - wandb==0.13.3
+
     # Use this fork of LPIPS until https://github.com/richzhang/PerceptualSimilarity/pull/114 is merged upstream
     - git+https://github.com/ercanburak/PerceptualSimilarity.git@9606c353e5777fc95186a5a4c876e7c6a17651a6#egg=lpips

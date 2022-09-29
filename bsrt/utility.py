@@ -1,4 +1,17 @@
+from metrics.aligned_l1 import AlignedL1
+from metrics.aligned_psnr import AlignedPSNR
+from metrics.charbonnier_loss import CharbonnierLoss
+from metrics.l1 import L1
+from metrics.l2 import L2
+from metrics.ms_ssim_loss import MSSSIMLoss
+from metrics.psnr import PSNR
+from metrics.utils.ignore_boundry import ignore_boundary
+from model.bsrt import BSRT
+from option import Config, LossName, DataTypeName
 from torch import Tensor
+from torchmetrics.metric import Metric
+from typing_extensions import Literal, overload
+from utils.postprocessing_functions import BurstSRPostProcess, SimplePostProcess
 import math
 import numpy as np
 import os
@@ -7,9 +20,6 @@ import torch.distributed as dist
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.optim.lr_scheduler as lrs
-from metrics.utils.ignore_boundry import ignore_boundary
-
-from option import Config
 
 
 def reduce_mean(tensor: Tensor, nprocs: int) -> Tensor:
@@ -75,6 +85,105 @@ def calc_psnr(sr, hr, scale, rgb_range, dataset=None):
     return -10 * math.log10(mse)
 
 
+def make_loss_fn(loss: LossName, data_type: DataTypeName) -> Metric:
+    match loss:
+        case "L1":
+            match data_type:
+                case "synthetic":
+                    return L1()
+                case "real":
+                    # FIXME: Reduce duplication with make_psnr_fn by using the same alignment_net
+                    from pwcnet.pwcnet import PWCNet
+
+                    alignment_net = PWCNet()
+                    for param in alignment_net.parameters():
+                        param.requires_grad = False
+                    return AlignedL1(alignment_net=alignment_net, boundary_ignore=40)
+        case "MSE":
+            return L2()
+        case "CB":
+            return CharbonnierLoss()
+        case "MSSSIM":
+            return MSSSIMLoss()
+
+
+@overload
+def make_postprocess_fn(data_type: Literal["synthetic"]) -> SimplePostProcess:
+    ...
+
+
+@overload
+def make_postprocess_fn(data_type: Literal["real"]) -> BurstSRPostProcess:
+    ...
+
+
+def make_postprocess_fn(
+    data_type: DataTypeName,
+) -> BurstSRPostProcess | SimplePostProcess:
+    match data_type:
+        case "synthetic":
+            return SimplePostProcess(return_np=True)
+        case "real":
+            return BurstSRPostProcess(return_np=True)
+
+
+def make_psnr_fn(data_type: DataTypeName) -> Metric:
+    match data_type:
+        case "synthetic":
+            return PSNR(boundary_ignore=40)
+        case "real":
+            from pwcnet.pwcnet import PWCNet
+
+            alignment_net = PWCNet()
+            for param in alignment_net.parameters():
+                param.requires_grad = False
+            return AlignedPSNR(alignment_net=alignment_net, boundary_ignore=40)
+
+
+def make_model(config: Config):
+    nframes = config.burst_size
+    img_size = config.patch_size * 2
+    # FIXME: This overrides below?
+    patch_size = 1
+    print("FIXME: Patch size is being ignored!")
+    in_chans = config.burst_channel
+    out_chans = config.n_colors
+
+    if config.model_level == "S":
+        depths = [6] * 1 + [6] * 4
+        num_heads = [6] * 1 + [6] * 4
+        embed_dim = 60
+    elif config.model_level == "L":
+        depths = [6] * 1 + [8] * 6
+        num_heads = [6] * 1 + [6] * 6
+        embed_dim = 180
+    window_size = 8
+    mlp_ratio = 2
+    upscale = config.scale
+    non_local = config.non_local
+    use_swin_checkpoint = config.use_checkpoint
+
+    bsrt = BSRT(
+        config=config,
+        nframes=nframes,
+        img_size=img_size,
+        # FIXME: Is this overriden above?
+        patch_size=patch_size,
+        in_chans=in_chans,
+        out_chans=out_chans,
+        embed_dim=embed_dim,  # type: ignore
+        depths=depths,  # type: ignore
+        num_heads=num_heads,  # type: ignore
+        window_size=window_size,
+        mlp_ratio=mlp_ratio,
+        upscale=upscale,
+        non_local=non_local,
+        use_swin_checkpoint=use_swin_checkpoint,
+    )
+
+    return bsrt
+
+
 def make_optimizer(config: Config, target):
     """
     make optimizer and scheduler together
@@ -88,14 +197,14 @@ def make_optimizer(config: Config, target):
         kwargs_optimizer["momentum"] = config.momentum
     elif config.optimizer == "ADAM":
         optimizer_class = optim.Adam
-        kwargs_optimizer["betas"] = config.betas
+        kwargs_optimizer["betas"] = (config.beta_gradient, config.beta_square)
         kwargs_optimizer["eps"] = config.epsilon
     elif config.optimizer == "RMSprop":
         optimizer_class = optim.RMSprop
         kwargs_optimizer["eps"] = config.epsilon
 
     # scheduler
-    milestones = list(map(lambda x: int(x), config.decay.split("-")))
+    milestones = list(map(int, config.decay_milestones))
     kwargs_scheduler = {"milestones": milestones, "gamma": config.gamma}
     scheduler_class = lrs.MultiStepLR
 

@@ -1,12 +1,40 @@
 from dataclasses import dataclass
-import dataclasses
-from typing import Tuple
 from typing_extensions import Literal
+from ray import tune
+from operator import pow
+from functools import partial
+from ray.tune.search.sample import Categorical, Float
+
+LossName = Literal["L1", "MSE", "CB", "MSSSIM"]
+OptimizerName = Literal["SGD", "ADAM", "RMSprop"]
+DataTypeName = Literal["synthetic", "real"]
+
+
+@dataclass
+class ConfigHyperTuner:
+    n_resblocks: Categorical = tune.choice(list(map(partial(pow, 2), range(3, 8))))
+    n_feats: Categorical = tune.choice(list(map(partial(pow, 2), range(5, 10))))
+    lr: Float = tune.loguniform(1e-5, 1e-3)
+    swinfeature: Categorical = tune.choice([True, False])
+    use_checkpoint: Categorical = tune.choice([True, False])
+    non_local: Categorical = tune.choice([True, False])
+    gan_k: Categorical = tune.choice(range(1, 5))
+    decay_milestones: Categorical = tune.choice(
+        [[x, y] for x in range(40, 300, 20) for y in range(80, 400, 20) if x < y]
+    )
+    gamma: Float = tune.loguniform(1e-4, 1.0)
+    # optimizer: Categorical = tune.choice(["SGD", "ADAM", "RMSprop"])
+    momentum: Float = tune.loguniform(1e-4, 1.0)
+    beta_gradient: Float = tune.loguniform(1e-4, 1.0)
+    beta_square: Float = tune.loguniform(1e-4, 1.0)
+    epsilon: Float = tune.loguniform(1e-10, 1e-4)
+    weight_decay: Float = tune.loguniform(1e-10, 1e-4)
+    # loss: Categorical = tune.choice(["L1", "MSE", "CB", "MSSIM"])
 
 
 @dataclass
 class Config:
-    data_type: Literal["synthetic", "real"]
+    data_type: DataTypeName
     n_resblocks: int
     n_feats: int
     n_colors: int
@@ -32,34 +60,19 @@ class Config:
     patch_size: int
     rgb_range: int
 
-    act: str
-    res_scale: float
-    shift_mean: bool
-    dilation: bool
-
-    n_resgroups: int
-    reduction: int
-    DA: bool
-    CA: bool
     non_local: bool
 
     seed: int
     batch_size: int
     gan_k: int
 
-    decay: str
+    decay_milestones: list[int]
     gamma: float
-    optimizer: Literal["SGD", "ADAM", "RMSprop"]
+    optimizer: OptimizerName
     momentum: float
-    betas: Tuple[int, int]
+    beta_gradient: float
+    beta_square: float
     epsilon: float
     weight_decay: float
-    gclip: float
 
-    loss: Literal["L1", "MSE", "CB", "MSSIM"]
-
-    @classmethod
-    def from_dict(cls, d) -> "Config":
-        field_names = set(f.name for f in dataclasses.fields(cls))
-        c = Config(**{k:v for k,v in d.items() if k in field_names})
-        return c
+    loss: LossName
