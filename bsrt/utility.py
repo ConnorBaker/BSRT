@@ -140,7 +140,7 @@ def make_psnr_fn(data_type: DataTypeName) -> Metric:
             return AlignedPSNR(alignment_net=alignment_net, boundary_ignore=40)
 
 
-def make_model(config: Config):
+def make_model(config: Config) -> BSRT:
     nframes = config.burst_size
     img_size = config.patch_size * 2
     # FIXME: This overrides below?

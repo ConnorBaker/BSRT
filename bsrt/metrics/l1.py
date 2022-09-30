@@ -32,20 +32,23 @@ class L1(Metric):
         gt = ignore_boundary(gt, self.boundary_ignore)
         valid = ignore_boundary(valid, self.boundary_ignore)
 
-        mse: Tensor = torch.tensor(0.0)
-        acc: Tensor = torch.tensor(0.0)
+        assert pred.device == gt.device and (
+            (gt.device == valid.device) if valid is not None else True
+        ), f"pred, gt, and valid must be on the same device"
+
+        acc: Tensor = torch.tensor(0.0, device=pred.device)
         for pred, gt, valid in zip(
             pred, gt, valid if valid is not None else [None] * len(pred)
         ):
             if valid is None:
-                mse = F.l1_loss(pred, gt)
+                mse: Tensor = F.l1_loss(pred, gt)
             else:
                 mse_tensor: Tensor = F.l1_loss(pred, gt, reduction="none")
 
                 eps: float = 1e-12
                 elem_ratio: float = mse_tensor.numel() / valid.numel()
                 # TODO: Why is it necessary to cast to float?
-                mse = (mse_tensor * valid.float()).sum() / (
+                mse: Tensor = (mse_tensor * valid.float()).sum() / (
                     valid.float().sum() * elem_ratio + eps
                 )
 

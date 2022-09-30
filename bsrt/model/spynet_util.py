@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import model.arch_util as arch_util
 from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
+
 class BasicModule(nn.Module):
     """Basic Module for SpyNet."""
 
@@ -95,7 +96,6 @@ class SpyNet(nn.Module):
             [
                 ref[0].size(0),
                 2,
-
                 # FIXME: Continued: taking the floor of these values can yield a tensor of width or height zero.
                 ref[0].size(2) // 2,
                 ref[0].size(3) // 2,
@@ -105,8 +105,7 @@ class SpyNet(nn.Module):
         for level in range(len(ref)):
             # FIXME: Continued: we cannot upsample a tensor with width or height zero.
             upsampled_flow = (
-                bilinear_upsample_2d(flow, scale_factor=2, align_corners=True)
-                * 2.0
+                bilinear_upsample_2d(flow, scale_factor=2, align_corners=True) * 2.0
             )
 
             if upsampled_flow.size(2) != ref[level].size(2):
@@ -165,10 +164,12 @@ class SpyNet(nn.Module):
         h_floor = math.floor(math.ceil(h / 32.0) * 32.0)
 
         ref = bilinear_upsample_2d(
-            ref, size=(h_floor, w_floor),
+            ref,
+            size=(h_floor, w_floor),
         )
         supp = bilinear_upsample_2d(
-            supp, size=(h_floor, w_floor),
+            supp,
+            size=(h_floor, w_floor),
         )
 
         flow_list = self.process(ref, supp, w, h, w_floor, h_floor)

@@ -8,7 +8,7 @@ from data_processing.synthetic_burst_generation import (
 from dataclasses import dataclass, field
 from metrics.utils.ignore_boundry import ignore_boundary
 from torch import Tensor
-from torchvision.transforms import ToTensor
+from torchvision.transforms.functional import to_tensor
 from typing_extensions import ClassVar
 from numpy.typing import NDArray
 from pandas import DataFrame
@@ -61,7 +61,6 @@ class TrainDataProcessor(BatchMapper):
     _is_fittable: ClassVar[bool] = False
     burst_size: int
     crop_sz: int
-    transform: ToTensor = field(default_factory=ToTensor)
     downsample_factor: int = 4
     burst_transformation_params: ImageTransformationParams = ImageTransformationParams(
         max_translation=24.0,
@@ -81,7 +80,7 @@ class TrainDataProcessor(BatchMapper):
 
     def _transform_singleton(self, frame: NDArray) -> TrainData:
         # Augmentation, e.g. convert to tensor
-        _frame: Tensor = self.transform(frame)
+        _frame: Tensor = to_tensor(frame)
 
         # Extract a random crop from the image
         crop_sz = self.crop_sz + 2 * self.burst_transformation_params.border_crop

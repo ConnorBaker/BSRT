@@ -3,6 +3,7 @@ import torch.nn as nn
 from model.DCNv2.dcn_v2 import DCN_sep as DCN, FlowGuidedDCN
 from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
+
 class FlowGuidedPCDAlign(nn.Module):
     """Alignment module using Pyramid, Cascading and Deformable convolution
     with 3 pyramid levels. [From EDVR]
@@ -66,9 +67,7 @@ class FlowGuidedPCDAlign(nn.Module):
         L3_offset = self.lrelu(self.L3_offset_conv2(L3_offset))
         L3_fea = self.lrelu(self.L3_dcnpack(nbr_fea_l[2], L3_offset, flows_l[2]))
         # L2
-        L3_offset = bilinear_upsample_2d(
-            L3_offset, scale_factor=2
-        )
+        L3_offset = bilinear_upsample_2d(L3_offset, scale_factor=2)
         L2_offset = torch.cat([nbr_fea_warped_l[1], ref_fea_l[1], flows_l[1]], dim=1)
         L2_offset = self.lrelu(self.L2_offset_conv1(L2_offset))
         L2_offset = self.lrelu(
@@ -77,12 +76,14 @@ class FlowGuidedPCDAlign(nn.Module):
         L2_offset = self.lrelu(self.L2_offset_conv3(L2_offset))
         L2_fea = self.L2_dcnpack(nbr_fea_l[1], L2_offset, flows_l[1])
         L3_fea = bilinear_upsample_2d(
-            L3_fea, scale_factor=2,
+            L3_fea,
+            scale_factor=2,
         )
         L2_fea = self.lrelu(self.L2_fea_conv(torch.cat([L2_fea, L3_fea], dim=1)))
         # L1
         L2_offset = bilinear_upsample_2d(
-            L2_offset, scale_factor=2,
+            L2_offset,
+            scale_factor=2,
         )
         L1_offset = torch.cat([nbr_fea_warped_l[0], ref_fea_l[0], flows_l[0]], dim=1)
         L1_offset = self.lrelu(self.L1_offset_conv1(L1_offset))
@@ -91,9 +92,7 @@ class FlowGuidedPCDAlign(nn.Module):
         )
         L1_offset = self.lrelu(self.L1_offset_conv3(L1_offset))
         L1_fea = self.L1_dcnpack(nbr_fea_l[0], L1_offset, flows_l[0])
-        L2_fea = bilinear_upsample_2d(
-            L2_fea, scale_factor=2
-        )
+        L2_fea = bilinear_upsample_2d(L2_fea, scale_factor=2)
         L1_fea = self.L1_fea_conv(torch.cat([L1_fea, L2_fea], dim=1))
 
         # Cascading

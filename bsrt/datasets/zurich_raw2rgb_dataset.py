@@ -35,6 +35,9 @@ class ZurichRaw2RgbDataset(
 
     data_dir: Path
 
+    def __post_init__(self) -> None:
+        self.download()
+
     def provide_dataset_pipeline(
         self, blocks_per_window: int = 100
     ) -> DatasetPipeline[ZuricRaw2RgbData]:
@@ -49,4 +52,4 @@ class ZurichRaw2RgbDataset(
             root=self.data_dir.as_posix(),
             size=(448, 448),
             mode="RGB",
-        ).lazy()
+        )

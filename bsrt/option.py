@@ -64,6 +64,7 @@ class Config:
 
     seed: int
     batch_size: int
+    epochs: int
     gan_k: int
 
     decay_milestones: list[int]

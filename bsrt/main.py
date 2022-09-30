@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+from dataclasses import dataclass
 from datasets.synthetic_burst.train_dataset import TrainData, TrainDataProcessor
 from datasets.zurich_raw2rgb_dataset import ZurichRaw2RgbDataset
 from option import Config, ConfigHyperTuner
@@ -7,7 +8,7 @@ from pathlib import Path
 from ray.air import session
 from ray.air.callbacks.wandb import WandbLoggerCallback
 from ray.air.config import CheckpointConfig, ScalingConfig, DatasetConfig, RunConfig
-from ray.data.dataset_pipeline import DatasetPipeline
+from ray.data.dataset import Dataset
 from ray.data.preprocessors.batch_mapper import BatchMapper
 from ray.data.preprocessors.chain import Chain
 from ray.train.torch import (
@@ -16,10 +17,10 @@ from ray.train.torch import (
     prepare_optimizer,
     accelerate,
     backward,
+    get_device,
 )
 from ray.tune import CLIReporter
 from ray.tune.schedulers.async_hyperband import AsyncHyperBandScheduler
-from ray.tune.search.concurrency_limiter import ConcurrencyLimiter
 from ray.tune.search.optuna.optuna_search import OptunaSearch
 from ray.tune.stopper import TrialPlateauStopper, CombinedStopper
 from ray.tune.syncer import SyncConfig
@@ -30,6 +31,8 @@ from torch.optim.optimizer import Optimizer
 from torchmetrics.metric import Metric
 from typing import Any
 from utility import make_optimizer, make_model, make_loss_fn, make_psnr_fn
+from ray.tune import Stopper
+import math
 import logging
 import optuna
 import os
@@ -38,19 +41,38 @@ import torch
 import torch.backends.cuda
 import torch.backends.cudnn
 
+os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
+torch.backends.cudnn.allow_tf32 = True
+torch.backends.cudnn.deterministic = False
+torch.backends.cudnn.benchmark = True
+
+OBJECT_STORE_MEMORY = 64 * 1024 * 1024 * 1024
+ray.init(
+    configure_logging=True,
+    logging_level=logging.ERROR,
+    object_store_memory=OBJECT_STORE_MEMORY,
+)
+GRACE_PERIOD = 512
+
+
+@dataclass
+class NaNStopper(Stopper):
+    metric: str
+
+    def __call__(self, trial_id, result: dict[str, Any]) -> bool:
+        return math.isnan(result[self.metric])
+
+    def stop_all(self) -> bool:
+        return False
+
 
 def train_setup(cfg: Config):
     # Create the Tune Reporting Callback
     # session.report({"loss": 1.0}, checkpoint=Checkpoint.from_directory("/Users/connorbaker/Packages/BSRT/bsrt/checkpoints"))
     # metrics = {"loss": "ptl/val_loss", "acc": "ptl/val_accuracy"}
     # trc = TuneReportCallback(metrics, on="validation_end")
-    os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
-    torch.backends.cuda.matmul.allow_tf32 = True
-    torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
-    torch.backends.cudnn.allow_tf32 = True
-    torch.backends.cudnn.deterministic = False
-    torch.backends.cudnn.benchmark = True
-
     trainer = TorchTrainer(
         train_loop_per_worker=train_loop_per_worker,
         run_config=RunConfig(
@@ -63,42 +85,58 @@ def train_setup(cfg: Config):
                 )
             ],
             stop=CombinedStopper(
+                NaNStopper(metric="metrics/batch/loss"),
                 TrialPlateauStopper(
-                    metric="metric.loss", std=0.005, num_results=8, grace_period=10
+                    metric="metrics/batch/loss",
+                    std=0.001,
+                    num_results=4,
+                    grace_period=GRACE_PERIOD,
                 ),
+                NaNStopper(metric="metrics/batch/psnr"),
                 TrialPlateauStopper(
-                    metric="metric.psnr", std=0.01, num_results=8, grace_period=10
+                    metric="metrics/batch/psnr",
+                    std=0.01,
+                    num_results=4,
+                    grace_period=GRACE_PERIOD,
                 ),
+                NaNStopper(metric="metrics/batch/ssim"),
                 TrialPlateauStopper(
-                    metric="metric.ssim", std=0.01, num_results=8, grace_period=10
+                    metric="metrics/batch/ssim",
+                    std=0.01,
+                    num_results=4,
+                    grace_period=GRACE_PERIOD,
                 ),
+                NaNStopper(metric="metrics/batch/lpips"),
                 TrialPlateauStopper(
-                    metric="metric.lpips", std=0.01, num_results=8, grace_period=10
+                    metric="metrics/batch/lpips",
+                    std=0.01,
+                    num_results=4,
+                    grace_period=GRACE_PERIOD,
                 ),
             ),
             verbose=1,
             progress_reporter=CLIReporter(
                 metric_columns=[
-                    "metric.loss",
-                    "metric.psnr",
-                    "metric.ssim",
-                    "metric.lpips",
+                    "metrics/batch/loss",
+                    "metrics/batch/psnr",
+                    "metrics/batch/ssim",
+                    "metrics/batch/lpips",
                 ],
                 print_intermediate_tables=True,
                 sort_by_metric=True,
             ),
             log_to_file=True,
             checkpoint_config=CheckpointConfig(),
-            sync_config=SyncConfig(upload_dir="gs://bsrt-supplemental"),
+            # sync_config=SyncConfig(upload_dir="gs://bsrt-supplemental"),
         ),
-        scaling_config=ScalingConfig(num_workers=3),
-        dataset_config={
-            "train": DatasetConfig(use_stream_api=True),
-        },
+        scaling_config=ScalingConfig(
+            num_workers=1, use_gpu=True, _max_cpu_fraction_per_node=0.8
+        ),
+        # dataset_config={
+        #     "train": DatasetConfig(use_stream_api=True, stream_window_size=OBJECT_STORE_MEMORY*1),
+        # },
         datasets={
-            "train": ZurichRaw2RgbDataset(data_dir=Path(cfg.data_dir))
-            .provide_dataset()
-            .limit(10)
+            "train": ZurichRaw2RgbDataset(data_dir=Path(cfg.data_dir)).provide_dataset()
         },
         preprocessor=Chain(
             BatchMapper(lambda df: df.drop("label", axis="columns")),
@@ -108,28 +146,23 @@ def train_setup(cfg: Config):
     tuner = Tuner(
         trainable=trainer,
         tune_config=TuneConfig(
-            metric="metric.loss",
+            metric="metrics/batch/loss",
             mode="min",
-            search_alg=ConcurrencyLimiter(
-                OptunaSearch(
-                    metric=[
-                        "metric.loss",
-                        "metric.psnr",
-                        "metric.ssim",
-                        "metric.lpips",
-                    ],
-                    mode=["min", "max", "max", "min"],
-                    sampler=optuna.samplers.NSGAIISampler(),
-                ),
-                max_concurrent=4,
+            search_alg=OptunaSearch(
+                metric=[
+                    "metrics/batch/loss",
+                    "metrics/batch/psnr",
+                    "metrics/batch/ssim",
+                    "metrics/batch/lpips",
+                ],
+                mode=["min", "max", "max", "min"],
+                sampler=optuna.samplers.NSGAIISampler(),
             ),
             scheduler=AsyncHyperBandScheduler(
-                time_attr="training_iteration",
-                metric="metric.loss",
-                mode="min",
-                grace_period=10,
+                max_t=8 * GRACE_PERIOD,
+                grace_period=GRACE_PERIOD,
             ),
-            num_samples=100,
+            num_samples=1000,
             max_concurrent_trials=None,
             time_budget_s=None,
         ),
@@ -141,30 +174,24 @@ def train_setup(cfg: Config):
 
 
 def train_loop_per_worker(config: dict[str, Any]) -> None:
-    os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
-    torch.backends.cuda.matmul.allow_tf32 = True
-    torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
-    torch.backends.cudnn.allow_tf32 = True
-    torch.backends.cudnn.deterministic = False
-    torch.backends.cudnn.benchmark = True
     accelerate(amp=True)
+    device = get_device()
 
     _cfg = Config(**config)
-    data_shard: DatasetPipeline[TrainData] = session.get_dataset_shard("train")
+    data_shard: Dataset[TrainData] = session.get_dataset_shard("train")
     model: Module = prepare_model(make_model(_cfg))
     optimizer: Optimizer = prepare_optimizer(make_optimizer(_cfg, model))
-    loss_fn: Metric = make_loss_fn(_cfg.loss, _cfg.data_type)
-    psnr_fn: Metric = make_psnr_fn(_cfg.data_type)
+    loss_fn: Metric = make_loss_fn(_cfg.loss, _cfg.data_type).to(device)
+    psnr_fn: Metric = make_psnr_fn(_cfg.data_type).to(device)
     # model: BSRT = prepare_model(model, ddp_kwargs={"find_unused_parameters": True})
 
-    # Use iter_epochs(10) to iterate over 10 epochs of data.
-    for epoch_idx, epoch in enumerate(data_shard.iter_epochs(10)):
-        for batch_idx, batch in enumerate(
-            epoch.iter_batches(batch_size=cfg.batch_size)
+    for _ in range(_cfg.epochs):
+        for batch in data_shard.iter_batches(
+            batch_size=cfg.batch_size, batch_format="pandas"
         ):
             assert isinstance(batch, DataFrame)
-            bursts = torch.stack(batch["burst"].tolist())
-            gts = torch.stack(batch["gt"].tolist())
+            bursts = torch.stack(batch["burst"].tolist()).to(device)
+            gts = torch.stack(batch["gt"].tolist()).to(device)
 
             # NOTE: while values should be in the range [0, 1], they are not clipped when training, so it is frequently the case that sr.max() > 1 or sr.min() < 0.
             optimizer.zero_grad()
@@ -175,22 +202,17 @@ def train_loop_per_worker(config: dict[str, Any]) -> None:
 
             backward(loss)
             optimizer.step()
-            optimizer.schedule()
 
             session.report(
                 {
-                    "batch.number": batch_idx,
-                    "batch.length": bursts.size(0),
-                    "epoch.number": epoch_idx,
-                    "metric.loss": loss.item(),
-                    "metric.psnr": psnr_score.item(),
-                    "metric.ssim": ssim_score.item(),
-                    "metric.lpips": lpips_score.item(),
+                    "metrics/batch/loss": loss.item(),
+                    "metrics/batch/psnr": psnr_score.item(),
+                    "metrics/batch/ssim": ssim_score.item(),
+                    "metrics/batch/lpips": lpips_score.item(),
                 },
-                # checkpoint=Checkpoint.from_dict(
-                #     {"epoch": epoch, "model": model.state_dict()}
-                # ),
             )
+
+        # TODO: Run validation after every epoch and log the results to wandb
 
     # View the stats for performance debugging.
     print(data_shard.stats())
@@ -300,6 +322,9 @@ if __name__ == "__main__":
         "--batch_size", type=int, default=8, help="input batch size for training"
     )
     train_group.add_argument(
+        "--epochs", type=int, default=16, help="number of epochs for training"
+    )
+    train_group.add_argument(
         "--gan_k", type=int, default=1, help="k value for adversarial loss"
     )
 
@@ -356,9 +381,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     cfg = Config(**args.__dict__)
-    ray.init(
-        configure_logging=True,
-        logging_level=logging.INFO,
-        object_store_memory=16 * 1024 * 1024 * 1024,
-    )
     train_setup(cfg)
