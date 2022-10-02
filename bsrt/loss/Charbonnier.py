@@ -1,24 +1,22 @@
+from dataclasses import dataclass
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+from torch import Tensor
 
 
+@dataclass
 class CharbonnierLoss(nn.Module):
     """L1 charbonnier loss."""
 
-    def __init__(self, epsilon=1e-3, reduce=True):
-        super(CharbonnierLoss, self).__init__()
-        self.eps = epsilon * epsilon
-        self.reduce = reduce
+    epsilon: float = 1e-3
+    reduce: bool = True
 
-    def forward(self, X, Y):
-        # diff = X - Y
-        diff = torch.add(X, -Y)
-        # error = sqrt(diff * diff + eps)
-        # error = sqrt(diff * diff + epsilon^2)
-        # = sqrt(diff^2 + epsilon^2)
-        # = sqrt((X-Y)^2 + epsilon^2))
-        error = torch.sqrt(diff * diff + self.eps)
+    def __post_init__(self) -> None:
+        super().__init__()
+
+    def forward(self, X: Tensor, Y: Tensor) -> Tensor:
+        diff = X - Y
+        error = torch.sqrt(diff * diff + self.epsilon * self.epsilon)
         if self.reduce:
             loss = torch.mean(error)
         else:

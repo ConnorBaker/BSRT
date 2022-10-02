@@ -1,23 +1,30 @@
 from __future__ import annotations
-import torch
-from torch import Tensor
-import utils.spatial_color_alignment as sca_utils
+from dataclasses import dataclass, field
 from metrics.utils.prepare_aligned import prepare_aligned
-
-# NOTE: We specifically do not use the LPIPS module torchmetrics ships with since it requires that all inputs are in the range [-1,1] and our SR outputs during training are regularly greater than one.
+from torch import Tensor
 from torchmetrics.functional.image.ssim import (
     structural_similarity_index_measure as compute_ssim,
 )
 from torchmetrics.metric import Metric
+from typing import ClassVar
+import torch
+import utils.spatial_color_alignment as sca_utils
 
 
+@dataclass
 class AlignedSSIM(Metric):
-    # TODO: See if we need the full metric state (the property full_state_update=True)
-    def __init__(self, alignment_net, sr_factor=4, boundary_ignore=None):
+    full_state_update: ClassVar[bool] = False
+    alignment_net: torch.nn.Module
+    sr_factor: int = 4
+    boundary_ignore: int | None = None
+    gauss_kernel: Tensor = field(init=False)
+    ksz: int = field(init=False)
+
+    # Losses
+    ssim: Tensor = field(init=False)
+
+    def __post_init__(self) -> None:
         super().__init__()
-        self.sr_factor = sr_factor
-        self.boundary_ignore = boundary_ignore
-        self.alignment_net = alignment_net
         self.gauss_kernel, self.ksz = sca_utils.get_gaussian_kernel(sd=1.5)
         self.add_state("ssim", default=torch.tensor(0), dist_reduce_fx="mean")
 

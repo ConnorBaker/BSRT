@@ -1,19 +1,16 @@
+from dataclasses import dataclass
 import torch
+from torch import Tensor
 import torch.nn as nn
-import torch.nn.functional as F
-
-from bsrt.option import Config
 
 
+@dataclass
 class HistEntropy(nn.Module):
-    def __init__(self, config: Config):
+    def __post_init__(self):
         super().__init__()
-        self.config = config
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         p = torch.softmax(x, dim=1)
         logp = torch.log_softmax(x, dim=1)
-
         entropy = (-p * logp).sum(dim=(2, 3)).mean()
-
         return entropy

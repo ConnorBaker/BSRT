@@ -1,7 +1,6 @@
 import torch
 from torch import Tensor
 import torch.nn as nn
-import torch.nn.functional as F
 from utils.spatial_color_alignment import match_colors
 from utils.warp import warp
 from metrics.utils.ignore_boundry import ignore_boundary

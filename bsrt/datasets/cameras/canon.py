@@ -1,3 +1,4 @@
+from __future__ import annotations
 from pathlib import Path
 import torch
 import cv2
@@ -8,7 +9,7 @@ from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 class CanonImage:
     @staticmethod
-    def load(path: Path):
+    def load(path: Path) -> CanonImage:
         im_raw = cv2.imread((path / "im_raw.png").as_posix(), cv2.IMREAD_UNCHANGED)
         im_raw = np.transpose(im_raw, (2, 0, 1)).astype(np.int16)
         im_raw = torch.from_numpy(im_raw)

@@ -5,11 +5,11 @@ from data_processing.synthetic_burst_generation import (
     ImageProcessingParams,
     ImageTransformationParams,
 )
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from metrics.utils.ignore_boundry import ignore_boundary
 from torch import Tensor
 from torchvision.transforms.functional import to_tensor
-from typing_extensions import ClassVar
+from typing_extensions import ClassVar, Literal
 from numpy.typing import NDArray
 from pandas import DataFrame
 from ray.data.preprocessors.batch_mapper import BatchMapper
@@ -76,7 +76,7 @@ class TrainDataProcessor(BatchMapper):
         compress_gamma=True,
         add_noise=True,
     )
-    interpolation_type: str = "bilinear"
+    interpolation_type: Literal["bilinear", "lanczos"] = "bilinear"
 
     def _transform_singleton(self, frame: NDArray) -> TrainData:
         # Augmentation, e.g. convert to tensor

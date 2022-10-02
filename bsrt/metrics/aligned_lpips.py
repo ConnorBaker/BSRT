@@ -1,22 +1,29 @@
 from __future__ import annotations
-import torch
-from torch import Tensor
-from utils.spatial_color_alignment import get_gaussian_kernel
-from metrics.utils.prepare_aligned import prepare_aligned
-
-# NOTE: We specifically do not use the LPIPS module torchmetrics ships with since it requires that all inputs are in the range [-1,1] and our SR outputs during training are regularly greater than one.
-from torchmetrics.metric import Metric
+from dataclasses import dataclass, field
 from lpips import LPIPS
+from metrics.utils.prepare_aligned import prepare_aligned
+from torch import Tensor
+from torchmetrics.metric import Metric
+from typing import ClassVar
+from utils.spatial_color_alignment import get_gaussian_kernel
+import torch
 
 
+@dataclass
 class AlignedLPIPS(Metric):
-    # TODO: See if we need the full metric state (the property full_state_update=True)
-    def __init__(self, alignment_net, sr_factor=4, boundary_ignore=None):
+    full_state_update: ClassVar[bool] = False
+    alignment_net: torch.nn.Module
+    sr_factor: int = 4
+    boundary_ignore: int | None = None
+    loss_fn: LPIPS = field(init=False, default_factory=lambda: LPIPS(net="alex"))
+    gauss_kernel: Tensor = field(init=False)
+    ksz: int = field(init=False)
+
+    # Losses
+    lpips: Tensor = field(init=False)
+
+    def __post_init__(self) -> None:
         super().__init__()
-        self.sr_factor = sr_factor
-        self.boundary_ignore = boundary_ignore
-        self.alignment_net = alignment_net
-        self.loss_fn = LPIPS(net="alex")
         self.gauss_kernel, self.ksz = get_gaussian_kernel(sd=1.5)
         self.add_state("lpips", default=torch.tensor(0), dist_reduce_fx="mean")
 

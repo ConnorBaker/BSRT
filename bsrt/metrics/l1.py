@@ -1,17 +1,23 @@
 from __future__ import annotations
-import torch
-from torch import Tensor
-import torch.nn.functional as F
-from torchmetrics.metric import Metric
+from dataclasses import dataclass, field
 from metrics.utils.ignore_boundry import ignore_boundary
+from torch import Tensor
+from torchmetrics.metric import Metric
+from typing import ClassVar
+import torch
+import torch.nn.functional as F
 
 
+@dataclass
 class L1(Metric):
-    full_state_update = False
+    full_state_update: ClassVar[bool] = False
+    boundary_ignore: int | None = None
 
-    def __init__(self, boundary_ignore: int | None = None) -> None:
+    # Losses
+    mse: Tensor = field(init=False)
+
+    def __post_init__(self) -> None:
         super().__init__()
-        self.boundary_ignore = boundary_ignore
         self.add_state("mse", default=torch.tensor(0), dist_reduce_fx="mean")
 
     def update(self, pred: Tensor, gt: Tensor, valid: Tensor | None = None) -> None:
@@ -47,9 +53,8 @@ class L1(Metric):
 
                 eps: float = 1e-12
                 elem_ratio: float = mse_tensor.numel() / valid.numel()
-                # TODO: Why is it necessary to cast to float?
-                mse: Tensor = (mse_tensor * valid.float()).sum() / (
-                    valid.float().sum() * elem_ratio + eps
+                mse: Tensor = (mse_tensor * valid).sum() / (
+                    valid.sum() * elem_ratio + eps
                 )
 
             acc += mse

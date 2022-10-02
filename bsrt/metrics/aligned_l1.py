@@ -1,28 +1,31 @@
 from __future__ import annotations
-import torch
+from dataclasses import dataclass, field
+from metrics.utils.prepare_aligned import prepare_aligned
 from torch import Tensor
+from torchmetrics.metric import Metric
+from typing import ClassVar
+from utils.spatial_color_alignment import get_gaussian_kernel
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from utils.spatial_color_alignment import get_gaussian_kernel
-from metrics.utils.prepare_aligned import prepare_aligned
-from torchmetrics.metric import Metric
 
 # TODO: Honestly, this should just be a flag for the L1 class.
 
 
+@dataclass
 class AlignedL1(Metric):
-    # TODO: See if we need the full metric state (the property full_state_update=True)
-    def __init__(
-        self,
-        alignment_net: nn.Module,
-        sr_factor: int = 4,
-        boundary_ignore: int | None = None,
-    ) -> None:
+    full_state_update: ClassVar[bool] = False
+    alignment_net: nn.Module
+    sr_factor: int = 4
+    boundary_ignore: int | None = None
+    gauss_kernel: Tensor = field(init=False)
+    ksz: int = field(init=False)
+
+    # Losses
+    mse: Tensor = field(init=False)
+
+    def __post_init__(self) -> None:
         super().__init__()
-        self.sr_factor = sr_factor
-        self.boundary_ignore = boundary_ignore
-        self.alignment_net = alignment_net
-        # self.gauss_kernel = _gaussian_kernel_2d(11, 1.5)
         self.gauss_kernel, self.ksz = get_gaussian_kernel(sd=1.5)
         self.add_state("mse", default=torch.tensor(0), dist_reduce_fx="mean")
 

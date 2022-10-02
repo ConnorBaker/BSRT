@@ -1,21 +1,34 @@
 from __future__ import annotations
-import torch
-from torch import Tensor
+from dataclasses import dataclass, field
 from metrics.aligned_l2 import AlignedL2
 from metrics.utils.compute_psnr import compute_psnr
+from torch import Tensor
 from torchmetrics.metric import Metric
+from typing import ClassVar
+import torch
 
 
+@dataclass
 class AlignedPSNR(Metric):
-    # TODO: See if we need the full metric state (the property full_state_update=True)
-    def __init__(self, alignment_net, sr_factor=4, boundary_ignore=None, max_value=1.0):
+    full_state_update: ClassVar[bool] = False
+    alignment_net: torch.nn.Module
+    sr_factor: int = 4
+    boundary_ignore: int | None = None
+    max_value: float = 1.0
+    l2: AlignedL2 = field(init=False)
+
+    # Losses
+    psnr: Tensor = field(init=False)
+    ssim: Tensor = field(init=False)
+    lpips: Tensor = field(init=False)
+
+    def __post_init__(self) -> None:
         super().__init__()
         self.l2 = AlignedL2(
-            alignment_net=alignment_net,
-            sr_factor=sr_factor,
-            boundary_ignore=boundary_ignore,
+            alignment_net=self.alignment_net,
+            sr_factor=self.sr_factor,
+            boundary_ignore=self.boundary_ignore,
         )
-        self.max_value = max_value
         self.add_state("psnr", default=torch.tensor(0), dist_reduce_fx="mean")
         self.add_state("ssim", default=torch.tensor(0), dist_reduce_fx="mean")
         self.add_state("lpips", default=torch.tensor(0), dist_reduce_fx="mean")

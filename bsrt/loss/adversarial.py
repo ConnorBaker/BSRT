@@ -1,18 +1,17 @@
 from bsrt.option import Config
 import utility
 from types import SimpleNamespace
-
-from model import common
 from loss import discriminator
 
 import torch
+from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.optim as optim
+from utils.types import GanType
 
 
 class Adversarial(nn.Module):
-    def __init__(self, config: Config, gan_type):
+    def __init__(self, config: Config, gan_type: GanType):
         super(Adversarial, self).__init__()
         self.gan_type = gan_type
         self.gan_k = config.gan_k
@@ -35,7 +34,7 @@ class Adversarial(nn.Module):
 
         self.optimizer = utility.make_optimizer(optim_args, self.dis)
 
-    def forward(self, fake, real):
+    def forward(self, fake: Tensor, real: Tensor) -> Tensor:
         # updating discriminator...
         self.loss = 0
         fake_detach = fake.detach()  # do not backpropagate through G
@@ -104,7 +103,7 @@ class Adversarial(nn.Module):
 
         return dict(**state_discriminator, **state_optimizer)
 
-    def bce(self, real, fake):
+    def bce(self, real: Tensor, fake: Tensor) -> Tensor:
         label_real = torch.ones_like(real)
         label_fake = torch.zeros_like(fake)
         bce_real = F.binary_cross_entropy_with_logits(real, label_real)

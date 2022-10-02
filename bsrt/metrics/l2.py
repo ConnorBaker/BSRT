@@ -1,26 +1,32 @@
 from __future__ import annotations
-import torch
-from torch import Tensor
-import torch.nn.functional as F
+from dataclasses import field
+from lpips import LPIPS
 from metrics.utils.ignore_boundry import ignore_boundary
-
-# NOTE: We specifically do not use the LPIPS module torchmetrics ships with since it requires that all inputs are in the range [-1,1] and our SR outputs during training are regularly greater than one.
+from torch import Tensor
 from torchmetrics.functional.image.ssim import (
     structural_similarity_index_measure as compute_ssim,
 )
-
 from torchmetrics.metric import Metric
-from lpips import LPIPS
+from typing import ClassVar
+import torch
+import torch.nn.functional as F
 
 
 class L2(Metric):
-    full_state_update = False
+    full_state_update: ClassVar[bool] = False
+    boundary_ignore: int | None = None
+    # FIXME: Why does LPIPS have unused model parameters when lpips=True (the default setting)?
+    loss_fn: LPIPS = field(
+        init=False, default_factory=lambda: LPIPS(net="alex", lpips=False)
+    )
 
-    def __init__(self, boundary_ignore: int | None = None):
+    # Losses
+    mse: Tensor = field(init=False)
+    ssim: Tensor = field(init=False)
+    lpips: Tensor = field(init=False)
+
+    def __post_init__(self) -> None:
         super().__init__()
-        self.boundary_ignore = boundary_ignore
-        # FIXME: Why does LPIPS have unused model parameters when lpips=True (the default setting)?
-        self.loss_fn = LPIPS(net="alex", lpips=False)
         self.add_state("mse", default=torch.tensor(0), dist_reduce_fx="mean")
         self.add_state("ssim", default=torch.tensor(0), dist_reduce_fx="mean")
         self.add_state("lpips", default=torch.tensor(0), dist_reduce_fx="mean")
