@@ -17,7 +17,7 @@ dependencies:
   - optuna==3.0.2
   - pip:
     - wandb==0.13.3
-    - ray[all] @ https://s3-us-west-2.amazonaws.com/ray-wheels/latest/ray-3.0.0.dev0-cp310-cp310-manylinux2014_x86_64.whl
+    - ray[all]==2.0.0
 
     # Use this fork of LPIPS until https://github.com/richzhang/PerceptualSimilarity/pull/114 is merged upstream
     - git+https://github.com/ercanburak/PerceptualSimilarity.git@9606c353e5777fc95186a5a4c876e7c6a17651a6#egg=lpips
