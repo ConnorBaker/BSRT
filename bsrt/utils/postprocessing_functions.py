@@ -1,5 +1,9 @@
+from abc import ABC
+from dataclasses import dataclass
 import torch
+from torch import Tensor
 import numpy as np
+from data_processing.synthetic_burst_generation import MetaInfo
 import utils.data_format_utils as df_utils
 from data_processing.camera_pipeline import (
     apply_gains,
@@ -9,17 +13,21 @@ from data_processing.camera_pipeline import (
 )
 
 
-class SimplePostProcess:
-    def __init__(
-        self, gains=True, ccm=True, gamma=True, smoothstep=True, return_np=False
-    ):
-        self.gains = gains
-        self.ccm = ccm
-        self.gamma = gamma
-        self.smoothstep = smoothstep
-        self.return_np = return_np
-
+@dataclass
+class PostProcess(ABC):
     def process(self, image, meta_info):
+        raise NotImplementedError()
+
+
+@dataclass
+class SimplePostProcess(PostProcess):
+    gains: bool = True
+    ccm: bool = True
+    gamma: bool = True
+    smoothstep: bool = True
+    return_np: bool = False
+
+    def process(self, image: Tensor, meta_info: MetaInfo):
         return process_linear_image_rgb(
             image,
             meta_info,
@@ -32,20 +40,26 @@ class SimplePostProcess:
 
 
 def process_linear_image_rgb(
-    image, meta_info, gains=True, ccm=True, gamma=True, smoothstep=True, return_np=False
+    image: Tensor,
+    meta_info: MetaInfo,
+    gains: bool = True,
+    ccm: bool = True,
+    gamma: bool = True,
+    smoothstep: bool = True,
+    return_np: bool = False,
 ):
     if gains:
         image = apply_gains(
-            image, meta_info["rgb_gain"], meta_info["red_gain"], meta_info["blue_gain"]
+            image, meta_info.rgb_gain, meta_info.red_gain, meta_info.blue_gain
         )
 
     if ccm:
-        image = apply_ccm(image, meta_info["cam2rgb"])
+        image = apply_ccm(image, meta_info.cam2rgb)
 
-    if meta_info["gamma"] and gamma:
+    if meta_info.compress_gamma and gamma:
         image = gamma_compression(image)
 
-    if meta_info["smoothstep"] and smoothstep:
+    if meta_info.smoothstep and smoothstep:
         image = apply_smoothstep(image)
 
     image = image.clamp(0.0, 1.0)
@@ -55,16 +69,19 @@ def process_linear_image_rgb(
     return image
 
 
-class BurstSRPostProcess:
-    def __init__(
-        self, no_white_balance=False, gamma=True, smoothstep=True, return_np=False
-    ):
-        self.no_white_balance = no_white_balance
-        self.gamma = gamma
-        self.smoothstep = smoothstep
-        self.return_np = return_np
+@dataclass
+class BurstSRPostProcess(PostProcess):
+    no_white_balance: bool = False
+    gamma: bool = True
+    smoothstep: bool = True
+    return_np: bool = False
 
-    def process(self, image, meta_info, external_norm_factor=None):
+    def process(
+        self,
+        image: Tensor,
+        meta_info: MetaInfo,
+        external_norm_factor: float | None = None,
+    ):
         return process_burstsr_image_rgb(
             image,
             meta_info,
@@ -77,23 +94,23 @@ class BurstSRPostProcess:
 
 
 def process_burstsr_image_rgb(
-    im,
-    meta_info,
-    return_np=False,
-    external_norm_factor=None,
-    gamma=True,
-    smoothstep=True,
-    no_white_balance=False,
+    im: Tensor,
+    meta_info: MetaInfo,
+    return_np: bool = False,
+    external_norm_factor: float | None = None,
+    gamma: bool = True,
+    smoothstep: bool = True,
+    no_white_balance: bool = False,
 ):
-    im = im * meta_info.get("norm_factor", 1.0)
+    im = im * meta_info.norm_factor
 
-    if not meta_info.get("black_level_subtracted", False):
-        im = im - torch.tensor(meta_info["black_level"])[[0, 1, -1]].view(3, 1, 1)
+    if not meta_info.black_level_subtracted:
+        assert meta_info.black_level is not None
+        im = im - torch.tensor(meta_info.black_level)[[0, 1, -1]].view(3, 1, 1)
 
-    if not meta_info.get("while_balance_applied", False) and not no_white_balance:
-        im = im * (
-            meta_info["cam_wb"][[0, 1, -1]].view(3, 1, 1) / meta_info["cam_wb"][1]
-        )
+    if not meta_info.while_balance_applied and not no_white_balance:
+        assert meta_info.cam_wb is not None
+        im = im * (meta_info.cam_wb[[0, 1, -1]].view(3, 1, 1) / meta_info.cam_wb[1])
 
     im_out = im
 

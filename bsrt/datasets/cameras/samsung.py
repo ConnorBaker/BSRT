@@ -1,133 +1,107 @@
+from __future__ import annotations
+from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import overload
+from typing_extensions import Literal
 import torch
+from torch import Tensor
 import cv2
 import numpy as np
 import pickle as pkl
+from datasets.cameras.metadata import ImageMetadata
+import numpy.typing as npt
+import numpy as np
 
 
+@dataclass
 class SamsungImage:
+    im_raw: Tensor
+    metadata: ImageMetadata
+
     @staticmethod
-    def load(path: Path):
+    def load(path: Path) -> SamsungImage:
         im_raw = cv2.imread((path / "im_raw.png").as_posix(), cv2.IMREAD_UNCHANGED)
         im_raw = np.transpose(im_raw, (2, 0, 1)).astype(np.int16)
         im_raw = torch.from_numpy(im_raw)
-        meta_data = pkl.load(open((path / "meta_info.pkl").as_posix(), "rb", -1))
 
-        return SamsungImage(
-            im_raw,
-            meta_data["black_level"],
-            meta_data["cam_wb"],
-            meta_data["daylight_wb"],
-            meta_data["color_matrix"],
-            meta_data["exif_data"],
-            meta_data.get("crop_info", None),
-            meta_data.get("im_preview", None),
-        )
+        # FIXME: Will not be able to load this object and have it translated directly.
+        metadata = pkl.load(open((path / "meta_info.pkl").as_posix(), "rb", -1))
 
-    def __init__(
-        self,
-        im_raw,
-        black_level,
-        cam_wb,
-        daylight_wb,
-        color_matrix,
-        exif_data,
-        crop_info=None,
-        im_preview=None,
-    ):
-        self.im_raw = im_raw
+        return SamsungImage(im_raw, ImageMetadata(**metadata.__dict__))
 
-        self.black_level = black_level
-        self.cam_wb = cam_wb
-        self.daylight_wb = daylight_wb
-        self.color_matrix = color_matrix
-        self.exif_data = exif_data
-        self.crop_info = crop_info
-        self.im_preview = im_preview
-
-        self.norm_factor = 1023.0
-
-    def get_all_meta_data(self):
-        return {
-            "black_level": self.black_level,
-            "cam_wb": self.cam_wb,
-            "daylight_wb": self.daylight_wb,
-            "color_matrix": self.color_matrix.tolist(),
-        }
+    def __post_init__(self) -> None:
+        super().__init__()
+        self.metadata.norm_factor = 1023.0
 
     def get_exposure_time(self):
-        return self.exif_data["Image ExposureTime"].values[0].decimal()
-
-    def get_noise_profile(self):
-        noise = self.exif_data["Image Tag 0xC761"].values
-        noise = [n[0] for n in noise]
-        noise = np.array(noise).reshape(3, 2)
-        return noise
+        assert self.metadata.exif_data is not None
+        return self.metadata.exif_data["EXIF ExposureTime"].values[0].decimal()
 
     def get_f_number(self):
-        return self.exif_data["Image FNumber"].values[0].decimal()
+        assert self.metadata.exif_data is not None
+        return self.metadata.exif_data["EXIF FNumber"].values[0].decimal()
 
     def get_iso(self):
-        return self.exif_data["Image ISOSpeedRatings"].values[0]
+        assert self.metadata.exif_data is not None
+        return self.metadata.exif_data["EXIF ISOSpeedRatings"].values[0]
 
     def get_image_data(
-        self, substract_black_level=False, white_balance=False, normalize=False
-    ):
+        self,
+        substract_black_level: bool = False,
+        white_balance: bool = False,
+        normalize: bool = False,
+    ) -> Tensor:
         im_raw = self.im_raw.float()
 
         if substract_black_level:
-            im_raw = im_raw - torch.tensor(self.black_level).view(4, 1, 1)
+            im_raw -= torch.tensor(self.metadata.black_level).view(4, 1, 1)
 
         if white_balance:
-            im_raw = im_raw * torch.tensor(self.cam_wb).view(4, 1, 1)
+            im_raw *= torch.tensor(self.metadata.cam_wb).view(4, 1, 1)
 
         if normalize:
-            im_raw = im_raw / self.norm_factor
+            im_raw /= self.metadata.norm_factor
 
         return im_raw
 
-    def shape(self):
-        shape = (4, self.im_raw.shape[1], self.im_raw.shape[2])
-        return shape
-
-    def crop_image(self, r1, r2, c1, c2):
-        self.im_raw = self.im_raw[:, r1:r2, c1:c2]
-
-    def get_crop(self, r1, r2, c1, c2):
+    def get_crop(self, r1: int, r2: int, c1: int, c2: int) -> SamsungImage:
         im_raw = self.im_raw[:, r1:r2, c1:c2]
 
-        if self.im_preview is not None:
-            im_preview = self.im_preview[2 * r1 : 2 * r2, 2 * c1 : 2 * c2]
+        if self.metadata.im_preview is not None:
+            im_preview = self.metadata.im_preview[2 * r1 : 2 * r2, 2 * c1 : 2 * c2]
         else:
             im_preview = None
 
-        return SamsungImage(
-            im_raw,
-            self.black_level,
-            self.cam_wb,
-            self.daylight_wb,
-            self.color_matrix,
-            self.exif_data,
-            im_preview=im_preview,
-        )
+        return SamsungImage(im_raw, replace(self.metadata, im_preview=im_preview))
 
-    def postprocess(self, return_np=True, norm_factor=None):
+    @overload
+    def postprocess(
+        self, return_np: Literal[False], norm_factor: float | None = None
+    ) -> Tensor:
+        ...
+
+    @overload
+    def postprocess(
+        self, return_np: Literal[True], norm_factor: float | None = None
+    ) -> npt.NDArray[np.uint8]:
+        ...
+
+    def postprocess(
+        self, return_np: bool = True, norm_factor: float | None = None
+    ) -> Tensor | npt.NDArray[np.uint8]:
         # Convert to rgb
-        # im = torch.from_numpy(self.im_raw.astype(np.float32))
         im = self.im_raw
 
-        im = (im - torch.tensor(self.black_level).view(4, 1, 1)) * torch.tensor(
-            self.cam_wb
-        ).view(4, 1, 1)
+        im = (
+            im - torch.tensor(self.metadata.black_level).view(4, 1, 1)
+        ) * torch.tensor(self.metadata.cam_wb).view(4, 1, 1)
 
         if norm_factor is None:
-            im = im / im.max()
+            im /= im.max()
         else:
-            im = im / norm_factor
+            im /= norm_factor
 
         im = torch.stack((im[0], (im[1] + im[2]) / 2, im[3]), dim=0)
-        # im = torch.stack((im[0], im[1], im[3]), dim=0)
-
         im_out = im.clamp(0.0, 1.0)
 
         if return_np:

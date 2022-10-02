@@ -52,7 +52,7 @@ class PSNR(Metric):
                 pred, gt, valid if valid is not None else [None] * len(pred)
             )
         ]
-        # psnr, ss, lp = sum(psnr_all) / len(psnr_all)
+
         self.psnr: Tensor = sum([score[0] for score in all_scores]) / len(all_scores)  # type: ignore
         self.ssim: Tensor = sum([score[1] for score in all_scores]) / len(all_scores)  # type: ignore
         self.lpips: Tensor = sum([score[2] for score in all_scores]) / len(all_scores)  # type: ignore

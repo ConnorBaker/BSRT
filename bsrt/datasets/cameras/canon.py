@@ -1,57 +1,52 @@
 from __future__ import annotations
+from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import overload
+from typing_extensions import Literal
 import torch
+from torch import Tensor
 import cv2
 import numpy as np
 import pickle as pkl
-from utils.bilinear_upsample_2d import bilinear_upsample_2d
+from datasets.cameras.metadata import ImageMetadata
+import numpy.typing as npt
+import numpy as np
 
 
+@dataclass
 class CanonImage:
+    im_raw: Tensor
+    metadata: ImageMetadata
+
     @staticmethod
     def load(path: Path) -> CanonImage:
         im_raw = cv2.imread((path / "im_raw.png").as_posix(), cv2.IMREAD_UNCHANGED)
         im_raw = np.transpose(im_raw, (2, 0, 1)).astype(np.int16)
         im_raw = torch.from_numpy(im_raw)
-        meta_data = pkl.load(open((path / "meta_info.pkl").as_posix(), "rb", -1))
 
-        return CanonImage(
-            im_raw.float(),
-            meta_data["black_level"],
-            meta_data["cam_wb"],
-            meta_data["daylight_wb"],
-            meta_data["rgb_xyz_matrix"],
-            meta_data.get("exif_data", None),
-            meta_data.get("crop_info", None),
-        )
+        # FIXME: Will not be able to load this object and have it translated directly.
+        metadata = pkl.load(open((path / "meta_info.pkl").as_posix(), "rb", -1))
 
-    def __init__(
-        self,
-        im_raw,
-        black_level,
-        cam_wb,
-        daylight_wb,
-        rgb_xyz_matrix,
-        exif_data,
-        crop_info=None,
-    ):
-        super(CanonImage, self).__init__()
-        self.im_raw = im_raw
+        return CanonImage(im_raw.float(), ImageMetadata(**metadata.__dict__))
 
-        if len(black_level) == 4:
-            black_level = [black_level[0], black_level[1], black_level[3]]
-        self.black_level = black_level
+    def __post_init__(self) -> None:
+        super().__init__()
+        if (
+            self.metadata.black_level is not None
+            and len(self.metadata.black_level) == 4
+        ):
+            self.metadata.black_level.pop(2)
 
-        if len(cam_wb) == 4:
-            cam_wb = [cam_wb[0], cam_wb[1], cam_wb[3]]
-        self.cam_wb = cam_wb
+        if self.metadata.cam_wb is not None and len(self.metadata.cam_wb) == 4:
+            self.metadata.cam_wb.pop(2)
 
-        if len(daylight_wb) == 4:
-            daylight_wb = [daylight_wb[0], daylight_wb[1], daylight_wb[3]]
-        self.daylight_wb = daylight_wb
+        if (
+            self.metadata.daylight_wb is not None
+            and len(self.metadata.daylight_wb) == 4
+        ):
+            self.metadata.daylight_wb.pop(2)
 
-        self.rgb_xyz_matrix = rgb_xyz_matrix
-        self.xyz_srgb_matrix = torch.tensor(
+        self.metadata.xyz_srgb_matrix = torch.tensor(
             [
                 3.2404542,
                 -1.5371385,
@@ -64,86 +59,67 @@ class CanonImage:
                 1.0572252,
             ]
         ).view(3, 3)
-        self.exif_data = exif_data
-        self.crop_info = crop_info
 
-        self.norm_factor = 16383
+        self.metadata.norm_factor = 16383.0
 
-    def shape(self):
+    def shape(self) -> tuple[int, int, int]:
         shape = (3, self.im_raw.shape[1], self.im_raw.shape[2])
         return shape
 
-    def get_all_meta_data(self):
-        return {
-            "black_level": self.black_level,
-            "cam_wb": self.cam_wb,
-            "daylight_wb": self.daylight_wb,
-            "rgb_xyz_matrix": self.rgb_xyz_matrix.tolist(),
-            "crop_info": self.crop_info,
-            "norm_factor": self.norm_factor,
-        }
-
     def get_exposure_time(self):
-        return self.exif_data["EXIF ExposureTime"].values[0].decimal()
+        assert self.metadata.exif_data is not None
+        return self.metadata.exif_data["EXIF ExposureTime"].values[0].decimal()
 
     def get_f_number(self):
-        return self.exif_data["EXIF FNumber"].values[0].decimal()
+        assert self.metadata.exif_data is not None
+        return self.metadata.exif_data["EXIF FNumber"].values[0].decimal()
 
     def get_iso(self):
-        return self.exif_data["EXIF ISOSpeedRatings"].values[0]
+        assert self.metadata.exif_data is not None
+        return self.metadata.exif_data["EXIF ISOSpeedRatings"].values[0]
 
     def get_image_data(
-        self, substract_black_level=False, white_balance=False, normalize=False
-    ):
+        self,
+        substract_black_level: bool = False,
+        white_balance: bool = False,
+        normalize: bool = False,
+    ) -> Tensor:
         im_raw = self.im_raw.float()
 
         if substract_black_level:
-            im_raw = im_raw - torch.tensor(self.black_level).view(3, 1, 1)
+            im_raw -= torch.tensor(self.metadata.black_level).view(3, 1, 1)
 
         if white_balance:
-            im_raw = im_raw * torch.tensor(self.cam_wb).view(3, 1, 1) / 1024.0
+            im_raw *= torch.tensor(self.metadata.cam_wb).view(3, 1, 1) / 1024.0
 
         if normalize:
-            im_raw = im_raw / self.norm_factor
+            im_raw /= self.metadata.norm_factor
 
         return im_raw
 
-    def set_image_data(self, im_data):
-        self.im_raw = im_data
-
-    def crop_image(self, r1, r2, c1, c2):
-        self.im_raw = self.im_raw[:, r1:r2, c1:c2]
-
-    def get_crop(self, r1, r2, c1, c2):
+    def get_crop(self, r1: int, r2: int, c1: int, c2: int) -> CanonImage:
         im_raw = self.im_raw[:, r1:r2, c1:c2]
         return CanonImage(
             im_raw,
-            self.black_level,
-            self.cam_wb,
-            self.daylight_wb,
-            self.rgb_xyz_matrix,
-            self.exif_data,
-            self.crop_info,
+            # Make a copy of the metadata.
+            replace(self.metadata),
         )
 
-    def set_crop_info(self, crop_info):
-        self.crop_info = crop_info
+    @overload
+    def postprocess(self, return_np: Literal[False]) -> Tensor:
+        ...
 
-    def resize(self, size=None, scale_factor=None):
+    @overload
+    def postprocess(self, return_np: Literal[True]) -> npt.NDArray[np.uint8]:
+        ...
 
-        self.im_raw = bilinear_upsample_2d(
-            self.im_raw.unsqueeze(0),
-            size=size,
-            scale_factor=scale_factor,
-        ).squeeze(0)
-
-    def postprocess(self, return_np=True):
+    def postprocess(self, return_np: bool = True) -> Tensor | npt.NDArray[np.uint8]:
         # Convert to rgb
         im = self.im_raw
 
-        im = (im - torch.tensor(self.black_level).view(3, 1, 1)).float() * torch.tensor(
-            self.cam_wb
-        ).view(3, 1, 1)
+        im = (
+            im - torch.tensor(self.metadata.black_level).view(3, 1, 1)
+        ).float() * torch.tensor(self.metadata.cam_wb).view(3, 1, 1)
 
         im_out = im / im.max()
         im_out = im_out.clamp(0.0, 1.0)

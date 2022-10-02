@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 import os
 from pathlib import Path
-from typing import ClassVar, overload
+from typing import Any, ClassVar, overload
 from typing_extensions import Literal
 import torch
 from torch import Tensor
@@ -265,8 +265,6 @@ class BurstSRDataset(Dataset):
 
             frame_gt = gt_image_data.float()
             meta_info_gt = gt_image_meta_info
-
-            del meta_info_gt["crop_info"]
 
             for k, v in meta_info_gt.items():
                 if isinstance(v, (list, tuple)):

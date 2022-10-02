@@ -1,3 +1,5 @@
+from typing import cast
+from utils.types import BayerPattern, NormalizationMode
 from metrics.aligned_l1 import AlignedL1
 from metrics.aligned_psnr import AlignedPSNR
 from metrics.charbonnier_loss import CharbonnierLoss
@@ -10,7 +12,7 @@ from model.bsrt import BSRT
 from option import Config, LossName, DataTypeName
 from torch import Tensor
 from torchmetrics.metric import Metric
-from typing_extensions import Literal, overload
+from typing_extensions import Literal, get_args, overload
 from utils.postprocessing_functions import BurstSRPostProcess, SimplePostProcess
 import math
 import numpy as np
@@ -254,11 +256,13 @@ def write_gray_to_tfboard(img):
 
 ######################## BayerUnifyAug ############################
 
-BAYER_PATTERNS = ["RGGB", "BGGR", "GRBG", "GBRG"]
-NORMALIZATION_MODE = ["crop", "pad"]
 
-
-def bayer_unify(raw, input_pattern, target_pattern, mode) -> np.ndarray:
+def bayer_unify(
+    raw: Tensor,
+    input_pattern: BayerPattern,
+    target_pattern: BayerPattern,
+    mode: NormalizationMode,
+) -> Tensor:
     """
     Convert a bayer raw image from one bayer pattern to another.
     mode: {"crop", "pad"}
@@ -268,37 +272,38 @@ def bayer_unify(raw, input_pattern, target_pattern, mode) -> np.ndarray:
     """
 
     if input_pattern == target_pattern:
+        # A match!
         h_offset, w_offset = 0, 0
-    elif (
-        input_pattern[0] == target_pattern[2] and input_pattern[1] == target_pattern[3]
-    ):
+    elif input_pattern[0:2] == target_pattern[2:4]:
+        # Channels are rotated
         h_offset, w_offset = 1, 0
     elif (
         input_pattern[0] == target_pattern[1] and input_pattern[2] == target_pattern[3]
     ):
+        # Channels are flipped
         h_offset, w_offset = 0, 1
-    elif (
-        input_pattern[0] == target_pattern[3] and input_pattern[1] == target_pattern[2]
-    ):
+    elif input_pattern[0:2] == target_pattern[3:1:-1]:
+        # Channels are rotated and flipped
         h_offset, w_offset = 1, 1
     else:  # This is not happening in ["RGGB", "BGGR", "GRBG", "GBRG"]
         raise RuntimeError("Unexpected pair of input and target bayer pattern!")
 
     if mode == "pad":
-        # out = np.pad(raw, [[h_offset, h_offset], [w_offset, w_offset]], 'reflect')
         out = F.pad(raw, (w_offset, w_offset, h_offset, h_offset), mode="reflect")
     elif mode == "crop":
         _, _, _, h, w = raw.shape
         out = raw[..., h_offset : h - h_offset, w_offset : w - w_offset]
-    else:
-        raise ValueError("Unknown normalization mode!")
 
     return out
 
 
 def bayer_aug(
-    raw, flip_h=False, flip_w=False, transpose=False, input_pattern="RGGB"
-) -> np.ndarray:
+    raw: Tensor,
+    flip_h: bool = False,
+    flip_w: bool = False,
+    transpose: bool = False,
+    input_pattern: BayerPattern = "RGGB",
+) -> Tensor:
     """
     Apply augmentation to a bayer raw image.
     """
@@ -316,5 +321,7 @@ def bayer_aug(
         out = out.permute(0, 1, 2, 4, 3)
         aug_pattern = aug_pattern[0] + aug_pattern[2] + aug_pattern[1] + aug_pattern[3]
 
+    assert aug_pattern in get_args(BayerPattern)
+    aug_pattern = cast(BayerPattern, aug_pattern)
     out = bayer_unify(out, aug_pattern, target_pattern, "crop")
     return out

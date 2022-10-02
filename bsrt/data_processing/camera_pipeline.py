@@ -1,3 +1,5 @@
+from __future__ import annotations
+from dataclasses import dataclass
 from data_processing.synthetic_burst_generation import MetaInfo
 from torch import Tensor
 from typing import Callable
@@ -14,6 +16,94 @@ import utils.data_format_utils as df_utils
 Functions for forward and inverse camera pipeline. All functions input a torch float tensor of shape (c, h, w).
 Additionally, some also support batch operations, i.e. inputs of shape (b, c, h, w)
 """
+
+
+@dataclass
+class Noises:
+    """Noise parameters."""
+
+    shot_noise: float = 0.01
+    read_noise: float = 0.0005
+
+    @staticmethod
+    def random_noise_levels() -> Noises:
+        """Generates random noise levels from a log-log linear distribution."""
+        log_min_shot_noise = math.log(0.0001)
+        log_max_shot_noise = math.log(0.012)
+        log_shot_noise = random.uniform(log_min_shot_noise, log_max_shot_noise)
+        shot_noise = math.exp(log_shot_noise)
+
+        line: Callable[[float], float] = lambda x: 2.18 * x + 1.20
+        log_read_noise = line(log_shot_noise) + random.gauss(mu=0.0, sigma=0.26)
+        read_noise = math.exp(log_read_noise)
+        return Noises(shot_noise, read_noise)
+
+    def apply(self, image: Tensor) -> Tensor:
+        """Adds random shot (proportional to image) and read (independent) noise."""
+        variance = image * self.shot_noise + self.read_noise
+        noise = torch.FloatTensor(image.shape).normal_() * variance.sqrt()
+        return image + noise
+
+
+@dataclass
+class RgbGains:
+    """Container for gains.
+    RGB gain represents brightening.
+    Red and blue gains represent white balance.
+    """
+
+    rgb_gain: float
+    red_gain: float
+    blue_gain: float
+
+    @staticmethod
+    def random_gains() -> RgbGains:
+        """Generates random gains for brightening and white balance."""
+        rgb_gain = 1.0 / random.gauss(mu=0.8, sigma=0.1)
+        red_gain = random.uniform(1.9, 2.4)
+        blue_gain = random.uniform(1.5, 1.9)
+        return RgbGains(rgb_gain, red_gain, blue_gain)
+
+    def apply(self, image: Tensor) -> Tensor:
+        """Inverts gains while safely handling saturated pixels."""
+        assert image.dim() == 3
+        channels = image.shape[0]
+        assert channels == 3 or channels == 4
+
+        match channels:
+            case 3:
+                gains: Tensor = (
+                    torch.tensor([self.red_gain, 1.0, self.blue_gain]) * self.rgb_gain
+                )
+            case 4:
+                gains: Tensor = (
+                    torch.tensor([self.red_gain, 1.0, 1.0, self.blue_gain])
+                    * self.rgb_gain
+                )
+
+        gains = gains.view(-1, 1, 1)
+        gains = gains.type_as(image)
+
+        return (image * gains).clamp(0.0, 1.0)
+
+    def safe_invert_gains(self, image: Tensor) -> Tensor:
+        """Inverts gains while safely handling saturated pixels."""
+        assert image.dim() == 3
+        assert image.shape[0] == 3
+
+        gains = (
+            torch.tensor([1.0 / self.red_gain, 1.0, 1.0 / self.blue_gain])
+            / self.rgb_gain
+        )
+        gains = gains.view(-1, 1, 1)
+
+        # Prevents dimming of saturated pixels by smoothly masking gains near white.
+        gray = image.mean(dim=0, keepdim=True)
+        inflection = 0.9
+        mask = ((gray - inflection).clamp(0.0) / (1.0 - inflection)) ** 2.0
+
+        safe_gains = torch.max(mask + (1.0 - mask) * gains, gains)
+        return image * safe_gains
 
 
 def random_ccm() -> Tensor:
@@ -64,17 +154,6 @@ def random_ccm() -> Tensor:
     return rgb2cam
 
 
-def random_gains() -> tuple[float, float, float]:
-    """Generates random gains for brightening and white balance."""
-    # RGB gain represents brightening.
-    rgb_gain = 1.0 / random.gauss(mu=0.8, sigma=0.1)
-
-    # Red and blue gains represent white balance.
-    red_gain = random.uniform(1.9, 2.4)
-    blue_gain = random.uniform(1.5, 1.9)
-    return rgb_gain, red_gain, blue_gain
-
-
 def apply_smoothstep(image: Tensor) -> Tensor:
     """Apply global tone mapping curve."""
     image_out = 3 * image**2 - 2 * image**3
@@ -101,7 +180,8 @@ def gamma_compression(image: Tensor) -> Tensor:
 
 def apply_ccm(image: Tensor, ccm: Tensor) -> Tensor:
     """Applies a color correction matrix."""
-    assert image.dim() == 3 and image.shape[0] == 3
+    assert image.dim() == 3
+    assert image.shape[0] == 3
 
     shape = image.shape
     image = image.view(3, -1)
@@ -110,40 +190,6 @@ def apply_ccm(image: Tensor, ccm: Tensor) -> Tensor:
     image = torch.mm(ccm, image)
 
     return image.view(shape)
-
-
-def apply_gains(
-    image: Tensor, rgb_gain: float, red_gain: float, blue_gain: float
-) -> Tensor:
-    """Inverts gains while safely handling saturated pixels."""
-    assert image.dim() == 3 and image.shape[0] in [3, 4]
-
-    if image.shape[0] == 3:
-        gains: Tensor = torch.tensor([red_gain, 1.0, blue_gain]) * rgb_gain
-    else:
-        gains: Tensor = torch.tensor([red_gain, 1.0, 1.0, blue_gain]) * rgb_gain
-    gains = gains.view(-1, 1, 1)
-    gains = gains.type_as(image)
-
-    return (image * gains).clamp(0.0, 1.0)
-
-
-def safe_invert_gains(
-    image: Tensor, rgb_gain: float, red_gain: float, blue_gain: float
-) -> Tensor:
-    """Inverts gains while safely handling saturated pixels."""
-    assert image.dim() == 3 and image.shape[0] == 3
-
-    gains = torch.tensor([1.0 / red_gain, 1.0, 1.0 / blue_gain]) / rgb_gain
-    gains = gains.view(-1, 1, 1)
-
-    # Prevents dimming of saturated pixels by smoothly masking gains near white.
-    gray = image.mean(dim=0, keepdim=True)
-    inflection = 0.9
-    mask = ((gray - inflection).clamp(0.0) / (1.0 - inflection)) ** 2.0
-
-    safe_gains = torch.max(mask + (1.0 - mask) * gains, gains)
-    return image * safe_gains
 
 
 def mosaic(image: Tensor, mode: Literal["grbg", "rggb"] = "rggb") -> Tensor:
@@ -207,40 +253,16 @@ def demosaic(image: Tensor) -> Tensor:
         return out[0]
 
 
-def random_noise_levels() -> tuple[float, float]:
-    """Generates random noise levels from a log-log linear distribution."""
-    log_min_shot_noise = math.log(0.0001)
-    log_max_shot_noise = math.log(0.012)
-    log_shot_noise = random.uniform(log_min_shot_noise, log_max_shot_noise)
-    shot_noise = math.exp(log_shot_noise)
-
-    line: Callable[[float], float] = lambda x: 2.18 * x + 1.20
-    log_read_noise = line(log_shot_noise) + random.gauss(mu=0.0, sigma=0.26)
-    read_noise = math.exp(log_read_noise)
-    return shot_noise, read_noise
-
-
-def add_noise(
-    image: Tensor, shot_noise: float = 0.01, read_noise: float = 0.0005
-) -> Tensor:
-    """Adds random shot (proportional to image) and read (independent) noise."""
-    variance = image * shot_noise + read_noise
-    noise = torch.FloatTensor(image.shape).normal_() * variance.sqrt()
-    return image + noise
-
-
 def process_linear_image_rgb(
     image: Tensor, meta_info: MetaInfo, return_np: bool = False
 ) -> Tensor:
-    image = apply_gains(
-        image, meta_info["rgb_gain"], meta_info["red_gain"], meta_info["blue_gain"]
-    )
-    image = apply_ccm(image, meta_info["cam2rgb"])
+    image = meta_info.gains.apply(image)
+    image = apply_ccm(image, meta_info.cam2rgb)
 
-    if meta_info["compress_gamma"]:
+    if meta_info.compress_gamma:
         image = gamma_compression(image)
 
-    if meta_info["smoothstep"]:
+    if meta_info.smoothstep:
         image = apply_smoothstep(image)
 
     image = image.clamp(0.0, 1.0)
@@ -251,15 +273,13 @@ def process_linear_image_rgb(
 
 
 def process_linear_image_raw(image: Tensor, meta_info: MetaInfo) -> Tensor:
-    image = apply_gains(
-        image, meta_info["rgb_gain"], meta_info["red_gain"], meta_info["blue_gain"]
-    )
+    image = meta_info.gains.apply(image)
     image = demosaic(image)
-    image = apply_ccm(image, meta_info["cam2rgb"])
+    image = apply_ccm(image, meta_info.cam2rgb)
 
-    if meta_info["compress_gamma"]:
+    if meta_info.compress_gamma:
         image = gamma_compression(image)
 
-    if meta_info["smoothstep"]:
+    if meta_info.smoothstep:
         image = apply_smoothstep(image)
     return image.clamp(0.0, 1.0)

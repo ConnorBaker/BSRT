@@ -50,7 +50,6 @@ class L1(Metric):
                 mse: Tensor = F.l1_loss(pred, gt)
             else:
                 mse_tensor: Tensor = F.l1_loss(pred, gt, reduction="none")
-
                 eps: float = 1e-12
                 elem_ratio: float = mse_tensor.numel() / valid.numel()
                 mse: Tensor = (mse_tensor * valid).sum() / (

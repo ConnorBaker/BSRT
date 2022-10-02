@@ -1,9 +1,9 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-from lpips import LPIPS
 from metrics.utils.prepare_aligned import prepare_aligned
 from torch import Tensor
 from torchmetrics.metric import Metric
+from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity as LPIPS
 from typing import ClassVar
 from utils.spatial_color_alignment import get_gaussian_kernel
 import torch
