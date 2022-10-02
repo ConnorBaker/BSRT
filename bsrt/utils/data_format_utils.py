@@ -1,17 +1,20 @@
+import numpy.typing as npt
 import numpy as np
 import torch
+from torch import Tensor
+from typing import Any
 import cv2 as cv
 
 
-def numpy_to_torch(a: np.ndarray):
+def numpy_to_torch(a: npt.NDArray):
     return torch.from_numpy(a).float().permute(2, 0, 1)
 
 
-def torch_to_numpy(a: torch.Tensor):
+def torch_to_numpy(a: Tensor) -> npt.NDArray[np.float32]:
     return a.permute(1, 2, 0).cpu().numpy()
 
 
-def torch_to_npimage(a: torch.Tensor, unnormalize=True):
+def torch_to_npimage(a: Tensor, unnormalize: bool = True) -> npt.NDArray[np.uint8]:
     a_np = torch_to_numpy(a)
 
     if unnormalize:
@@ -20,7 +23,9 @@ def torch_to_npimage(a: torch.Tensor, unnormalize=True):
     return cv.cvtColor(a_np, cv.COLOR_RGB2BGR)
 
 
-def npimage_to_torch(a, normalize=True, input_bgr=True):
+def npimage_to_torch(
+    a: npt.NDArray, normalize: bool = True, input_bgr: bool = True
+) -> Tensor:
     if input_bgr:
         a = cv.cvtColor(a, cv.COLOR_BGR2RGB)
     a_t = numpy_to_torch(a)
@@ -31,7 +36,7 @@ def npimage_to_torch(a, normalize=True, input_bgr=True):
     return a_t
 
 
-def convert_dict(base_dict, batch_sz):
+def convert_dict(base_dict: dict[str, Any], batch_sz: int) -> list[Any]:
     out_dict = []
     for b_elem in range(batch_sz):
         b_info = {}

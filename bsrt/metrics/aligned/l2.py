@@ -8,7 +8,7 @@ from utils.spatial_color_alignment import get_gaussian_kernel
 import torch
 
 
-@dataclass
+@dataclass(kw_only=True)
 class AlignedL2(L2):
     full_state_update: ClassVar[bool] = False
     alignment_net: torch.nn.Module

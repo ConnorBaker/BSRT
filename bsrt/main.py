@@ -130,7 +130,10 @@ def train_setup(cfg: Config):
             # sync_config=SyncConfig(upload_dir="gs://bsrt-supplemental"),
         ),
         scaling_config=ScalingConfig(
-            num_workers=1, use_gpu=True, _max_cpu_fraction_per_node=0.8
+            num_workers=1,
+            use_gpu=False,
+            _max_cpu_fraction_per_node=0.8,
+            resources_per_worker={"CPU": 8, "GPU": 0},
         ),
         # dataset_config={
         #     "train": DatasetConfig(use_stream_api=True, stream_window_size=OBJECT_STORE_MEMORY*1),

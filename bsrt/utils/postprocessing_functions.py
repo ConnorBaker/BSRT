@@ -1,16 +1,18 @@
 from abc import ABC
 from dataclasses import dataclass
+from typing import overload
 import torch
 from torch import Tensor
 import numpy as np
+import numpy.typing as npt
 from data_processing.synthetic_burst_generation import MetaInfo
-import utils.data_format_utils as df_utils
+from utils.data_format_utils import torch_to_npimage
 from data_processing.camera_pipeline import (
-    apply_gains,
     apply_ccm,
     apply_smoothstep,
     gamma_compression,
 )
+from typing_extensions import Literal
 
 
 @dataclass
@@ -39,6 +41,32 @@ class SimplePostProcess(PostProcess):
         )
 
 
+@overload
+def process_linear_image_rgb(
+    image: Tensor,
+    meta_info: MetaInfo,
+    gains: bool = True,
+    ccm: bool = True,
+    gamma: bool = True,
+    smoothstep: bool = True,
+    return_np: Literal[False] = False,
+) -> Tensor:
+    ...
+
+
+@overload
+def process_linear_image_rgb(
+    image: Tensor,
+    meta_info: MetaInfo,
+    gains: bool = True,
+    ccm: bool = True,
+    gamma: bool = True,
+    smoothstep: bool = True,
+    return_np: Literal[True] = True,
+) -> npt.NDArray[np.float32]:
+    ...
+
+
 def process_linear_image_rgb(
     image: Tensor,
     meta_info: MetaInfo,
@@ -47,11 +75,9 @@ def process_linear_image_rgb(
     gamma: bool = True,
     smoothstep: bool = True,
     return_np: bool = False,
-):
+) -> Tensor | npt.NDArray[np.float32]:
     if gains:
-        image = apply_gains(
-            image, meta_info.rgb_gain, meta_info.red_gain, meta_info.blue_gain
-        )
+        image = meta_info.gains.apply(image)
 
     if ccm:
         image = apply_ccm(image, meta_info.cam2rgb)
@@ -65,7 +91,7 @@ def process_linear_image_rgb(
     image = image.clamp(0.0, 1.0)
 
     if return_np:
-        image = df_utils.torch_to_npimage(image)
+        return torch_to_npimage(image)
     return image
 
 

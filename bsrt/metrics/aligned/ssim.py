@@ -11,7 +11,7 @@ import torch
 import utils.spatial_color_alignment as sca_utils
 
 
-@dataclass
+@dataclass(kw_only=True)
 class AlignedSSIM(Metric):
     full_state_update: ClassVar[bool] = False
     alignment_net: torch.nn.Module

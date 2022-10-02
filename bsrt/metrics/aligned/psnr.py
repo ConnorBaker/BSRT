@@ -7,7 +7,7 @@ from typing import ClassVar
 import torch
 
 
-@dataclass
+@dataclass(kw_only=True)
 class AlignedPSNR(PSNR):
     full_state_update: ClassVar[bool] = False
     alignment_net: torch.nn.Module

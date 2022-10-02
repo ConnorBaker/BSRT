@@ -1,7 +1,7 @@
 from typing import cast
 from utils.types import BayerPattern, NormalizationMode
-from metrics.aligned_l1 import AlignedL1
-from metrics.aligned_psnr import AlignedPSNR
+from metrics.aligned.l1 import AlignedL1
+from metrics.aligned.psnr import AlignedPSNR
 from metrics.charbonnier_loss import CharbonnierLoss
 from metrics.l1 import L1
 from metrics.l2 import L2
