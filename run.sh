@@ -1,0 +1,1 @@
+python main.py --data_type synthetic --lr 0.0001 --decay_milestones 100 200 --model_level L --swinfeature --batch_size 16 --burst_size 14 --patch_size 256 --data_dir ~/working/datasets --use_checkpoint --loss L1

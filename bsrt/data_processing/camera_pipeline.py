@@ -1,109 +1,18 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from typing import overload
 from data_processing.synthetic_burst_generation import MetaInfo
 from torch import Tensor
-from typing import Callable
 from typing_extensions import Literal
 import cv2 as cv
-import math
 import numpy as np
 import numpy.typing as npt
-import random
 import torch
-import utils.data_format_utils as df_utils
+from utils.data_format_utils import torch_to_npimage
 
 """ Based on http://timothybrooks.com/tech/unprocessing
 Functions for forward and inverse camera pipeline. All functions input a torch float tensor of shape (c, h, w).
 Additionally, some also support batch operations, i.e. inputs of shape (b, c, h, w)
 """
-
-
-@dataclass
-class Noises:
-    """Noise parameters."""
-
-    shot_noise: float = 0.01
-    read_noise: float = 0.0005
-
-    @staticmethod
-    def random_noise_levels() -> Noises:
-        """Generates random noise levels from a log-log linear distribution."""
-        log_min_shot_noise = math.log(0.0001)
-        log_max_shot_noise = math.log(0.012)
-        log_shot_noise = random.uniform(log_min_shot_noise, log_max_shot_noise)
-        shot_noise = math.exp(log_shot_noise)
-
-        line: Callable[[float], float] = lambda x: 2.18 * x + 1.20
-        log_read_noise = line(log_shot_noise) + random.gauss(mu=0.0, sigma=0.26)
-        read_noise = math.exp(log_read_noise)
-        return Noises(shot_noise, read_noise)
-
-    def apply(self, image: Tensor) -> Tensor:
-        """Adds random shot (proportional to image) and read (independent) noise."""
-        variance = image * self.shot_noise + self.read_noise
-        noise = torch.FloatTensor(image.shape).normal_() * variance.sqrt()
-        return image + noise
-
-
-@dataclass
-class RgbGains:
-    """Container for gains.
-    RGB gain represents brightening.
-    Red and blue gains represent white balance.
-    """
-
-    rgb_gain: float
-    red_gain: float
-    blue_gain: float
-
-    @staticmethod
-    def random_gains() -> RgbGains:
-        """Generates random gains for brightening and white balance."""
-        rgb_gain = 1.0 / random.gauss(mu=0.8, sigma=0.1)
-        red_gain = random.uniform(1.9, 2.4)
-        blue_gain = random.uniform(1.5, 1.9)
-        return RgbGains(rgb_gain, red_gain, blue_gain)
-
-    def apply(self, image: Tensor) -> Tensor:
-        """Inverts gains while safely handling saturated pixels."""
-        assert image.dim() == 3
-        channels = image.shape[0]
-        assert channels == 3 or channels == 4
-
-        match channels:
-            case 3:
-                gains: Tensor = (
-                    torch.tensor([self.red_gain, 1.0, self.blue_gain]) * self.rgb_gain
-                )
-            case 4:
-                gains: Tensor = (
-                    torch.tensor([self.red_gain, 1.0, 1.0, self.blue_gain])
-                    * self.rgb_gain
-                )
-
-        gains = gains.view(-1, 1, 1)
-        gains = gains.type_as(image)
-
-        return (image * gains).clamp(0.0, 1.0)
-
-    def safe_invert_gains(self, image: Tensor) -> Tensor:
-        """Inverts gains while safely handling saturated pixels."""
-        assert image.dim() == 3
-        assert image.shape[0] == 3
-
-        gains = (
-            torch.tensor([1.0 / self.red_gain, 1.0, 1.0 / self.blue_gain])
-            / self.rgb_gain
-        )
-        gains = gains.view(-1, 1, 1)
-
-        # Prevents dimming of saturated pixels by smoothly masking gains near white.
-        gray = image.mean(dim=0, keepdim=True)
-        inflection = 0.9
-        mask = ((gray - inflection).clamp(0.0) / (1.0 - inflection)) ** 2.0
-
-        safe_gains = torch.max(mask + (1.0 - mask) * gains, gains)
-        return image * safe_gains
 
 
 def random_ccm() -> Tensor:
@@ -253,9 +162,23 @@ def demosaic(image: Tensor) -> Tensor:
         return out[0]
 
 
+@overload
+def process_linear_image_rgb(
+    image: Tensor, meta_info: MetaInfo, return_np: Literal[False]
+) -> Tensor:
+    ...
+
+
+@overload
+def process_linear_image_rgb(
+    image: Tensor, meta_info: MetaInfo, return_np: Literal[True]
+) -> npt.NDArray[np.float32]:
+    ...
+
+
 def process_linear_image_rgb(
     image: Tensor, meta_info: MetaInfo, return_np: bool = False
-) -> Tensor:
+) -> Tensor | npt.NDArray[np.float32]:
     image = meta_info.gains.apply(image)
     image = apply_ccm(image, meta_info.cam2rgb)
 
@@ -268,7 +191,7 @@ def process_linear_image_rgb(
     image = image.clamp(0.0, 1.0)
 
     if return_np:
-        image = df_utils.torch_to_npimage(image)
+        return torch_to_npimage(image)
     return image
 
 

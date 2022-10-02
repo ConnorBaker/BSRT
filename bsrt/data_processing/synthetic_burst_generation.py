@@ -1,4 +1,8 @@
-from data_processing.camera_pipeline import Noises, RgbGains
+from data_processing.meta_info import MetaInfo
+from data_processing.noises import Noises
+from data_processing.rgb_gains import RgbGains
+from data_processing.image_processing_params import ImageProcessingParams
+from data_processing.image_transformation_params import ImageTransformationParams
 from utils.types import InterpolationType
 from data_processing.camera_pipeline import (
     random_ccm,
@@ -7,7 +11,6 @@ from data_processing.camera_pipeline import (
     invert_smoothstep,
     gamma_expansion,
 )
-from dataclasses import dataclass, field
 from torch import Tensor
 from utils.bilinear_upsample_2d import bilinear_upsample_2d
 from utils.data_format_utils import torch_to_numpy, numpy_to_torch
@@ -16,44 +19,6 @@ import numpy as np
 import numpy.typing as npt
 import random
 import torch
-
-
-@dataclass
-class ImageTransformationParams:
-    """Dataclass for storing transformation parameters"""
-
-    border_crop: int = 0
-    max_rotation: float = 0.0
-    max_shear: float = 0.0
-    max_ar_factor: float = 0.0
-    max_scale: float = 0.0
-    max_translation: float = 0.0
-
-
-@dataclass
-class ImageProcessingParams:
-    """Dataclass for storing image processing parameters"""
-
-    random_ccm: bool = True
-    random_gains: bool = True
-    smoothstep: bool = True
-    compress_gamma: bool = True
-    add_noise: bool = True
-
-
-@dataclass
-class MetaInfo:
-    rgb2cam: Tensor
-    cam2rgb: Tensor
-    smoothstep: bool
-    compress_gamma: bool
-    norm_factor: float = 1.0
-    black_level_subtracted: bool = False
-    black_level: Tensor | None = None
-    while_balance_applied: bool = False
-    cam_wb: Tensor | None = None
-    gains: RgbGains = field(default_factory=lambda: RgbGains(0.0, 0.0, 0.0))
-    noises: Noises = field(default_factory=lambda: Noises(0.0, 0.0))
 
 
 def random_crop(
