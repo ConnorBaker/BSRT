@@ -12,14 +12,14 @@ import torch
 import torch.nn.functional as F
 
 
-@dataclass
+# TODO: Using the derivied equals overwrites the default hash method, which we want to inherit from Metric.
+@dataclass(eq=False)
 class L2(Metric):
     full_state_update: ClassVar[bool] = False
     boundary_ignore: int | None = None
     # FIXME: Why does LPIPS have unused model parameters when lpips=True (the default setting)?
-    loss_fn: LPIPS = field(
-        init=False, default_factory=lambda: LPIPS(net="alex", lpips=False)
-    )
+    # TODO: We cannot use the default factory with nn.Modules because we must call the super init before we can call the module init.
+    loss_fn: LPIPS = field(init=False)
 
     # Losses
     mse: Tensor = field(init=False)
@@ -28,6 +28,7 @@ class L2(Metric):
 
     def __post_init__(self) -> None:
         super().__init__()
+        self.loss_fn = LPIPS(net="alex", lpips=False)
         self.add_state("mse", default=torch.tensor(0), dist_reduce_fx="mean")
         self.add_state("ssim", default=torch.tensor(0), dist_reduce_fx="mean")
         self.add_state("lpips", default=torch.tensor(0), dist_reduce_fx="mean")

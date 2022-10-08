@@ -7,17 +7,29 @@ from typing import ClassVar
 import torch
 
 
-@dataclass(kw_only=True)
+# TODO: Using the derivied equals overwrites the default hash method, which we want to inherit from Metric.
+@dataclass(eq=False, init=False, kw_only=True)
 class AlignedPSNR(PSNR):
     full_state_update: ClassVar[bool] = False
     alignment_net: torch.nn.Module
-    sr_factor: int = 4
     boundary_ignore: int | None = None
     max_value: float = 1.0
+    sr_factor: int = 4
     l2: L2 = field(init=False)
 
-    def __post_init__(self) -> None:
-        super().__init__(boundary_ignore=self.boundary_ignore)
+    # TODO: We cannot use the generated init with nn.Modules arguments because we must call the super init before we can call the module init.
+    def __init__(
+        self,
+        alignment_net: torch.nn.Module,
+        boundary_ignore: int | None = None,
+        max_value: float = 1.0,
+        sr_factor: int = 4,
+    ) -> None:
+        super().__init__()
+        self.alignment_net = alignment_net
+        self.boundary_ignore = boundary_ignore
+        self.max_value = max_value
+        self.sr_factor = sr_factor
         self.l2 = AlignedL2(
             alignment_net=self.alignment_net,
             sr_factor=self.sr_factor,

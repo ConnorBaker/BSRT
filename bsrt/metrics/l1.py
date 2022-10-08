@@ -8,7 +8,8 @@ import torch
 import torch.nn.functional as F
 
 
-@dataclass
+# TODO: Using the derivied equals overwrites the default hash method, which we want to inherit from Metric.
+@dataclass(eq=False)
 class L1(Metric):
     full_state_update: ClassVar[bool] = False
     boundary_ignore: int | None = None

@@ -8,7 +8,8 @@ from utils.spatial_color_alignment import get_gaussian_kernel
 import torch
 
 
-@dataclass(kw_only=True)
+# TODO: Using the derivied equals overwrites the default hash method, which we want to inherit from Metric.
+@dataclass(eq=False, init=False, kw_only=True)
 class AlignedL2(L2):
     full_state_update: ClassVar[bool] = False
     alignment_net: torch.nn.Module
@@ -17,8 +18,17 @@ class AlignedL2(L2):
     gauss_kernel: Tensor = field(init=False)
     ksz: int = field(init=False)
 
-    def __post_init__(self) -> None:
-        super().__init__(boundary_ignore=self.boundary_ignore)
+    # TODO: We cannot use the generated init with nn.Modules arguments because we must call the super init before we can call the module init.
+    def __init__(
+        self,
+        alignment_net: torch.nn.Module,
+        boundary_ignore: int | None = None,
+        sr_factor: int = 4,
+    ) -> None:
+        super().__init__(boundary_ignore=boundary_ignore)
+        self.alignment_net = alignment_net
+        self.boundary_ignore = boundary_ignore
+        self.sr_factor = sr_factor
         self.gauss_kernel, self.ksz = get_gaussian_kernel(sd=1.5)
 
     def update(self, pred: Tensor, gt: Tensor, burst_input: Tensor) -> None:

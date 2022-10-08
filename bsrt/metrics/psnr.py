@@ -8,11 +8,13 @@ from typing import ClassVar
 import torch
 
 
-@dataclass
+# TODO: Using the derivied equals overwrites the default hash method, which we want to inherit from Metric.
+@dataclass(eq=False)
 class PSNR(Metric):
     full_state_update: ClassVar[bool] = False
     boundary_ignore: int | None = None
     max_value: float = 1.0
+    # TODO: We cannot use the default factory with nn.Modules because we must call the super init before we can call the module init.
     l2: L2 = field(init=False)
 
     # Losses

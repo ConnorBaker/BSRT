@@ -9,7 +9,8 @@ from typing import ClassVar
 import torch
 
 
-@dataclass
+# TODO: Using the derivied equals overwrites the default hash method, which we want to inherit from Metric.
+@dataclass(eq=False)
 class MSSSIMLoss(Metric):
     full_state_update: ClassVar[bool] = False
     boundary_ignore: int | None = None

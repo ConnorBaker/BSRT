@@ -9,21 +9,33 @@ from utils.spatial_color_alignment import get_gaussian_kernel
 import torch
 
 
-@dataclass
+# TODO: Using the derivied equals overwrites the default hash method, which we want to inherit from Metric.
+@dataclass(eq=False, init=False)
 class AlignedLPIPS(Metric):
     full_state_update: ClassVar[bool] = False
     alignment_net: torch.nn.Module
-    sr_factor: int = 4
     boundary_ignore: int | None = None
-    loss_fn: LPIPS = field(init=False, default_factory=lambda: LPIPS(net="alex"))
+    sr_factor: int = 4
+    # TODO: We cannot use the default factory with nn.Modules because we must call the super init before we can call the module init.
+    loss_fn: LPIPS = field(init=False)
     gauss_kernel: Tensor = field(init=False)
     ksz: int = field(init=False)
 
     # Losses
     lpips: Tensor = field(init=False)
 
-    def __post_init__(self) -> None:
+    # TODO: We cannot use the generated init with nn.Modules arguments because we must call the super init before we can call the module init.
+    def __init__(
+        self,
+        alignment_net: torch.nn.Module,
+        boundary_ignore: int | None = None,
+        sr_factor: int = 4,
+    ) -> None:
         super().__init__()
+        self.alignment_net = alignment_net
+        self.boundary_ignore = boundary_ignore
+        self.sr_factor = sr_factor
+        self.loss_fn = LPIPS(net="alex")
         self.gauss_kernel, self.ksz = get_gaussian_kernel(sd=1.5)
         self.add_state("lpips", default=torch.tensor(0), dist_reduce_fx="mean")
 

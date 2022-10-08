@@ -4,23 +4,24 @@ from typing import ClassVar
 import torch
 from torch import Tensor
 from metrics.utils.ignore_boundry import ignore_boundary
-from loss.Charbonnier import CharbonnierLoss as CBLoss
+from loss.charbonnier import CharbonnierLoss as CBLoss
 from torchmetrics.metric import Metric
 
 
-@dataclass
+# TODO: Using the derivied equals overwrites the default hash method, which we want to inherit from Metric.
+@dataclass(eq=False)
 class CharbonnierLoss(Metric):
     full_state_update: ClassVar[bool] = False
     boundary_ignore: int | None = None
-    charbonnier_loss: CBLoss = field(
-        init=False, default_factory=lambda: CBLoss(reduce=True)
-    )
+    # TODO: We cannot use the default factory with nn.Modules because we must call the super init before we can call the module init.
+    charbonnier_loss: CBLoss = field(init=False)
 
     # Losses
     loss: Tensor = field(init=False)
 
     def __post_init__(self) -> None:
         super().__init__()
+        self.charbonnier_loss = CBLoss(reduce=True)
         self.add_state("loss", default=torch.tensor(0), dist_reduce_fx="mean")
 
     def update(self, pred: Tensor, gt: Tensor) -> None:
