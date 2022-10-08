@@ -1,0 +1,34 @@
+name: bsrt-nightly
+channels:
+  - nvidia
+  - pytorch-nightly
+  - conda-forge
+  - fastai
+dependencies:
+  # Base Python install
+  - conda-forge::python=3.10
+  - conda-forge::pip=22.2
+
+  # NVIDIA libraries
+  - nvidia::cuda==11.7.1
+  - conda-forge::cupy==11.2.0
+  - conda-forge::cudnn==8.4.1.50
+  - conda-forge::nccl==2.14.3.1
+
+  # PyTorch install
+  - pytorch-nightly::pytorch==1.14.0.dev20221008=py3.10_cuda11.7_cudnn8.5.0_0
+  - pytorch-nightly::torchvision==0.15.0.dev20221008=py310_cu117
+  - fastai::opencv-python-headless==4.6.0.66
+  - fastai::timm==0.6.7
+  - conda-forge::gcsfs==2022.8.2
+  - conda-forge::optuna==3.0.2
+  - pip:
+    - wandb==0.13.4
+    # - ray[all] @ https://s3-us-west-2.amazonaws.com/ray-wheels/master/d99eff919bf785f911e4eebc87ddc4960344a139/ray-3.0.0.dev0-cp310-cp310-manylinux2014_x86_64.whl
+    - ray[all]==2.0.0
+
+    # Use this fork of LPIPS until https://github.com/richzhang/PerceptualSimilarity/pull/114 is merged upstream
+    - git+https://github.com/ercanburak/PerceptualSimilarity.git@9606c353e5777fc95186a5a4c876e7c6a17651a6#egg=lpips
+
+    # Metrics wrapper for PyTorch (depends on LPIPS)
+    - git+https://github.com/Lightning-AI/metrics.git@e06a0c4982c1cae5fc055f8cfba07279978ba0c9#egg=torchmetrics
