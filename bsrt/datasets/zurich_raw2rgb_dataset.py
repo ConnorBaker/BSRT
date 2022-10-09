@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing_extensions import ClassVar
 from datasets.utilities.image_folder_data import ImageFolderData
@@ -34,9 +34,11 @@ class ZurichRaw2RgbDataset(
     ]
 
     data_dir: Path
+    dataset_dir: Path = field(init=False)
 
     def __post_init__(self) -> None:
         self.download()
+        self.dataset_dir: Path = self.data_dir / self.dirname
 
     def provide_dataset_pipeline(
         self, blocks_per_window: int = 100
@@ -49,7 +51,7 @@ class ZurichRaw2RgbDataset(
     def provide_datasource(self) -> Dataset[ZuricRaw2RgbData]:
         return read_datasource(
             ImageFolderDatasource(),
-            root=self.data_dir.as_posix(),
+            root=self.dataset_dir.as_posix(),
             size=(448, 448),
             mode="RGB",
         )
