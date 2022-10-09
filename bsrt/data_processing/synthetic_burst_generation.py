@@ -224,44 +224,46 @@ def single2lrburst(
 
     sample_grid = torch.stack((cvs, rvs, torch.ones_like(cvs)), dim=-1).float()
 
-    # For base image, do not apply any random transformations. We only translate the image to center the
-    # sampling grid
-    shift: float = (downsample_factor / 2.0) - 0.5
-    translation: tuple[float, float] = (shift, shift)
-    theta: float = 0.0
-    shear_factor: tuple[float, float] = (0.0, 0.0)
-
-    for i in range(1, burst_size):
-        # Sample random image transformation parameters
-        max_translation = transformation_params.max_translation
-
-        if max_translation <= 0.01:
-            shift = (downsample_factor / 2.0) - 0.5
-            translation = (shift, shift)
+    for i in range(burst_size):
+        if i == 0:
+            # For base image, do not apply any random transformations. We only translate the image to center the
+            # sampling grid
+            shift: float = (downsample_factor / 2.0) - 0.5
+            translation: tuple[float, float] = (shift, shift)
+            theta: float = 0.0
+            shear_factor: tuple[float, float] = (0.0, 0.0)
+            scale_factor_tuple: tuple[float, float] = (1.0, 1.0)
         else:
-            translation = (
-                random.uniform(-max_translation, max_translation),
-                random.uniform(-max_translation, max_translation),
+            # Sample random image transformation parameters
+            max_translation = transformation_params.max_translation
+
+            if max_translation <= 0.01:
+                shift = (downsample_factor / 2.0) - 0.5
+                translation = (shift, shift)
+            else:
+                translation = (
+                    random.uniform(-max_translation, max_translation),
+                    random.uniform(-max_translation, max_translation),
+                )
+
+            max_rotation = transformation_params.max_rotation
+            theta = random.uniform(-max_rotation, max_rotation)
+
+            max_shear = transformation_params.max_shear
+            shear_x = random.uniform(-max_shear, max_shear)
+            shear_y = random.uniform(-max_shear, max_shear)
+            shear_factor = (shear_x, shear_y)
+
+            max_ar_factor = transformation_params.max_ar_factor
+            ar_factor: float = np.exp(random.uniform(-max_ar_factor, max_ar_factor))
+
+            max_scale = transformation_params.max_scale
+            scale_factor: float = np.exp(random.uniform(-max_scale, max_scale))
+
+            scale_factor_tuple: tuple[float, float] = (
+                scale_factor,
+                scale_factor * ar_factor,
             )
-
-        max_rotation = transformation_params.max_rotation
-        theta = random.uniform(-max_rotation, max_rotation)
-
-        max_shear = transformation_params.max_shear
-        shear_x = random.uniform(-max_shear, max_shear)
-        shear_y = random.uniform(-max_shear, max_shear)
-        shear_factor = (shear_x, shear_y)
-
-        max_ar_factor = transformation_params.max_ar_factor
-        ar_factor: float = np.exp(random.uniform(-max_ar_factor, max_ar_factor))
-
-        max_scale = transformation_params.max_scale
-        scale_factor: float = np.exp(random.uniform(-max_scale, max_scale))
-
-        scale_factor_tuple: tuple[float, float] = (
-            scale_factor,
-            scale_factor * ar_factor,
-        )
 
         output_sz: tuple[int, int] = (image.shape[1], image.shape[0])
 
