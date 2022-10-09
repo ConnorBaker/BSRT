@@ -16,6 +16,7 @@ class CharbonnierLoss(nn.Module):
         self.epsilon = epsilon
         self.reduce = reduce
 
+    # TODO: Does this handle batched inputs in the way we want?
     def forward(self, X: Tensor, Y: Tensor) -> Tensor:
         diff = X - Y
         error = torch.sqrt(diff * diff + self.epsilon * self.epsilon)
