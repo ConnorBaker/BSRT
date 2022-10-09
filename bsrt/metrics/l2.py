@@ -47,7 +47,7 @@ class L2(Metric):
             pred.shape == gt.shape
         ), f"pred and gt must have the same shape, got {pred.shape} and {gt.shape}"
 
-        pred = ignore_boundary(pred, self.boundary_ignore)
+        pred = ignore_boundary(pred, self.boundary_ignore).type_as(gt)
         gt = ignore_boundary(gt, self.boundary_ignore)
         valid = ignore_boundary(valid, self.boundary_ignore)
 
@@ -55,39 +55,31 @@ class L2(Metric):
             (gt.device == valid.device) if valid is not None else True
         ), f"pred, gt, and valid must be on the same device"
 
+        # TODO: The generated superresolution image regularly has a range greater than 1.0. Is this a problem?
+        self.ssim: Tensor = compute_ssim(
+            pred.contiguous(),
+            gt.contiguous(),
+            gaussian_kernel=True,
+            kernel_size=11,
+            sigma=1.5,
+            reduction="elementwise_mean",
+            data_range=1.0,
+        )  # type: ignore
+        self.lpips = self.loss_fn(pred.contiguous(), gt.contiguous())
+
         acc_mse: Tensor = torch.tensor(0.0, device=pred.device)
-        acc_ssim: Tensor = torch.tensor(0.0, device=pred.device)
-        acc_lpips: Tensor = torch.tensor(0.0, device=pred.device)
-        for pred, gt, valid in zip(
-            pred, gt, valid if valid is not None else [None] * len(pred)
-        ):
-            if valid is None:
-                mse: Tensor = F.mse_loss(pred, gt)
-            else:
-                mse_tensor: Tensor = F.mse_loss(pred, gt, reduction="none")
-                eps: float = 1e-12
-                elem_ratio: float = mse_tensor.numel() / valid.numel()
-                mse: Tensor = (mse_tensor * valid).sum() / (
-                    valid.sum() * elem_ratio + eps
+        if valid is None:
+            self.mse = sum(map(F.mse_loss, pred, gt), acc_mse) / len(pred)
+        else:
+            eps: float = 1e-12
+            for _pred, _gt, _valid in zip(pred, gt, valid):
+                mse_tensor: Tensor = F.mse_loss(_pred, _gt, reduction="none")
+                elem_ratio: float = mse_tensor.numel() / _valid.numel()
+                mse: Tensor = (mse_tensor * _valid).sum() / (
+                    _valid.sum() * elem_ratio + eps
                 )
-
-            acc_mse += mse
-
-            # TODO: The generated superresolution image regularly has a range greater than 1.0. Is this a problem?
-            acc_ssim += compute_ssim(
-                pred.type_as(gt).contiguous(),
-                gt.contiguous(),
-                gaussian_kernel=True,
-                kernel_size=11,
-                sigma=1.5,
-                reduction="elementwise_mean",
-                data_range=1.0,
-            )  # type: ignore
-            acc_lpips += self.loss_fn(pred.contiguous(), gt.contiguous()).squeeze()
-
-        self.mse = acc_mse / len(pred)
-        self.ssim = acc_ssim / len(pred)
-        self.lpips = acc_lpips / len(pred)
+                acc_mse += mse
+            self.mse = acc_mse / len(pred)
 
     def compute(self) -> tuple[Tensor, Tensor, Tensor]:
         return self.mse, self.ssim, self.lpips

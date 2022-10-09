@@ -1,13 +1,14 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
+import math
 from metrics.l2 import L2
-from metrics.utils.compute_psnr import compute_psnr
 from torch import Tensor
 from torchmetrics.metric import Metric
 from typing import ClassVar
 import torch
 
 
+# TODO: This serves as a catch-all loss function. We should split it into multiple loss functions, and use metrics provided by torchmetrics where possible.
 # TODO: Using the derivied equals overwrites the default hash method, which we want to inherit from Metric.
 @dataclass(eq=False)
 class PSNR(Metric):
@@ -42,22 +43,12 @@ class PSNR(Metric):
         assert (
             pred.shape == gt.shape
         ), f"pred and gt must have the same shape, got {pred.shape} and {gt.shape}"
-        all_scores = [
-            compute_psnr(
-                self.l2,
-                self.max_value,
-                p.unsqueeze(0),
-                g.unsqueeze(0),
-                v.unsqueeze(0) if v is not None else None,
-            )
-            for p, g, v in zip(
-                pred, gt, valid if valid is not None else [None] * len(pred)
-            )
-        ]
 
-        self.psnr: Tensor = sum([score[0] for score in all_scores]) / len(all_scores)  # type: ignore
-        self.ssim: Tensor = sum([score[1] for score in all_scores]) / len(all_scores)  # type: ignore
-        self.lpips: Tensor = sum([score[2] for score in all_scores]) / len(all_scores)  # type: ignore
+        mse, ssim, lpips = self.l2(pred, gt, valid=valid)
+        psnr = 20 * math.log10(self.max_value) - 10.0 * mse.log10()
+        self.psnr = psnr
+        self.ssim = ssim
+        self.lpips = lpips
 
     def compute(self) -> tuple[Tensor, Tensor, Tensor]:
         return self.psnr, self.ssim, self.lpips
