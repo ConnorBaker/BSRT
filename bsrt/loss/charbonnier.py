@@ -4,15 +4,17 @@ import torch.nn as nn
 from torch import Tensor
 
 
-@dataclass
+@dataclass(eq=False, init=False)
 class CharbonnierLoss(nn.Module):
     """L1 charbonnier loss."""
 
     epsilon: float = 1e-3
     reduce: bool = True
 
-    def __post_init__(self) -> None:
+    def __init__(self, epsilon: float = 1e-3, reduce: bool = True) -> None:
         super().__init__()
+        self.epsilon = epsilon
+        self.reduce = reduce
 
     def forward(self, X: Tensor, Y: Tensor) -> Tensor:
         diff = X - Y

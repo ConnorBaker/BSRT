@@ -4,9 +4,9 @@ from torch import Tensor
 import torch.nn as nn
 
 
-@dataclass
+@dataclass(eq=False, init=False)
 class HistEntropy(nn.Module):
-    def __post_init__(self):
+    def __init__(self):
         super().__init__()
 
     def forward(self, x: Tensor) -> Tensor:

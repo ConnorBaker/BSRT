@@ -1,7 +1,8 @@
+from dataclasses import dataclass, field
 from bsrt.option import Config
 import utility
 from types import SimpleNamespace
-from loss import discriminator
+from loss.discriminator import Discriminator
 
 import torch
 from torch import Tensor
@@ -10,12 +11,20 @@ import torch.nn.functional as F
 from utils.types import GanType
 
 
+@dataclass(eq=False, init=False)
 class Adversarial(nn.Module):
+    gan_type: GanType
+    gan_k: int
+    dis: Discriminator = field(init=False)
+    optimizer: torch.optim.Optimizer = field(init=False)
+
     def __init__(self, config: Config, gan_type: GanType):
-        super(Adversarial, self).__init__()
+        super().__init__()
         self.gan_type = gan_type
         self.gan_k = config.gan_k
-        self.dis = discriminator.Discriminator(config)
+        self.dis = Discriminator(
+            in_channels=config.n_colors, patch_size=config.patch_size
+        )
         # if gan_type == 'WGAN_GP':
         if True:
             # see https://arxiv.org/pdf/1704.00028.pdf pp.4

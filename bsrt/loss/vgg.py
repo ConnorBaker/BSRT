@@ -1,21 +1,23 @@
 from dataclasses import dataclass, field
 from model import common
-
+from torch import Tensor
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
 
 
-@dataclass
+@dataclass(eq=False, init=False)
 class VGG(nn.Module):
     conv_index: str = "22"
     rgb_range: int = 1
     vgg: nn.Sequential = field(init=False)
     sub_mean: common.MeanShift = field(init=False)
 
-    def __post_init__(self) -> None:
+    def __init__(self, conv_index: str = "22", rgb_range: int = 1) -> None:
         super().__init__()
+        self.conv_index = conv_index
+        self.rgb_range = rgb_range
         modules = list(models.vgg19(pretrained=True).features.modules())
         if self.conv_index.find("22") >= 0:
             self.vgg = nn.Sequential(*modules[:8])
@@ -33,7 +35,7 @@ class VGG(nn.Module):
             p.requires_grad = False
 
     # TODO: Why build sub_mean if we're not going to use it?
-    def forward(self, sr, hr):
+    def forward(self, sr: Tensor, hr: Tensor) -> Tensor:
         def _forward(x):
             # x = self.sub_mean(x)
             x = self.vgg(x)
