@@ -1,22 +1,30 @@
-from bsrt.option import Config
-from model import common
-
+from dataclasses import dataclass, field
+from torch import Tensor
 import torch.nn as nn
 
 
+@dataclass(eq=False, init=False)
 class Discriminator(nn.Module):
     """
     output is not normalized
     """
 
-    def __init__(self, config: Config, gan_type="GAN"):
-        super(Discriminator, self).__init__()
+    features: nn.Sequential = field(init=False)
+    classifier: nn.Sequential = field(init=False)
 
-        in_channels = config.n_colors
-        out_channels = 32
-        depth = 6
+    def __init__(
+        self,
+        in_channels: int,
+        patch_size: int,
+        out_channels: int = 32,
+        depth: int = 6,
+        gan_type: str = "GAN",
+    ):
+        super().__init__()
 
-        def _block(_in_channels, _out_channels, stride=1):
+        def _block(
+            _in_channels: int, _out_channels: int, stride: int = 1
+        ) -> nn.Sequential:
 
             Conv = nn.Conv2d(
                 _in_channels, _out_channels, 3, padding=1, stride=stride, bias=False
@@ -36,7 +44,7 @@ class Discriminator(nn.Module):
                 )
 
         m_features = [_block(in_channels, out_channels)]
-        for i in range(depth):
+        for _ in range(depth):
             in_channels = out_channels
             # if i % 2 == 1:
             #     stride = 1
@@ -46,7 +54,7 @@ class Discriminator(nn.Module):
             stride = 2
             m_features.append(_block(in_channels, out_channels, stride=stride))
 
-        patch_size = config.patch_size // 2 ** (depth - 1)
+        patch_size = patch_size // 2 ** (depth - 1)
 
         # print(out_channels, patch_size)
 
@@ -60,7 +68,7 @@ class Discriminator(nn.Module):
         self.features = nn.Sequential(*m_features)
         self.classifier = nn.Sequential(*m_classifier)
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         features = self.features(x)
         # print(features.shape)
         output = self.classifier(features)

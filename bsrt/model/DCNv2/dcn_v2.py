@@ -100,13 +100,14 @@ class FlowGuidedDCN(DeformConv2d):
         offset = torch.tanh(torch.cat((o1, o2), dim=1)) * 10  # max_residue_magnitude
         offset = offset + flows.flip(1).repeat(1, offset.size(1) // 2, 1, 1)
 
-        offset_mean = torch.mean(torch.abs(offset))
-        if offset_mean > 250:
-            print(
-                "FlowGuidedDCN: Offset mean is {}, larger than 100.".format(offset_mean)
-            )
-            # offset = offset.clamp(-50, 50)
-            # return None
+        # offset_mean = torch.mean(torch.abs(offset))
+        # if offset_mean > 250:
+        # TODO: Is this bad? Should we clamp or terminate the experiment?
+        # print(
+        #     "FlowGuidedDCN: Offset mean is {}, larger than 100.".format(offset_mean)
+        # )
+        # offset = offset.clamp(-50, 50)
+        # return None
 
         mask = torch.sigmoid(mask)
         return deform_conv2d(

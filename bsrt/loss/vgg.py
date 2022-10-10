@@ -1,28 +1,41 @@
+from dataclasses import dataclass, field
 from model import common
-
+from torch import Tensor
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
 
 
+@dataclass(eq=False, init=False)
 class VGG(nn.Module):
-    def __init__(self, conv_index, rgb_range=1):
-        super(VGG, self).__init__()
-        vgg_features = models.vgg19(pretrained=True).features
-        modules = [m for m in vgg_features]
-        if conv_index.find("22") >= 0:
+    conv_index: str = "22"
+    rgb_range: int = 1
+    vgg: nn.Sequential = field(init=False)
+    sub_mean: common.MeanShift = field(init=False)
+
+    def __init__(self, conv_index: str = "22", rgb_range: int = 1) -> None:
+        super().__init__()
+        self.conv_index = conv_index
+        self.rgb_range = rgb_range
+        modules = list(models.vgg19(pretrained=True).features.modules())
+        if self.conv_index.find("22") >= 0:
             self.vgg = nn.Sequential(*modules[:8])
-        elif conv_index.find("54") >= 0:
+        elif self.conv_index.find("54") >= 0:
             self.vgg = nn.Sequential(*modules[:35])
 
         vgg_mean = (0.485, 0.456, 0.406)
-        vgg_std = (0.229 * rgb_range, 0.224 * rgb_range, 0.225 * rgb_range)
-        self.sub_mean = common.MeanShift(rgb_range, vgg_mean, vgg_std)
+        vgg_std = (
+            0.229 * self.rgb_range,
+            0.224 * self.rgb_range,
+            0.225 * self.rgb_range,
+        )
+        self.sub_mean = common.MeanShift(self.rgb_range, vgg_mean, vgg_std)
         for p in self.parameters():
             p.requires_grad = False
 
-    def forward(self, sr, hr):
+    # TODO: Why build sub_mean if we're not going to use it?
+    def forward(self, sr: Tensor, hr: Tensor) -> Tensor:
         def _forward(x):
             # x = self.sub_mean(x)
             x = self.vgg(x)

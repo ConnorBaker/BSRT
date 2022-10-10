@@ -6,6 +6,7 @@ from model import common
 from model.utils.psconv import PSGConv2d as PSConv2d, PyConv2d
 from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
+
 def initialize_weights(net_l, scale=1):
     if not isinstance(net_l, list):
         net_l = [net_l]
@@ -63,9 +64,7 @@ class ESA(nn.Module):
         v_range = self.relu(self.conv_max(v_max))
         c3 = self.relu(self.conv3(v_range))
         c3 = self.conv3_(c3)
-        c3 = bilinear_upsample_2d(
-            c3, size=(x.size(2), x.size(3))
-        )
+        c3 = bilinear_upsample_2d(c3, size=(x.size(2), x.size(3)))
         cf = self.conv_f(c1_)
         c4 = self.conv4(c3 + cf)
         m = self.sigmoid(c4)

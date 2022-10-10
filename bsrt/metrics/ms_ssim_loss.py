@@ -1,19 +1,25 @@
-from typing import Optional
-import torch
-from torch import Tensor
+from dataclasses import dataclass, field
 from metrics.utils.ignore_boundry import ignore_boundary
+from torch import Tensor
 from torchmetrics.functional.image.ssim import (
     multiscale_structural_similarity_index_measure as compute_msssim,
 )
 from torchmetrics.metric import Metric
+from typing import ClassVar
+import torch
 
 
+# TODO: Using the derivied equals overwrites the default hash method, which we want to inherit from Metric.
+@dataclass(eq=False)
 class MSSSIMLoss(Metric):
-    # TODO: See if we need the full metric state (the property full_state_update=True)
+    full_state_update: ClassVar[bool] = False
+    boundary_ignore: int | None = None
 
-    def __init__(self, boundary_ignore: Optional[int] = None) -> None:
+    # Losses
+    loss: Tensor = field(init=False)
+
+    def __post_init__(self) -> None:
         super().__init__()
-        self.boundary_ignore = boundary_ignore
         self.add_state("loss", default=torch.tensor(0), dist_reduce_fx="mean")
 
     def update(self, pred: Tensor, gt: Tensor) -> None:

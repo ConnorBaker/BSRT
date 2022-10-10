@@ -1,10 +1,13 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 from typing_extensions import ClassVar
 from datasets.utilities.image_folder_data import ImageFolderData
 from datasets.utilities.downloadable import Downloadable
-from datasets.utilities.provides import ProvidesDataset, ProvidesDatasetPipeline, ProvidesDatasource
+from datasets.utilities.provides import (
+    ProvidesDataset,
+    ProvidesDatasetPipeline,
+    ProvidesDatasource,
+)
 from ray.data.datasource import ImageFolderDatasource
 from ray.data.dataset import Dataset
 from ray.data.dataset_pipeline import DatasetPipeline
@@ -15,7 +18,9 @@ ZuricRaw2RgbData = ImageFolderData[np.uint8]
 
 
 @dataclass
-class ZurichRaw2RgbDataset(Downloadable, ProvidesDatasource, ProvidesDataset, ProvidesDatasetPipeline):
+class ZurichRaw2RgbDataset(
+    Downloadable, ProvidesDatasource, ProvidesDataset, ProvidesDatasetPipeline
+):
     """Canon RGB images from the "Zurich RAW to RGB mapping" dataset. You can download the full
     dataset (22 GB) from http://people.ee.ethz.ch/~ihnatova/pynet.html#dataset. Alternatively, you can only download the
     Canon RGB images (5.5 GB) from https://data.vision.ee.ethz.ch/bhatg/zurich-raw-to-rgb.zip
@@ -29,9 +34,14 @@ class ZurichRaw2RgbDataset(Downloadable, ProvidesDatasource, ProvidesDataset, Pr
     ]
 
     data_dir: Path
+    dataset_dir: Path = field(init=False)
+
+    def __post_init__(self) -> None:
+        self.download()
+        self.dataset_dir: Path = self.data_dir / self.dirname
 
     def provide_dataset_pipeline(
-        self, blocks_per_window: Optional[int] = 100
+        self, blocks_per_window: int = 100
     ) -> DatasetPipeline[ZuricRaw2RgbData]:
         return self.provide_datasource().window(blocks_per_window=blocks_per_window)
 
@@ -41,7 +51,7 @@ class ZurichRaw2RgbDataset(Downloadable, ProvidesDatasource, ProvidesDataset, Pr
     def provide_datasource(self) -> Dataset[ZuricRaw2RgbData]:
         return read_datasource(
             ImageFolderDatasource(),
-            root=self.data_dir.as_posix(),
+            root=self.dataset_dir.as_posix(),
             size=(448, 448),
             mode="RGB",
-        ).lazy()
+        )

@@ -1,13 +1,9 @@
-import imp
-from typing import Optional
 import torch
 from torch import Tensor
 import torch.nn as nn
-import torch.nn.functional as F
 from utils.spatial_color_alignment import match_colors
 from utils.warp import warp
 from metrics.utils.ignore_boundry import ignore_boundary
-from typing import Tuple
 from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 
@@ -19,8 +15,8 @@ def prepare_aligned(
     sr_factor: int,
     kernel_size: int,
     gaussian_kernel: Tensor,
-    boundary_ignore: Optional[int],
-) -> Tuple[Tensor, Tensor, Tensor]:
+    boundary_ignore: int | None,
+) -> tuple[Tensor, Tensor, Tensor]:
     # Estimate flow between the prediction and the ground truth
     with torch.no_grad():
         flow = alignment_net(pred / (pred.max() + 1e-6), gt / (gt.max() + 1e-6))

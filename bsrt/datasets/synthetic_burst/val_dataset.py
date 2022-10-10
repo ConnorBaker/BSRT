@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, ClassVar
-from typing_extensions import TypedDict
+from typing import Any
+from typing_extensions import ClassVar, TypedDict
 import torch
 from torch import Tensor
 import cv2

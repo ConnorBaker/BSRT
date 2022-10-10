@@ -1,22 +1,30 @@
+from dataclasses import dataclass, field
 from bsrt.option import Config
 import utility
 from types import SimpleNamespace
-
-from model import common
-from loss import discriminator
+from loss.discriminator import Discriminator
 
 import torch
+from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.optim as optim
+from utils.types import GanType
 
 
+@dataclass(eq=False, init=False)
 class Adversarial(nn.Module):
-    def __init__(self, config: Config, gan_type):
-        super(Adversarial, self).__init__()
+    gan_type: GanType
+    gan_k: int
+    dis: Discriminator = field(init=False)
+    optimizer: torch.optim.Optimizer = field(init=False)
+
+    def __init__(self, config: Config, gan_type: GanType):
+        super().__init__()
         self.gan_type = gan_type
         self.gan_k = config.gan_k
-        self.dis = discriminator.Discriminator(config)
+        self.dis = Discriminator(
+            in_channels=config.n_colors, patch_size=config.patch_size
+        )
         # if gan_type == 'WGAN_GP':
         if True:
             # see https://arxiv.org/pdf/1704.00028.pdf pp.4
@@ -26,7 +34,7 @@ class Adversarial(nn.Module):
                 "epsilon": 1e-8,
                 "lr": 1e-5,
                 "weight_decay": config.weight_decay,
-                "decay": config.decay,
+                "decay_milestones": config.decay_milestones,
                 "gamma": config.gamma,
             }
             optim_args = SimpleNamespace(**optim_dict)
@@ -35,7 +43,7 @@ class Adversarial(nn.Module):
 
         self.optimizer = utility.make_optimizer(optim_args, self.dis)
 
-    def forward(self, fake, real):
+    def forward(self, fake: Tensor, real: Tensor) -> Tensor:
         # updating discriminator...
         self.loss = 0
         fake_detach = fake.detach()  # do not backpropagate through G
@@ -104,7 +112,7 @@ class Adversarial(nn.Module):
 
         return dict(**state_discriminator, **state_optimizer)
 
-    def bce(self, real, fake):
+    def bce(self, real: Tensor, fake: Tensor) -> Tensor:
         label_real = torch.ones_like(real)
         label_fake = torch.zeros_like(fake)
         bce_real = F.binary_cross_entropy_with_logits(real, label_real)

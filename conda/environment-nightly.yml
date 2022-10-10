@@ -1,0 +1,32 @@
+name: bsrt-nightly
+channels:
+  - nvidia
+  - pytorch-nightly
+  - conda-forge
+  - fastai
+dependencies:
+  - conda-forge::python==3.10.6
+
+  - pytorch-nightly::pytorch==1.14.0.dev20221009=py3.10_cuda11.7_cudnn8.5.0_0
+  - pytorch-nightly::torchvision==0.15.0.dev20221009=py310_cu117
+  - conda-forge::torchmetrics==0.10.0
+  - conda-forge::lpips==0.1.3
+
+  - nvidia::cuda==11.7.1
+  - conda-forge::cupy==11.2.0
+  - conda-forge::numpy==1.23.3
+  - conda-forge::pandas==1.5.0
+
+  - conda-forge::ray-core==2.0.0
+  - conda-forge::ray-dashboard==2.0.0
+  - conda-forge::ray-data==2.0.0
+  - conda-forge::ray-tune==2.0.0
+
+  - fastai::opencv-python-headless==4.6.0.66
+  - fastai::timm==0.6.7
+  # Waiting for https://github.com/fsspec/gcsfs/issues/498 in a new release
+  - conda-forge::gcsfs==2022.7.1
+  - conda-forge::optuna==3.0.2
+  - conda-forge::wandb==0.13.4
+
+  - conda-forge::black==22.8.0

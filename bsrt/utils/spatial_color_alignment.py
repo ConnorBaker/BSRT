@@ -1,9 +1,9 @@
 import math
-from typing import Tuple
 import torch
 import torch.nn.functional as F
 from utils.bilinear_upsample_2d import bilinear_upsample_2d
 from metrics.utils.ignore_boundry import ignore_boundary
+
 
 def gauss_1d(sz, sigma, center, end_pad=0, density=False):
     """Returns a 1-D Gaussian"""
@@ -50,14 +50,18 @@ def apply_kernel(im, ksz, gauss_kernel):
     return im_mean
 
 
-def match_colors(im_ref, im_q, im_test, ksz, gauss_kernel) -> Tuple[torch.Tensor, torch.Tensor]:
+def match_colors(
+    im_ref, im_q, im_test, ksz, gauss_kernel
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Estimates a color transformation matrix between im_ref and im_q. Applies the estimated transformation to
     im_test
     """
     bi = 5
 
     # Apply Gaussian smoothing
-    im_ref_mean = ignore_boundary(apply_kernel(im_ref, ksz, gauss_kernel), bi).contiguous()
+    im_ref_mean = ignore_boundary(
+        apply_kernel(im_ref, ksz, gauss_kernel), bi
+    ).contiguous()
     im_q_mean = ignore_boundary(apply_kernel(im_q, ksz, gauss_kernel), bi).contiguous()
 
     im_ref_mean_re = im_ref_mean.view(*im_ref_mean.shape[:2], -1)

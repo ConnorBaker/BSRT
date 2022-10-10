@@ -1,23 +1,30 @@
 name: bsrt
 channels:
-  - conda-forge
   - pytorch
+  - conda-forge
   - fastai
 dependencies:
-  - python=3.9
-  - pip==22.2.2
+  - python==3.10.6
 
-  - pytorch==1.12.1=py3.9_cuda11.6_cudnn8.3.2_0
-  - torchvision==0.13.1=py39_cu116
-  - torchmetrics==0.9.3
-  - pytorch-lightning==1.7.6
-  - cupy==11.1.0
+  - pytorch==1.12.1=py3.10_cuda11.6_cudnn8.3.2_0
+  - torchvision==0.13.1=py310_cu116
+  - torchmetrics==0.10.0
+  - lpips==0.1.3
+
+  - cupy==11.2.0
+  - numpy==1.23.3
+  - pandas==1.5.0
+
+  - ray-core==2.0.0
+  - ray-dashboard==2.0.0
+  - ray-data==2.0.0
+  - ray-tune==2.0.0
+
   - opencv-python-headless==4.6.0.66
   - timm==0.6.7
+  # Waiting for https://github.com/fsspec/gcsfs/issues/498 in a new release
+  - gcsfs==2022.7.1
+  - optuna==3.0.2
+  - wandb==0.13.4
 
-  # For bagua-net
-  - nccl==2.14.3.1
-  - pip:
-    - bagua-cuda116==0.9.1
-    # Use this fork of LPIPS until https://github.com/richzhang/PerceptualSimilarity/pull/114 is merged upstream
-    - git+https://github.com/ercanburak/PerceptualSimilarity.git@9606c353e5777fc95186a5a4c876e7c6a17651a6#egg=lpips
+  - black==22.8.0

@@ -1,5 +1,4 @@
 # Based on run.py from PWCNet
-from typing import Optional
 import torch
 from utils.bilinear_upsample_2d import bilinear_upsample_2d
 import math
@@ -503,7 +502,7 @@ class Network(torch.nn.Module):
 
 
 class PWCNet(torch.nn.Module):
-    def __init__(self, weights_path: Optional[str] = None, rgb2bgr=False):
+    def __init__(self, weights_path: str | None = None, rgb2bgr=False):
         super(PWCNet, self).__init__()
         self.net = Network()
         self.rgb2bgr = rgb2bgr

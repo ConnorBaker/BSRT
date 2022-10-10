@@ -1,20 +1,20 @@
-from typing import Optional, overload
+from typing_extensions import overload
 from torch import Tensor
 
 
 @overload
-def ignore_boundary(x: None, boundary_ignore: Optional[int]) -> None:
+def ignore_boundary(x: None, boundary_ignore: int | None) -> None:
     ...
 
 
 @overload
-def ignore_boundary(x: Tensor, boundary_ignore: Optional[int]) -> Tensor:
+def ignore_boundary(x: Tensor, boundary_ignore: int | None) -> Tensor:
     ...
 
 
 def ignore_boundary(
-    x: Optional[Tensor], boundary_ignore: Optional[int] = None
-) -> Optional[Tensor]:
+    x: Tensor | None, boundary_ignore: int | None = None
+) -> Tensor | None:
     if boundary_ignore is not None and x is not None:
         x = x[
             ...,

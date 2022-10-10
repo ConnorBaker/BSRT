@@ -1,223 +1,18 @@
-import os
-import functools
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.nn.parameter import Parameter
-import torch.nn.functional as F
-from datasets.synthetic_burst.test_dataset import TestData
-from datasets.synthetic_burst.train_dataset import TrainData
-from datasets.synthetic_burst.val_dataset import ValData
-from utils.postprocessing_functions import BurstSRPostProcess, SimplePostProcess
-from metrics.l1 import L1
-from metrics.l2 import L2
-from metrics.psnr import PSNR
-from metrics.aligned_l1 import AlignedL1
-from metrics.aligned_psnr import AlignedPSNR
-from metrics.ms_ssim_loss import MSSSIMLoss
-from metrics.charbonnier_loss import CharbonnierLoss
-from torch.optim import lr_scheduler
+from model.cross_non_local_fusion import CrossNonLocalFusion
+from model.flow_guided_pcd_align import FlowGuidedPCDAlign
+from model.spynet_util import SpyNet
 from option import Config
+from torch.nn.parameter import Parameter
+from utils.bilinear_upsample_2d import bilinear_upsample_2d
+import functools
 import model.arch_util as arch_util
 import model.swin_util as swu
-from model.spynet_util import SpyNet
-from model.non_local.non_local_cross_dot_product import NONLocalBlock2D as NonLocalCross
-from model.non_local.non_local_dot_product import NONLocalBlock2D as NonLocal
-from model.DCNv2.dcn_v2 import DCN_sep as DCN, FlowGuidedDCN
-import pytorch_lightning as pl
-from utils.bilinear_upsample_2d import bilinear_upsample_2d
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 
-def make_model(config: Config):
-    nframes = config.burst_size
-    img_size = config.patch_size * 2
-    patch_size = 1
-    in_chans = config.burst_channel
-    out_chans = config.n_colors
-
-    if config.model_level == "S":
-        depths = [6] * 1 + [6] * 4
-        num_heads = [6] * 1 + [6] * 4
-        embed_dim = 60
-    elif config.model_level == "L":
-        depths = [6] * 1 + [8] * 6
-        num_heads = [6] * 1 + [6] * 6
-        embed_dim = 180
-    window_size = 8
-    mlp_ratio = 2
-    upscale = config.scale
-    non_local = config.non_local
-    use_swin_checkpoint = config.use_checkpoint
-
-    bsrt = BSRT(
-        config=config,
-        nframes=nframes,
-        img_size=img_size,
-        patch_size=patch_size,
-        in_chans=in_chans,
-        out_chans=out_chans,
-        embed_dim=embed_dim,  # type: ignore
-        depths=depths,  # type: ignore
-        num_heads=num_heads,  # type: ignore
-        window_size=window_size,
-        mlp_ratio=mlp_ratio,
-        upscale=upscale,
-        non_local=non_local,
-        use_swin_checkpoint=use_swin_checkpoint,
-    )
-
-    return bsrt
-
-
-class FlowGuidedPCDAlign(nn.Module):
-    """Alignment module using Pyramid, Cascading and Deformable convolution
-    with 3 pyramid levels. [From EDVR]
-    """
-
-    def __init__(self, nf=64, groups=8):
-        super(FlowGuidedPCDAlign, self).__init__()
-        # L3: level 3, 1/4 spatial size
-        self.L3_offset_conv1 = nn.Conv2d(
-            nf * 2 + 2, nf, 3, 1, 1, bias=True
-        )  # concat for diff
-        self.L3_offset_conv2 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-        self.L3_dcnpack = FlowGuidedDCN(
-            nf, nf, 3, stride=1, padding=1, dilation=1, groups=groups
-        )
-
-        # L2: level 2, 1/2 spatial size
-        self.L2_offset_conv1 = nn.Conv2d(
-            nf * 2 + 2, nf, 3, 1, 1, bias=True
-        )  # concat for diff
-        self.L2_offset_conv2 = nn.Conv2d(
-            nf * 2, nf, 3, 1, 1, bias=True
-        )  # concat for offset
-        self.L2_offset_conv3 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-        self.L2_dcnpack = FlowGuidedDCN(
-            nf, nf, 3, stride=1, padding=1, dilation=1, groups=groups
-        )
-        self.L2_fea_conv = nn.Conv2d(nf * 2, nf, 3, 1, 1, bias=True)  # concat for fea
-
-        # L1: level 1, original spatial size
-        self.L1_offset_conv1 = nn.Conv2d(
-            nf * 2 + 2, nf, 3, 1, 1, bias=True
-        )  # concat for diff
-        self.L1_offset_conv2 = nn.Conv2d(
-            nf * 2, nf, 3, 1, 1, bias=True
-        )  # concat for offset
-        self.L1_offset_conv3 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-        self.L1_dcnpack = FlowGuidedDCN(
-            nf, nf, 3, stride=1, padding=1, dilation=1, groups=groups
-        )
-        self.L1_fea_conv = nn.Conv2d(nf * 2, nf, 3, 1, 1, bias=True)  # concat for fea
-
-        # Cascading DCN
-        self.cas_offset_conv1 = nn.Conv2d(
-            nf * 2, nf, 3, 1, 1, bias=True
-        )  # concat for diff
-        self.cas_offset_conv2 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-        self.cas_dcnpack = DCN(
-            nf, nf, 3, stride=1, padding=1, dilation=1, groups=groups
-        )
-
-        self.lrelu = nn.LeakyReLU(negative_slope=0.1, inplace=True)
-
-    def forward(self, nbr_fea_l, nbr_fea_warped_l, ref_fea_l, flows_l):
-        """align other neighboring frames to the reference frame in the feature level
-        nbr_fea_l, ref_fea_l: [L1, L2, L3], each with [B,C,H,W] features
-        """
-        # L3
-        L3_offset = torch.cat([nbr_fea_warped_l[2], ref_fea_l[2], flows_l[2]], dim=1)
-        L3_offset = self.lrelu(self.L3_offset_conv1(L3_offset))
-        L3_offset = self.lrelu(self.L3_offset_conv2(L3_offset))
-        L3_fea = self.lrelu(self.L3_dcnpack(nbr_fea_l[2], L3_offset, flows_l[2]))
-        # L2
-        L3_offset = bilinear_upsample_2d(
-            L3_offset, scale_factor=2
-        )
-        L2_offset = torch.cat([nbr_fea_warped_l[1], ref_fea_l[1], flows_l[1]], dim=1)
-        L2_offset = self.lrelu(self.L2_offset_conv1(L2_offset))
-        L2_offset = self.lrelu(
-            self.L2_offset_conv2(torch.cat([L2_offset, L3_offset * 2], dim=1))
-        )
-        L2_offset = self.lrelu(self.L2_offset_conv3(L2_offset))
-        L2_fea = self.L2_dcnpack(nbr_fea_l[1], L2_offset, flows_l[1])
-        L3_fea = bilinear_upsample_2d(
-            L3_fea, scale_factor=2,
-        )
-        L2_fea = self.lrelu(self.L2_fea_conv(torch.cat([L2_fea, L3_fea], dim=1)))
-        # L1
-        L2_offset = bilinear_upsample_2d(
-            L2_offset, scale_factor=2,
-        )
-        L1_offset = torch.cat([nbr_fea_warped_l[0], ref_fea_l[0], flows_l[0]], dim=1)
-        L1_offset = self.lrelu(self.L1_offset_conv1(L1_offset))
-        L1_offset = self.lrelu(
-            self.L1_offset_conv2(torch.cat([L1_offset, L2_offset * 2], dim=1))
-        )
-        L1_offset = self.lrelu(self.L1_offset_conv3(L1_offset))
-        L1_fea = self.L1_dcnpack(nbr_fea_l[0], L1_offset, flows_l[0])
-        L2_fea = bilinear_upsample_2d(
-            L2_fea, scale_factor=2
-        )
-        L1_fea = self.L1_fea_conv(torch.cat([L1_fea, L2_fea], dim=1))
-
-        # Cascading
-        offset = torch.cat([L1_fea, ref_fea_l[0]], dim=1)
-        offset = self.lrelu(self.cas_offset_conv1(offset))
-        offset = self.lrelu(self.cas_offset_conv2(offset))
-        L1_fea = self.cas_dcnpack(L1_fea, offset)
-
-        return L1_fea
-
-
-class CrossNonLocal_Fusion(nn.Module):
-    """Cross Non Local fusion module"""
-
-    def __init__(self, nf=64, out_feat=96, nframes=5, center=2):
-        super(CrossNonLocal_Fusion, self).__init__()
-        self.center = center
-
-        self.non_local_T = nn.ModuleList()
-        self.non_local_F = nn.ModuleList()
-
-        for i in range(nframes):
-            self.non_local_T.append(
-                NonLocalCross(
-                    nf, inter_channels=nf // 2, sub_sample=True, bn_layer=False
-                )
-            )
-            self.non_local_F.append(
-                NonLocal(nf, inter_channels=nf // 2, sub_sample=True, bn_layer=False)
-            )
-
-        # fusion conv: using 1x1 to save parameters and computation
-        self.fea_fusion = nn.Conv2d(nframes * nf * 2, out_feat, 3, 1, 1, bias=True)
-
-        self.lrelu = nn.LeakyReLU(negative_slope=0.1, inplace=True)
-
-    def forward(self, aligned_fea):
-        B, N, C, H, W = aligned_fea.size()  # N video frames
-        ref = aligned_fea[:, self.center, :, :, :].clone()
-
-        cor_l = []
-        non_l = []
-        for i in range(N):
-            nbr = aligned_fea[:, i, :, :, :]
-            non_l.append(self.non_local_F[i](nbr))
-            cor_l.append(self.non_local_T[i](nbr, ref))
-
-        aligned_fea_T = torch.cat(cor_l, dim=1)
-        aligned_fea_F = torch.cat(non_l, dim=1)
-        aligned_fea = torch.cat([aligned_fea_T, aligned_fea_F], dim=1)
-
-        #### fusion
-        fea = self.fea_fusion(aligned_fea)
-
-        return fea
-
-
-class BSRT(pl.LightningModule):
+class BSRT(nn.Module):
     def __init__(
         self,
         config: Config,
@@ -269,46 +64,9 @@ class BSRT(pl.LightningModule):
         self.num_features = embed_dim
         self.mlp_ratio = mlp_ratio
 
-        # print(self.model, file=ckp.log_file)
         self.spynet = SpyNet([3, 4, 5])
         self.conv_flow = nn.Conv2d(1, 3, kernel_size=3, stride=1, padding=1)
         self.flow_ps = nn.PixelShuffle(2)
-
-        # Loss functions
-        if "L1" == self.loss_name:
-            if config.data_type == "synthetic":
-                self.aligned_loss = L1()
-            elif config.data_type == "real":
-                self.aligned_loss = AlignedL1(
-                    alignment_net=self.alignment_net, boundary_ignore=40
-                )
-            else:
-                raise Exception(
-                    "Unexpected data_type: expected either synthetic or real"
-                )
-
-        elif "MSE" == self.loss_name:
-            self.aligned_loss = L2()
-        elif "CB" == self.loss_name:
-            self.aligned_loss = CharbonnierLoss()
-        elif "MSSSIM" ==self.loss_name:
-            self.aligned_loss = MSSSIMLoss()
-
-        # PSNR functions
-        if config.data_type == "synthetic":
-            self.postprocess_fn = SimplePostProcess(return_np=True)
-            self.psnr_fn = PSNR(boundary_ignore=40)
-        elif config.data_type == "real":
-            self.postprocess_fn = BurstSRPostProcess(return_np=True)
-            from pwcnet.pwcnet import PWCNet
-            self.alignment_net = PWCNet()
-            for param in self.alignment_net.parameters():
-                param.requires_grad = False
-            self.psnr_fn = AlignedPSNR(
-                alignment_net=self.alignment_net, boundary_ignore=40
-            )
-        else:
-            raise Exception("Unexpected data_type: expected either synthetic or real")
 
         # split image into non-overlapping patches
         self.patch_embed = swu.PatchEmbed(
@@ -403,7 +161,7 @@ class BSRT(pl.LightningModule):
 
         if self.non_local:
             print("using non_local")
-            self.fusion = CrossNonLocal_Fusion(
+            self.fusion = CrossNonLocalFusion(
                 nf=num_feat, out_feat=embed_dim, nframes=nframes, center=self.center
             )
         else:
@@ -533,6 +291,11 @@ class BSRT(pl.LightningModule):
         return x
 
     def forward(self, x):
+        # B: batch size
+        # N: number of frames
+        # C: number of channels
+        # H: height
+        # W: width
         B, N, C, H, W = x.size()  # N video frames
         x_center = x[:, self.center, :, :, :].contiguous()
 
@@ -622,7 +385,6 @@ class BSRT(pl.LightningModule):
 
     def get_ref_flows(self, x):
         """Get flow between frames ref and other"""
-
         b, n, c, h, w = x.size()
         x_nbr = x.reshape(-1, c, h, w)
         x_ref = (
@@ -639,108 +401,3 @@ class BSRT(pl.LightningModule):
         ]
 
         return flows_list
-
-    def training_step(self, batch_value: TrainData, batch_idx):
-        if self.config.data_type == "synthetic":
-            burst = batch_value["burst"]
-            gt = batch_value["gt"]
-        elif self.config.data_type == "real":
-            burst, gt, meta_info_burst, meta_info_gt = batch_value
-        else:
-            raise Exception("Unexpected data_type: expected either synthetic or real")
-
-        # NOTE: while values should be in the range [0, 1], they are not clipped when training, so it is frequently the case that sr.max() > 1 or sr.min() < 0.
-        sr = self(burst)
-
-        if self.config.data_type == "synthetic":
-            loss = self.aligned_loss(sr, gt)
-        elif self.config.data_type == "real":
-            loss = self.aligned_loss(sr, gt, burst)
-        else:
-            raise Exception("Unexpected data_type: expected either synthetic or real")
-
-        self.log("mse_L1", loss, batch_size=self.batch_size, sync_dist=True)
-        return loss
-
-    def validation_step(self, batch_value: ValData, batch_idx):
-        if self.config.data_type == "synthetic":
-            burst = batch_value["burst"]
-            gt = batch_value["gt"]
-        elif self.config.data_type == "real":
-            burst, gt, meta_info_burst, meta_info_gt = batch_value
-        else:
-            raise Exception("Unexpected data_type: expected either synthetic or real")
-
-        # NOTE: while values should be in the range [0, 1], they are not clipped when training, so it is frequently the case that sr.max() > 1 or sr.min() < 0.
-        sr = self(burst)
-
-        if self.config.data_type == "synthetic":
-            psnr_score, ssim_score, lpips_score = self.psnr_fn(sr, gt)
-        elif self.config.data_type == "real":
-            psnr_score, ssim_score, lpips_score = self.psnr_fn(sr, gt, burst)
-        else:
-            raise Exception("Unexpected data_type: expected either synthetic or real")
-
-        self.log("psnr", psnr_score, batch_size=self.batch_size, sync_dist=True)
-        self.log("ssim", ssim_score, batch_size=self.batch_size, sync_dist=True)
-        self.log("lpips", lpips_score, batch_size=self.batch_size, sync_dist=True)
-        return psnr_score, ssim_score, lpips_score
-
-    def configure_optimizers(self):
-        """
-        make optimizer and scheduler together
-        """
-        # optimizer
-        trainable = filter(lambda x: x.requires_grad, self.parameters())
-        kwargs_optimizer = {
-            "lr": self.config.lr,
-            "weight_decay": self.config.weight_decay,
-        }
-
-        if self.config.optimizer == "SGD":
-            optimizer_class = optim.SGD
-            kwargs_optimizer["momentum"] = self.config.momentum
-        elif self.config.optimizer == "ADAM":
-            optimizer_class = optim.Adam
-            kwargs_optimizer["betas"] = self.config.betas
-            kwargs_optimizer["eps"] = self.config.epsilon
-        elif self.config.optimizer == "RMSprop":
-            optimizer_class = optim.RMSprop
-            kwargs_optimizer["eps"] = self.config.epsilon
-
-        # scheduler
-        milestones = list(map(lambda x: int(x), self.config.decay.split("-")))
-        kwargs_scheduler = {"milestones": milestones, "gamma": self.config.gamma}
-        scheduler_class = lr_scheduler.MultiStepLR
-
-        class CustomOptimizer(optimizer_class):
-            def __init__(self, *args, **kwargs):
-                super(CustomOptimizer, self).__init__(*args, **kwargs)
-
-            def _register_scheduler(self, scheduler_class, **kwargs):
-                self.scheduler = scheduler_class(self, **kwargs)
-
-            def save(self, save_dir):
-                torch.save(self.state_dict(), self.get_dir(save_dir))
-
-            def load(self, load_dir, epoch=1):
-                self.load_state_dict(torch.load(self.get_dir(load_dir)))
-                if epoch > 1:
-                    for _ in range(epoch):
-                        self.scheduler.step()
-
-            def get_dir(self, dir_path):
-                return os.path.join(dir_path, "optimizer.pt")
-
-            def schedule(self):
-                self.scheduler.step()
-
-            def get_lr(self):
-                return self.scheduler.get_last_lr()[0]
-
-            def get_last_epoch(self):
-                return self.scheduler.last_epoch
-
-        optimizer = CustomOptimizer(trainable, **kwargs_optimizer)
-        optimizer._register_scheduler(scheduler_class, **kwargs_scheduler)
-        return optimizer

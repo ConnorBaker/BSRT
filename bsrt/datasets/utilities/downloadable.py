@@ -1,7 +1,8 @@
 from abc import ABC
 from pathlib import Path
-from typing import ClassVar
+from typing_extensions import ClassVar
 from torchvision.datasets.utils import download_and_extract_archive, extract_archive
+
 
 class Downloadable(ABC):
     url: ClassVar[str]
@@ -33,7 +34,7 @@ class Downloadable(ABC):
                         )
                         return
                     except:
-                        print(f"Failed to download from {url}")
+                        raise Exception("Could not download dataset")
 
                 if not file.exists():
                     raise Exception("Could not download dataset")
