@@ -24,8 +24,10 @@ dependencies:
 
   - fastai::opencv-python-headless==4.6.0.66
   - fastai::timm==0.6.7
-  - conda-forge::gcsfs==2022.8.2
-  - conda-forge::optuna==3.0.2
+  # Waiting for https://github.com/fsspec/gcsfs/issues/498 in a new release
+  - conda-forge::gcsfs==2022.7.1
+  - conda-forge::gpy==1.10.0
+  - conda-forge::scikit-learn==1.1.2
   - conda-forge::wandb==0.13.4
 
   - conda-forge::black==22.8.0
