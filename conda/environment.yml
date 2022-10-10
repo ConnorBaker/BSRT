@@ -24,8 +24,7 @@ dependencies:
   - timm==0.6.7
   # Waiting for https://github.com/fsspec/gcsfs/issues/498 in a new release
   - gcsfs==2022.7.1
-  - gpy==1.10.0
-  - scikit-learn==1.1.2
+  - optuna==3.0.2
   - wandb==0.13.4
 
   - black==22.8.0
