@@ -1,5 +1,5 @@
 from argparse import ArgumentParser
-from dataclasses import dataclass
+from importlib import resources
 from datasets.synthetic_burst.train_dataset import TrainData, TrainDataProcessor
 from datasets.zurich_raw2rgb_dataset import ZurichRaw2RgbDataset
 from option import Config, ConfigHyperTuner
@@ -7,7 +7,7 @@ from pandas import DataFrame
 from pathlib import Path
 from ray.air import session
 from ray.air.callbacks.wandb import WandbLoggerCallback
-from ray.air.config import CheckpointConfig, ScalingConfig, DatasetConfig, RunConfig
+from ray.air.config import CheckpointConfig, ScalingConfig, RunConfig
 from ray.data.dataset import Dataset
 from ray.data.preprocessors.batch_mapper import BatchMapper
 from ray.data.preprocessors.chain import Chain
@@ -22,7 +22,6 @@ from ray.train.torch import (
 from ray.tune import CLIReporter
 from ray.tune.schedulers.async_hyperband import AsyncHyperBandScheduler
 from ray.tune.search.optuna.optuna_search import OptunaSearch
-from ray.tune.stopper import TrialPlateauStopper, CombinedStopper
 from ray.tune.syncer import SyncConfig
 from ray.tune.tune_config import TuneConfig
 from ray.tune.tuner import Tuner
@@ -31,8 +30,6 @@ from torch.optim.optimizer import Optimizer
 from torchmetrics.metric import Metric
 from typing import Any
 from utility import make_optimizer, make_model, make_loss_fn, make_psnr_fn
-from ray.tune import Stopper
-import math
 import logging
 import optuna
 import os
@@ -42,37 +39,20 @@ import torch.backends.cuda
 import torch.backends.cudnn
 
 os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
+os.environ["TORCH_CUDNN_V8_API_DEBUG"] = "1"
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
 torch.backends.cudnn.allow_tf32 = True
 torch.backends.cudnn.deterministic = False
 torch.backends.cudnn.benchmark = True
 
-OBJECT_STORE_MEMORY = 64 * 1024 * 1024 * 1024
 ray.init(
     configure_logging=True,
     logging_level=logging.ERROR,
-    object_store_memory=OBJECT_STORE_MEMORY,
 )
 GRACE_PERIOD = 512
 
-
-@dataclass
-class NaNStopper(Stopper):
-    metric: str
-
-    def __call__(self, trial_id, result: dict[str, Any]) -> bool:
-        return math.isnan(result[self.metric])
-
-    def stop_all(self) -> bool:
-        return False
-
-
 def train_setup(cfg: Config):
-    # Create the Tune Reporting Callback
-    # session.report({"loss": 1.0}, checkpoint=Checkpoint.from_directory("/Users/connorbaker/Packages/BSRT/bsrt/checkpoints"))
-    # metrics = {"loss": "ptl/val_loss", "acc": "ptl/val_accuracy"}
-    # trc = TuneReportCallback(metrics, on="validation_end")
     trainer = TorchTrainer(
         train_loop_per_worker=train_loop_per_worker,
         run_config=RunConfig(
@@ -84,60 +64,25 @@ def train_setup(cfg: Config):
                     log_config=True,
                 )
             ],
-            stop=CombinedStopper(
-                NaNStopper(metric="metrics/batch/loss"),
-                TrialPlateauStopper(
-                    metric="metrics/batch/loss",
-                    std=0.001,
-                    num_results=4,
-                    grace_period=GRACE_PERIOD,
-                ),
-                NaNStopper(metric="metrics/batch/psnr"),
-                TrialPlateauStopper(
-                    metric="metrics/batch/psnr",
-                    std=0.01,
-                    num_results=4,
-                    grace_period=GRACE_PERIOD,
-                ),
-                NaNStopper(metric="metrics/batch/ssim"),
-                TrialPlateauStopper(
-                    metric="metrics/batch/ssim",
-                    std=0.01,
-                    num_results=4,
-                    grace_period=GRACE_PERIOD,
-                ),
-                NaNStopper(metric="metrics/batch/lpips"),
-                TrialPlateauStopper(
-                    metric="metrics/batch/lpips",
-                    std=0.01,
-                    num_results=4,
-                    grace_period=GRACE_PERIOD,
-                ),
-            ),
             verbose=1,
             progress_reporter=CLIReporter(
                 metric_columns=[
                     "metrics/batch/loss",
-                    "metrics/batch/psnr",
-                    "metrics/batch/ssim",
                     "metrics/batch/lpips",
+                    "metrics/batch/ssim",
+                    "metrics/batch/psnr",
                 ],
                 print_intermediate_tables=True,
                 sort_by_metric=True,
             ),
             log_to_file=True,
             checkpoint_config=CheckpointConfig(),
-            # sync_config=SyncConfig(upload_dir="gs://bsrt-supplemental"),
+            sync_config=SyncConfig(upload_dir="gs://bsrt-supplemental/checkpoints"),
         ),
         scaling_config=ScalingConfig(
-            num_workers=1,
-            use_gpu=False,
-            _max_cpu_fraction_per_node=0.8,
-            resources_per_worker={"CPU": 8, "GPU": 0},
+            use_gpu=True,
+            num_workers=8,
         ),
-        # dataset_config={
-        #     "train": DatasetConfig(use_stream_api=True, stream_window_size=OBJECT_STORE_MEMORY*1),
-        # },
         datasets={
             "train": ZurichRaw2RgbDataset(data_dir=Path(cfg.data_dir)).provide_dataset()
         },
@@ -154,20 +99,21 @@ def train_setup(cfg: Config):
             search_alg=OptunaSearch(
                 metric=[
                     "metrics/batch/loss",
-                    "metrics/batch/psnr",
-                    "metrics/batch/ssim",
                     "metrics/batch/lpips",
+                    "metrics/batch/ssim",
+                    "metrics/batch/psnr",
                 ],
-                mode=["min", "max", "max", "min"],
+                mode=["min", "min", "max", "max"],
                 sampler=optuna.samplers.NSGAIISampler(),
             ),
             scheduler=AsyncHyperBandScheduler(
-                max_t=8 * GRACE_PERIOD,
+                max_t=4 * GRACE_PERIOD,
                 grace_period=GRACE_PERIOD,
             ),
             num_samples=1000,
             max_concurrent_trials=None,
             time_budget_s=None,
+            reuse_actors=True,
         ),
         param_space={
             "train_loop_config": cfg.__dict__ | ConfigHyperTuner().__dict__,
@@ -177,6 +123,18 @@ def train_setup(cfg: Config):
 
 
 def train_loop_per_worker(config: dict[str, Any]) -> None:
+    import os
+    import torch
+    import torch.backends.cuda
+    import torch.backends.cudnn
+
+    os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
+    os.environ["TORCH_CUDNN_V8_API_DEBUG"] = "1"
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
+    torch.backends.cudnn.allow_tf32 = True
+    torch.backends.cudnn.deterministic = False
+    torch.backends.cudnn.benchmark = True
     accelerate(amp=True)
     device = get_device()
 
