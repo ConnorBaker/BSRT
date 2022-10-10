@@ -1,23 +1,17 @@
 from utils.types import InterpolationType
 from data_processing.synthetic_burst_generation import (
-    MetaInfo,
     rgb2rawburst,
     random_crop,
     ImageProcessingParams,
     ImageTransformationParams,
 )
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from metrics.utils.ignore_boundry import ignore_boundary
 from torch import Tensor
-from torchvision.transforms.functional import to_tensor
-from typing_extensions import ClassVar
-from numpy.typing import NDArray
-from pandas import DataFrame
-from ray.data.preprocessors.batch_mapper import BatchMapper
+from typing_extensions import ClassVar, TypedDict
 
 
-@dataclass
-class TrainData:
+class TrainData(TypedDict):
     """
     burst: Generated LR RAW burst, a torch tensor of shape
     [burst_size, 4, self.crop_sz / (2*self.downsample_factor), self.crop_sz / (2*self.downsample_factor)]
@@ -44,11 +38,11 @@ class TrainData:
     burst: Tensor
     gt: Tensor
     flow_vectors: Tensor
-    meta_info: MetaInfo
+    # meta_info: MetaInfo
 
 
 @dataclass
-class TrainDataProcessor(BatchMapper):
+class TrainDataProcessor:
     """Synthetic burst dataset for joint denoising, demosaicking, and super-resolution. RAW Burst sequences are
     synthetically generated on the fly as follows. First, a single image is loaded from the base_dataset. The sampled
     image is converted to linear sensor space using the inverse camera pipeline employed in [1]. A burst
@@ -62,6 +56,7 @@ class TrainDataProcessor(BatchMapper):
     _is_fittable: ClassVar[bool] = False
     burst_size: int
     crop_sz: int
+    final_crop_sz: int = field(init=False)
     downsample_factor: int = 4
     burst_transformation_params: ImageTransformationParams = ImageTransformationParams(
         max_translation=24.0,
@@ -79,13 +74,14 @@ class TrainDataProcessor(BatchMapper):
     )
     interpolation_type: InterpolationType = "bilinear"
 
-    def _transform_singleton(self, frame: NDArray) -> TrainData:
-        # Augmentation, e.g. convert to tensor
-        _frame: Tensor = to_tensor(frame)
+    def __post_init__(self):
+        self.final_crop_sz = (
+            self.crop_sz + 2 * self.burst_transformation_params.border_crop
+        )
 
+    def __call__(self, frame: Tensor) -> TrainData:
         # Extract a random crop from the image
-        crop_sz = self.crop_sz + 2 * self.burst_transformation_params.border_crop
-        cropped_frame = random_crop(_frame, crop_sz)
+        cropped_frame = random_crop(frame, self.final_crop_sz)
 
         burst, gt, _burst_rgb, flow_vectors, meta_info = rgb2rawburst(
             cropped_frame,
@@ -97,9 +93,4 @@ class TrainDataProcessor(BatchMapper):
         )
         gt = ignore_boundary(gt, self.burst_transformation_params.border_crop)
 
-        return TrainData(
-            burst=burst, gt=gt, flow_vectors=flow_vectors, meta_info=meta_info
-        )
-
-    def _transform_pandas(self, df: DataFrame) -> DataFrame:
-        return DataFrame(list(map(self._transform_singleton, df["image"].to_numpy())))
+        return TrainData(burst=burst, gt=gt, flow_vectors=flow_vectors)

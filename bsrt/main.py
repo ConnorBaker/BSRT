@@ -2,29 +2,9 @@ from argparse import ArgumentParser
 from importlib import resources
 from datasets.synthetic_burst.train_dataset import TrainData, TrainDataProcessor
 from datasets.zurich_raw2rgb_dataset import ZurichRaw2RgbDataset
-from option import Config, ConfigHyperTuner
+from option import Config
 from pandas import DataFrame
 from pathlib import Path
-from ray.air import session
-from ray.air.callbacks.wandb import WandbLoggerCallback
-from ray.air.config import CheckpointConfig, ScalingConfig, RunConfig
-from ray.data.dataset import Dataset
-from ray.data.preprocessors.batch_mapper import BatchMapper
-from ray.data.preprocessors.chain import Chain
-from ray.train.torch import (
-    TorchTrainer,
-    prepare_model,
-    prepare_optimizer,
-    accelerate,
-    backward,
-    get_device,
-)
-from ray.tune import CLIReporter
-from ray.tune.schedulers.async_hyperband import AsyncHyperBandScheduler
-from ray.tune.search.optuna.optuna_search import OptunaSearch
-from ray.tune.syncer import SyncConfig
-from ray.tune.tune_config import TuneConfig
-from ray.tune.tuner import Tuner
 from torch.nn import Module
 from torch.optim.optimizer import Optimizer
 from torchmetrics.metric import Metric
@@ -33,10 +13,18 @@ from utility import make_optimizer, make_model, make_loss_fn, make_psnr_fn
 import logging
 import optuna
 import os
-import ray
 import torch
 import torch.backends.cuda
 import torch.backends.cudnn
+import logging
+import pytorch_lightning as pl
+from torch.utils.data import DataLoader
+
+
+# configure logging at the root level of Lightning
+logger = logging.getLogger("pytorch_lightning")
+logger.setLevel(logging.INFO)
+
 
 os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
 os.environ["TORCH_CUDNN_V8_API_DEBUG"] = "1"
@@ -46,138 +34,56 @@ torch.backends.cudnn.allow_tf32 = True
 torch.backends.cudnn.deterministic = False
 torch.backends.cudnn.benchmark = True
 
-ray.init(
-    configure_logging=True,
-    logging_level=logging.ERROR,
-)
-GRACE_PERIOD = 512
 
-def train_setup(cfg: Config):
-    trainer = TorchTrainer(
-        train_loop_per_worker=train_loop_per_worker,
-        run_config=RunConfig(
-            callbacks=[
-                WandbLoggerCallback(
-                    project="bsrt",
-                    api_key=os.environ["WANDB_API_KEY"],
-                    save_checkpoints=True,
-                    log_config=True,
-                )
-            ],
-            verbose=1,
-            progress_reporter=CLIReporter(
-                metric_columns=[
-                    "metrics/batch/loss",
-                    "metrics/batch/lpips",
-                    "metrics/batch/ssim",
-                    "metrics/batch/psnr",
-                ],
-                print_intermediate_tables=True,
-                sort_by_metric=True,
-            ),
-            log_to_file=True,
-            checkpoint_config=CheckpointConfig(),
-            sync_config=SyncConfig(upload_dir="gs://bsrt-supplemental/checkpoints"),
-        ),
-        scaling_config=ScalingConfig(
-            use_gpu=True,
-            num_workers=8,
-        ),
-        datasets={
-            "train": ZurichRaw2RgbDataset(data_dir=Path(cfg.data_dir)).provide_dataset()
-        },
-        preprocessor=Chain(
-            BatchMapper(lambda df: df.drop("label", axis="columns")),
-            TrainDataProcessor(crop_sz=256, burst_size=cfg.burst_size),
-        ),
+class BSRTModule(pl.LightningModule):
+    def __init__(self, cfg: Config) -> None:
+        super().__init__()
+        self.cfg = cfg
+        self.model = make_model(cfg)
+        self.loss_fn = make_loss_fn(cfg.loss, cfg.data_type)
+        self.psnr_fn = make_psnr_fn(cfg.data_type)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.model(x)
+
+    def training_step(self, batch: TrainData, batch_idx: int) -> torch.Tensor:
+        bursts = batch["burst"]
+        gts = batch["gt"]
+        srs = self(bursts)
+        loss = self.loss_fn(srs, gts)
+        psnr, ssim, lpips = self.psnr_fn(srs, gts)
+        self.log("train_loss", loss.item())
+        self.log("val_psnr", psnr.item())
+        self.log("val_ssim", ssim.item())
+        self.log("val_lpips", lpips.item())
+        return loss
+
+    def validation_step(self, batch: Any, batch_idx: int) -> torch.Tensor:
+        x, y = batch
+        y_hat = self(x)
+        loss = self.loss_fn(y_hat, y)
+        psnr, ssim, lpips = self.psnr_fn(y_hat, y)
+        self.log("val_loss", loss)
+        self.log("val_psnr", psnr)
+        self.log("val_ssim", ssim)
+        self.log("val_lpips", lpips)
+        return loss
+
+    def configure_optimizers(self) -> Optimizer:
+        return make_optimizer(self.cfg, self.model)
+
+
+def train_setup(cfg: Config) -> None:
+    """Set up the training environment."""
+    datamodule = ZurichRaw2RgbDataset(data_dir=Path(cfg.data_dir), batch_size=cfg.batch_size, transform=TrainDataProcessor(burst_size=cfg.burst_size, crop_sz=cfg.patch_size))
+
+    module = BSRTModule(cfg)
+    trainer = pl.Trainer(
+        max_epochs=3,
+        accelerator="auto",
+        precision="bf16",
     )
-    tuner = Tuner(
-        trainable=trainer,
-        tune_config=TuneConfig(
-            metric="metrics/batch/loss",
-            mode="min",
-            search_alg=OptunaSearch(
-                metric=[
-                    "metrics/batch/loss",
-                    "metrics/batch/lpips",
-                    "metrics/batch/ssim",
-                    "metrics/batch/psnr",
-                ],
-                mode=["min", "min", "max", "max"],
-                sampler=optuna.samplers.NSGAIISampler(),
-            ),
-            scheduler=AsyncHyperBandScheduler(
-                max_t=4 * GRACE_PERIOD,
-                grace_period=GRACE_PERIOD,
-            ),
-            num_samples=1000,
-            max_concurrent_trials=None,
-            time_budget_s=None,
-            reuse_actors=True,
-        ),
-        param_space={
-            "train_loop_config": cfg.__dict__ | ConfigHyperTuner().__dict__,
-        },
-    )
-    analysis = tuner.fit()
-
-
-def train_loop_per_worker(config: dict[str, Any]) -> None:
-    import os
-    import torch
-    import torch.backends.cuda
-    import torch.backends.cudnn
-
-    os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
-    os.environ["TORCH_CUDNN_V8_API_DEBUG"] = "1"
-    torch.backends.cuda.matmul.allow_tf32 = True
-    torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
-    torch.backends.cudnn.allow_tf32 = True
-    torch.backends.cudnn.deterministic = False
-    torch.backends.cudnn.benchmark = True
-    accelerate(amp=True)
-    device = get_device()
-
-    _cfg = Config(**config)
-    data_shard: Dataset[TrainData] = session.get_dataset_shard("train")
-    model: Module = prepare_model(make_model(_cfg))
-    optimizer: Optimizer = prepare_optimizer(make_optimizer(_cfg, model))
-    loss_fn: Metric = make_loss_fn(_cfg.loss, _cfg.data_type).to(device)
-    psnr_fn: Metric = make_psnr_fn(_cfg.data_type).to(device)
-    # model: BSRT = prepare_model(model, ddp_kwargs={"find_unused_parameters": True})
-
-    for _ in range(_cfg.epochs):
-        for batch in data_shard.iter_batches(
-            batch_size=cfg.batch_size, batch_format="pandas"
-        ):
-            assert isinstance(batch, DataFrame)
-            bursts = torch.stack(batch["burst"].tolist()).to(device)
-            gts = torch.stack(batch["gt"].tolist()).to(device)
-
-            # NOTE: while values should be in the range [0, 1], they are not clipped when training, so it is frequently the case that sr.max() > 1 or sr.min() < 0.
-            optimizer.zero_grad()
-            srs = model(bursts)
-
-            loss: torch.Tensor = loss_fn(srs, gts)
-            psnr_score, ssim_score, lpips_score = psnr_fn(srs, gts)
-
-            backward(loss)
-            optimizer.step()
-
-            session.report(
-                {
-                    "metrics/batch/loss": loss.item(),
-                    "metrics/batch/psnr": psnr_score.item(),
-                    "metrics/batch/ssim": ssim_score.item(),
-                    "metrics/batch/lpips": lpips_score.item(),
-                },
-            )
-
-        # TODO: Run validation after every epoch and log the results to wandb
-
-    # View the stats for performance debugging.
-    print(data_shard.stats())
-
+    trainer.fit(module, datamodule)
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="BSRT")
