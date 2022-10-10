@@ -6,6 +6,7 @@ channels:
   - fastai
 dependencies:
   - conda-forge::python==3.10.6
+  - conda-forge::pip==22.2.2
 
   - pytorch-nightly::pytorch==1.12.1=py3.10_cuda11.6_cudnn8.3.2_0
   - pytorch-nightly::torchvision==0.13.1=py310_cu116
@@ -26,3 +27,5 @@ dependencies:
   - conda-forge::wandb==0.13.4
 
   - conda-forge::black==22.8.0
+  - pip:
+    - jsonargparse[signatures]==4.15.1
