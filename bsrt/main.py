@@ -1,5 +1,8 @@
 from argparse import ArgumentParser
 from importlib import resources
+from datasets.synthetic_train_zurich_raw2rgb_data_module import (
+    SyntheticTrainZurichRaw2RgbDatasetDataModule,
+)
 from datasets.synthetic_burst.train_dataset import TrainData, TrainDataProcessor
 from datasets.zurich_raw2rgb_dataset import ZurichRaw2RgbDataset
 from option import Config
@@ -40,8 +43,8 @@ class BSRTModule(pl.LightningModule):
         super().__init__()
         self.cfg = cfg
         self.model = make_model(cfg)
-        self.loss_fn = make_loss_fn(cfg.loss, cfg.data_type)
-        self.psnr_fn = make_psnr_fn(cfg.data_type)
+        self.loss_fn = make_loss_fn(cfg["loss"], cfg["data_type"])
+        self.psnr_fn = make_psnr_fn(cfg["data_type"])
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
@@ -75,7 +78,17 @@ class BSRTModule(pl.LightningModule):
 
 def train_setup(cfg: Config) -> None:
     """Set up the training environment."""
-    datamodule = ZurichRaw2RgbDataset(data_dir=Path(cfg.data_dir), batch_size=cfg.batch_size, transform=TrainDataProcessor(burst_size=cfg.burst_size, crop_sz=cfg.patch_size))
+    datamodule = SyntheticTrainZurichRaw2RgbDatasetDataModule(
+        data_dir=cfg["data_dir"],
+        batch_size=cfg["batch_size"],
+        burst_size=cfg["burst_size"],
+        crop_size=cfg["patch_size"],
+        num_workers=cfg["num_workers"],
+        pin_memory=cfg["pin_memory"],
+        drop_last=cfg["drop_last"],
+        timeout=cfg["timeout"],
+        prefetch_factor=cfg["prefetch_factor"],
+    )
 
     module = BSRTModule(cfg)
     trainer = pl.Trainer(
@@ -84,6 +97,7 @@ def train_setup(cfg: Config) -> None:
         precision="bf16",
     )
     trainer.fit(module, datamodule)
+
 
 if __name__ == "__main__":
     parser = ArgumentParser(description="BSRT")
@@ -107,9 +121,6 @@ if __name__ == "__main__":
         "--n_colors", type=int, default=3, help="number of color channels to use"
     )
     bsrt_group.add_argument("--lr", type=float, default=1e-4, help="learning rate")
-    bsrt_group.add_argument(
-        "--burst_size", type=int, default=14, help="burst size, max 14"
-    )
     bsrt_group.add_argument(
         "--burst_channel", type=int, default=4, help="RAW channel, default:4"
     )
@@ -160,11 +171,6 @@ if __name__ == "__main__":
     ################## dataset ##################
     dataset_group = parser.add_argument_group("dataset")
     dataset_group.add_argument(
-        "--data_dir",
-        type=str,
-        help="dataset directory",
-    )
-    dataset_group.add_argument(
         "--mode", type=str, default="train", help="demo image directory"
     )
     dataset_group.add_argument(
@@ -185,9 +191,6 @@ if __name__ == "__main__":
 
     ################## training ##################
     train_group = parser.add_argument_group("training")
-    train_group.add_argument(
-        "--batch_size", type=int, default=8, help="input batch size for training"
-    )
     train_group.add_argument(
         "--epochs", type=int, default=16, help="number of epochs for training"
     )
@@ -246,6 +249,8 @@ if __name__ == "__main__":
         help="loss function configuration",
     )
 
+    parser = SyntheticTrainZurichRaw2RgbDatasetDataModule.add_argparse_args(parser)
+    parser = pl.Trainer.add_argparse_args(parser)
     args = parser.parse_args()
     cfg = Config(**args.__dict__)
     train_setup(cfg)

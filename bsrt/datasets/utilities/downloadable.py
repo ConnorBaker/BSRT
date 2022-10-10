@@ -9,11 +9,11 @@ class Downloadable(ABC):
     filename: ClassVar[str]
     dirname: ClassVar[str]
     mirrors: ClassVar[list[str]]
-    data_dir: Path
+    data_dir: str | Path
 
     def download(self) -> None:
-        dir = self.data_dir / self.dirname
-        file = self.data_dir / self.filename
+        dir = Path(self.data_dir) / self.dirname
+        file = Path(self.data_dir) / self.filename
         urls = [self.url] + self.mirrors
 
         match (dir.exists(), file.exists()):
@@ -28,7 +28,7 @@ class Downloadable(ABC):
                     try:
                         download_and_extract_archive(
                             url,
-                            download_root=self.data_dir.as_posix(),
+                            download_root=Path(self.data_dir).as_posix(),
                             extract_root=dir.as_posix(),
                             filename=self.filename,
                         )

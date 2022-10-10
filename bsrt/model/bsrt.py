@@ -54,8 +54,8 @@ class BSRT(nn.Module):
         self.window_size = window_size
         self.non_local = non_local
         self.nframes = nframes
-        self.batch_size = config.batch_size
-        self.loss_name = config.loss
+        self.batch_size = config["batch_size"]
+        self.loss_name = config["loss"]
 
         self.num_layers = len(depths)
         self.embed_dim = embed_dim
@@ -100,7 +100,7 @@ class BSRT(nn.Module):
             0, drop_path_rate, sum(depths)
         ).tolist()  # stochastic depth decay rule
 
-        if config.swinfeature:
+        if config["swinfeature"]:
             print("using swinfeature")
             self.pre_layers = nn.ModuleList()
             for i_layer in range(depths[0]):
@@ -214,12 +214,12 @@ class BSRT(nn.Module):
         self.upconv2 = nn.Conv2d(num_feat, 64 * 4, 3, 1, 1, bias=True)
         self.pixel_shuffle = nn.PixelShuffle(2)
         self.HRconv = nn.Conv2d(64, 64, 3, 1, 1, bias=True)
-        self.conv_last = nn.Conv2d(64, config.n_colors, 3, 1, 1, bias=True)
+        self.conv_last = nn.Conv2d(64, config["n_colors"], 3, 1, 1, bias=True)
 
         #### skip #############
         self.skip_pixel_shuffle = nn.PixelShuffle(2)
         self.skipup1 = nn.Conv2d(num_in_ch // 4, num_feat * 4, 3, 1, 1, bias=True)
-        self.skipup2 = nn.Conv2d(num_feat, config.n_colors * 4, 3, 1, 1, bias=True)
+        self.skipup2 = nn.Conv2d(num_feat, config["n_colors"] * 4, 3, 1, 1, bias=True)
 
         #### activation function
         self.lrelu = nn.LeakyReLU(0.1, inplace=True)
@@ -255,7 +255,7 @@ class BSRT(nn.Module):
         return x
 
     def pre_forward_features(self, x):
-        if self.config.swinfeature:
+        if self.config["swinfeature"]:
             x_size = (x.shape[-2], x.shape[-1])
             x = self.patch_embed(x, use_norm=True)
             if self.ape:

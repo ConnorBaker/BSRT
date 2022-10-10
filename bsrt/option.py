@@ -1,12 +1,22 @@
 from dataclasses import dataclass
-from typing_extensions import Literal
+from typing_extensions import Literal, TypedDict
 
 LossName = Literal["L1", "MSE", "CB", "MSSSIM"]
 OptimizerName = Literal["SGD", "ADAM", "RMSprop"]
 DataTypeName = Literal["synthetic", "real"]
 
-@dataclass
-class Config:
+class Config(TypedDict):
+    # Data loader
+    burst_size: int
+    crop_size: int
+    data_dir: str
+    batch_size: int
+    num_workers: int
+    pin_memory: bool
+    drop_last: bool
+    timeout: float
+    prefetch_factor: int
+
     data_type: DataTypeName
     n_resblocks: int
     n_feats: int
@@ -27,7 +37,6 @@ class Config:
 
     use_checkpoint: bool
 
-    data_dir: str
     mode: str
     scale: int
     patch_size: int
@@ -36,7 +45,6 @@ class Config:
     non_local: bool
 
     seed: int
-    batch_size: int
     epochs: int
     gan_k: int
 

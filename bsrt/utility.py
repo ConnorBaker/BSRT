@@ -76,27 +76,27 @@ def make_psnr_fn(data_type: DataTypeName) -> Metric:
 
 
 def make_model(config: Config) -> BSRT:
-    nframes = config.burst_size
-    img_size = config.patch_size * 2
+    nframes = config["burst_size"]
+    img_size = config["patch_size"] * 2
     # FIXME: This overrides below?
     patch_size = 1
     print("FIXME: Patch size is being ignored!")
-    in_chans = config.burst_channel
-    out_chans = config.n_colors
+    in_chans = config["burst_channel"]
+    out_chans = config["n_colors"]
 
-    if config.model_level == "S":
+    if config["model_level"] == "S":
         depths = [6] * 1 + [6] * 4
         num_heads = [6] * 1 + [6] * 4
         embed_dim = 60
-    elif config.model_level == "L":
+    elif config["model_level"] == "L":
         depths = [6] * 1 + [8] * 6
         num_heads = [6] * 1 + [6] * 6
         embed_dim = 180
     window_size = 8
     mlp_ratio = 2
-    upscale = config.scale
-    non_local = config.non_local
-    use_swin_checkpoint = config.use_checkpoint
+    upscale = config["scale"]
+    non_local = config["non_local"]
+    use_swin_checkpoint = config["use_checkpoint"]
 
     bsrt = BSRT(
         config=config,
@@ -123,24 +123,27 @@ def make_optimizer(config: Config, target):
     """
     make optimizer and scheduler together
     """
+    lr = config["lr"]
+    weight_decay = config["weight_decay"]
+    optimizer = config["optimizer"]
     # optimizer
     trainable = filter(lambda x: x.requires_grad, target.parameters())
-    kwargs_optimizer = {"lr": config.lr, "weight_decay": config.weight_decay}
+    kwargs_optimizer = {"lr": lr, "weight_decay": weight_decay}
 
-    if config.optimizer == "SGD":
+    if optimizer == "SGD":
         optimizer_class = optim.SGD
-        kwargs_optimizer["momentum"] = config.momentum
-    elif config.optimizer == "ADAM":
+        kwargs_optimizer["momentum"] = config["momentum"]
+    elif optimizer == "ADAM":
         optimizer_class = optim.Adam
-        kwargs_optimizer["betas"] = (config.beta_gradient, config.beta_square)
-        kwargs_optimizer["eps"] = config.epsilon
-    elif config.optimizer == "RMSprop":
+        kwargs_optimizer["betas"] = (config["beta_gradient"], config["beta_square"])
+        kwargs_optimizer["eps"] = config["epsilon"]
+    elif optimizer == "RMSprop":
         optimizer_class = optim.RMSprop
-        kwargs_optimizer["eps"] = config.epsilon
+        kwargs_optimizer["eps"] = config["epsilon"]
 
     # scheduler
-    milestones = list(map(int, config.decay_milestones))
-    kwargs_scheduler = {"milestones": milestones, "gamma": config.gamma}
+    milestones = list(map(int, config["decay_milestones"]))
+    kwargs_scheduler = {"milestones": milestones, "gamma": config["gamma"]}
     scheduler_class = lrs.MultiStepLR
 
     class CustomOptimizer(optimizer_class):
