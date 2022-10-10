@@ -129,5 +129,4 @@ dmypy.json
 .pyre/
 
 # ML
-experiment
-train_log
+lightning_logs

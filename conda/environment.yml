@@ -1,0 +1,23 @@
+name: bsrt
+channels:
+  - conda-forge
+  - pytorch
+  - fastai
+dependencies:
+  - python=3.9
+  - pip==22.2.2
+
+  - pytorch==1.12.1=py3.9_cuda11.6_cudnn8.3.2_0
+  - torchvision==0.13.1=py39_cu116
+  - torchmetrics==0.9.3
+  - pytorch-lightning==1.7.6
+  - cupy==11.1.0
+  - opencv-python-headless==4.6.0.66
+  - timm==0.6.7
+
+  # For bagua-net
+  - nccl==2.14.3.1
+  - pip:
+    - bagua-cuda116==0.9.1
+    # Use this fork of LPIPS until https://github.com/richzhang/PerceptualSimilarity/pull/114 is merged upstream
+    - git+https://github.com/ercanburak/PerceptualSimilarity.git@9606c353e5777fc95186a5a4c876e7c6a17651a6#egg=lpips

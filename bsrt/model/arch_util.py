@@ -4,7 +4,7 @@ import torch.nn.init as init
 import torch.nn.functional as F
 from model import common
 from model.utils.psconv import PSGConv2d as PSConv2d, PyConv2d
-
+from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 def initialize_weights(net_l, scale=1):
     if not isinstance(net_l, list):
@@ -12,12 +12,12 @@ def initialize_weights(net_l, scale=1):
     for net in net_l:
         for m in net.modules():
             if isinstance(m, nn.Conv2d):
-                init.kaiming_normal_(m.weight, a=0, mode='fan_in')
+                init.kaiming_normal_(m.weight, a=0, mode="fan_in")
                 m.weight.data *= scale  # for residual block
                 if m.bias is not None:
                     m.bias.data.zero_()
             elif isinstance(m, nn.Linear):
-                init.kaiming_normal_(m.weight, a=0, mode='fan_in')
+                init.kaiming_normal_(m.weight, a=0, mode="fan_in")
                 m.weight.data *= scale
                 if m.bias is not None:
                     m.bias.data.zero_()
@@ -35,9 +35,12 @@ def make_layer(block, n_layers):
 
 ###########################
 
+
 def conv_layer(in_channels, out_channels, kernel_size, stride=1, padding=0):
-    return nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding=padding, bias=True)
-    
+    return nn.Conv2d(
+        in_channels, out_channels, kernel_size, stride, padding=padding, bias=True
+    )
+
 
 class ESA(nn.Module):
     def __init__(self, n_feats, conv=conv_layer):
@@ -54,17 +57,19 @@ class ESA(nn.Module):
         self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
-        c1_ = (self.conv1(x))
+        c1_ = self.conv1(x)
         c1 = self.conv2(c1_)
         v_max = F.max_pool2d(c1, kernel_size=7, stride=3)
         v_range = self.relu(self.conv_max(v_max))
         c3 = self.relu(self.conv3(v_range))
         c3 = self.conv3_(c3)
-        c3 = F.interpolate(c3, (x.size(2), x.size(3)), mode='bilinear', align_corners=False) 
+        c3 = bilinear_upsample_2d(
+            c3, size=(x.size(2), x.size(3))
+        )
         cf = self.conv_f(c1_)
-        c4 = self.conv4(c3+cf)
+        c4 = self.conv4(c3 + cf)
         m = self.sigmoid(c4)
-        
+
         return x * m
 
 
@@ -77,12 +82,15 @@ class DWConv(nn.Module):
         x = self.dwconv(x)
         return x
 
+
 ##########################
 
+
 class SELayer(nn.Module):
-    '''
+    """
     SE-block
-    '''
+    """
+
     def __init__(self, channel, reduction=16):
         super(SELayer, self).__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
@@ -99,11 +107,12 @@ class SELayer(nn.Module):
         y = self.fc(y).view(b, c, 1, 1)
         return x * y.expand_as(x)
 
+
 class ResidualBlock_noBN(nn.Module):
-    '''Residual block w/o BN
+    """Residual block w/o BN
     ---Conv-ReLU-Conv-+-
      |________________|
-    '''
+    """
 
     def __init__(self, nf=64):
         super(ResidualBlock_noBN, self).__init__()
@@ -121,10 +130,10 @@ class ResidualBlock_noBN(nn.Module):
 
 
 class ResidualBlock_SE(nn.Module):
-    '''Residual block w/o BN
+    """Residual block w/o BN
     ---Conv-ReLU-Conv-+-
      |________________|
-    '''
+    """
 
     def __init__(self, nf=64, reduction=16):
         super(ResidualBlock_SE, self).__init__()
@@ -146,7 +155,7 @@ class ResidualBlock_SE(nn.Module):
 
 
 class _PositionAttentionModule(nn.Module):
-    """ Position attention module"""
+    """Position attention module"""
 
     def __init__(self, in_channels, **kwargs):
         super(_PositionAttentionModule, self).__init__()
@@ -162,19 +171,22 @@ class _PositionAttentionModule(nn.Module):
         feat_c = self.conv_c(x).view(batch_size, -1, height * width)
         attention_s = self.softmax(torch.bmm(feat_b, feat_c))
         feat_d = self.conv_d(x).view(batch_size, -1, height * width)
-        feat_e = torch.bmm(feat_d, attention_s.permute(0, 2, 1)).view(batch_size, -1, height, width)
+        feat_e = torch.bmm(feat_d, attention_s.permute(0, 2, 1)).view(
+            batch_size, -1, height, width
+        )
         out = self.alpha * feat_e + x
 
         return out
 
+
 ## Spatial Attention (CA) Layer
 class SALayer(nn.Module):
     def __init__(self, wn=None):
-        super(SALayer,self).__init__()
+        super(SALayer, self).__init__()
         self.body = nn.Sequential(
-            wn(nn.Conv2d(2, 1, 7, 1, 3, bias=False)),
-            nn.Sigmoid()
+            wn(nn.Conv2d(2, 1, 7, 1, 3, bias=False)), nn.Sigmoid()
         )
+
     def forward(self, x):
         avg_f = torch.mean(x, dim=1, keepdim=True)
         max_f = torch.max(x, dim=1, keepdim=True)[0]
@@ -191,10 +203,10 @@ class CALayerV2(nn.Module):
         self.max_pool = nn.AdaptiveMaxPool2d(1)
         # feature channel downscale and upscale --> channel weight
         self.conv_du = nn.Sequential(
-                wn(nn.Conv2d(n_feat, n_feat//reduction, 1, padding=0, bias=False)),
-                nn.ReLU(inplace=True),
-                wn(nn.Conv2d(n_feat//reduction, n_feat, 1, padding=0, bias=False)),
-                # nn.Sigmoid()
+            wn(nn.Conv2d(n_feat, n_feat // reduction, 1, padding=0, bias=False)),
+            nn.ReLU(inplace=True),
+            wn(nn.Conv2d(n_feat // reduction, n_feat, 1, padding=0, bias=False)),
+            # nn.Sigmoid()
         )
 
     def forward(self, x):
@@ -202,7 +214,8 @@ class CALayerV2(nn.Module):
         y2 = self.max_pool(x)
         y1 = self.conv_du(y1)
         y2 = self.conv_du(y2)
-        return x * torch.sigmoid(y1+y2)
+        return x * torch.sigmoid(y1 + y2)
+
 
 class DALayer(nn.Module):
     def __init__(self, channel, reduction, wn):
@@ -210,7 +223,7 @@ class DALayer(nn.Module):
         # global average pooling: feature --> point
         self.ca = CALayer(channel, reduction, wn)
         self.sa = SALayer(wn)
-        self.conv = wn(nn.Conv2d(channel*2, channel, 1))
+        self.conv = wn(nn.Conv2d(channel * 2, channel, 1))
 
     def forward(self, x):
         ca = self.ca(x)
@@ -227,10 +240,10 @@ class CALayer(nn.Module):
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         # feature channel downscale and upscale --> channel weight
         self.conv_du = nn.Sequential(
-                wn(nn.Conv2d(channel, channel // reduction, 1, padding=0, bias=True)),
-                nn.ReLU(inplace=True),
-                wn(nn.Conv2d(channel // reduction, channel, 1, padding=0, bias=True)),
-                nn.Sigmoid()
+            wn(nn.Conv2d(channel, channel // reduction, 1, padding=0, bias=True)),
+            nn.ReLU(inplace=True),
+            wn(nn.Conv2d(channel // reduction, channel, 1, padding=0, bias=True)),
+            nn.Sigmoid(),
         )
 
     def forward(self, x):
@@ -242,8 +255,18 @@ class CALayer(nn.Module):
 ## Residual Channel Attention Block (RCAB)
 class RCAB(nn.Module):
     def __init__(
-        self, conv, n_feat, kernel_size, reduction, wn,
-        bias=True, bn=False, act=nn.ReLU(True), res_scale=1, da=False):
+        self,
+        conv,
+        n_feat,
+        kernel_size,
+        reduction,
+        wn,
+        bias=True,
+        bn=False,
+        act=nn.ReLU(True),
+        res_scale=1,
+        da=False,
+    ):
 
         super(RCAB, self).__init__()
 
@@ -251,10 +274,12 @@ class RCAB(nn.Module):
         linear = 0.75
         modules_body = []
         # for i in range(2):
-        modules_body.append(wn(nn.Conv2d(n_feat, n_feat*expand, 1, bias=bias)))
+        modules_body.append(wn(nn.Conv2d(n_feat, n_feat * expand, 1, bias=bias)))
         modules_body.append(act)
-        modules_body.append(wn(nn.Conv2d(n_feat*expand, int(n_feat*linear), 1, bias=bias)))
-        modules_body.append(conv(int(n_feat*linear), n_feat, kernel_size, bias=bias))
+        modules_body.append(
+            wn(nn.Conv2d(n_feat * expand, int(n_feat * linear), 1, bias=bias))
+        )
+        modules_body.append(conv(int(n_feat * linear), n_feat, kernel_size, bias=bias))
         if da:
             modules_body.append(DALayer(n_feat, reduction, wn))
         else:
@@ -265,9 +290,10 @@ class RCAB(nn.Module):
 
     def forward(self, x):
         res = self.body(x)
-        #res = self.body(x).mul(self.res_scale)
+        # res = self.body(x).mul(self.res_scale)
         res += x
         return res
+
 
 ## Residual Group (RG)
 class ResidualGroup(nn.Module):
@@ -283,9 +309,19 @@ class ResidualGroup(nn.Module):
         modules_body = []
         modules_body = [
             RCAB(
-                conv, n_feat, kernel_size, reduction, wn=wn, bias=True,
-                bn=False, act=nn.ReLU(True), res_scale=res_scale, da=da) \
-            for _ in range(n_resblocks)]
+                conv,
+                n_feat,
+                kernel_size,
+                reduction,
+                wn=wn,
+                bias=True,
+                bn=False,
+                act=nn.ReLU(True),
+                res_scale=res_scale,
+                da=da,
+            )
+            for _ in range(n_resblocks)
+        ]
         modules_body.append(wn(conv(n_feat, n_feat, kernel_size)))
         self.body = nn.Sequential(*modules_body)
 
@@ -299,28 +335,49 @@ class ResidualGroup(nn.Module):
 ################################################################
 ################################################################
 
+
 def make_layer_idx(block, n_layers):
     layers = []
     for i in range(n_layers):
         layers.append(block(idx=i))
     return nn.Sequential(*layers)
 
+
 ## Residual Channel Attention Block (RCAB)
 class LRSCRCAB(nn.Module):
     def __init__(
-        self, conv, n_feat, kernel_size, reduction, wn,
-        bias=True, bn=False, act=nn.ReLU(True), res_scale=1, da=False, idx=0):
+        self,
+        conv,
+        n_feat,
+        kernel_size,
+        reduction,
+        wn,
+        bias=True,
+        bn=False,
+        act=nn.ReLU(True),
+        res_scale=1,
+        da=False,
+        idx=0,
+    ):
         super(LRSCRCAB, self).__init__()
 
         expand = 6
         linear = 0.75
 
-        modules_body = [wn(nn.Conv2d(n_feat*(idx+1), n_feat, 1, 1, 0, bias=True))] if idx > 0 else []
+        modules_body = (
+            [wn(nn.Conv2d(n_feat * (idx + 1), n_feat, 1, 1, 0, bias=True))]
+            if idx > 0
+            else []
+        )
         # for i in range(2):
-        modules_body.append(wn(nn.Conv2d(n_feat, n_feat*expand, 1, bias=bias)))
+        modules_body.append(wn(nn.Conv2d(n_feat, n_feat * expand, 1, bias=bias)))
         modules_body.append(act)
-        modules_body.append(wn(nn.Conv2d(n_feat*expand, int(n_feat*linear), 1, bias=bias)))
-        modules_body.append(wn(conv(int(n_feat*linear), n_feat, kernel_size, bias=bias)))
+        modules_body.append(
+            wn(nn.Conv2d(n_feat * expand, int(n_feat * linear), 1, bias=bias))
+        )
+        modules_body.append(
+            wn(conv(int(n_feat * linear), n_feat, kernel_size, bias=bias))
+        )
         if da:
             modules_body.append(DALayer(n_feat, reduction, wn))
         else:
@@ -331,30 +388,50 @@ class LRSCRCAB(nn.Module):
 
     def forward(self, x):
         res = self.body(x)
-        res  = torch.cat([res, x], dim=1)
+        res = torch.cat([res, x], dim=1)
         return res
 
 
 ## Residual Channel Attention Block (RCAB)
 class LRSCPYRCAB(nn.Module):
     def __init__(
-        self, conv, n_feat, kernel_size, reduction, wn,
-        bias=True, bn=False, act=nn.ReLU(True), res_scale=1, da=False, idx=0):
+        self,
+        conv,
+        n_feat,
+        kernel_size,
+        reduction,
+        wn,
+        bias=True,
+        bn=False,
+        act=nn.ReLU(True),
+        res_scale=1,
+        da=False,
+        idx=0,
+    ):
         super(LRSCPYRCAB, self).__init__()
 
         expand = 6
         linear = 0.75
 
-        modules_body = [wn(nn.Conv2d(n_feat*(idx+1), n_feat, 1, 1, 0, bias=True))] if idx > 0 else []
+        modules_body = (
+            [wn(nn.Conv2d(n_feat * (idx + 1), n_feat, 1, 1, 0, bias=True))]
+            if idx > 0
+            else []
+        )
         # for i in range(2):
-        modules_body.append(wn(nn.Conv2d(n_feat, n_feat*expand, 1, bias=bias)))
+        modules_body.append(wn(nn.Conv2d(n_feat, n_feat * expand, 1, bias=bias)))
         modules_body.append(act)
-        modules_body.append(wn(nn.Conv2d(n_feat*expand, int(n_feat*linear), 1, bias=bias)))
         modules_body.append(
-            PyConv2d(in_channels=int(n_feat*linear),
-                out_channels=[n_feat//4, n_feat//4, n_feat//2],
+            wn(nn.Conv2d(n_feat * expand, int(n_feat * linear), 1, bias=bias))
+        )
+        modules_body.append(
+            PyConv2d(
+                in_channels=int(n_feat * linear),
+                out_channels=[n_feat // 4, n_feat // 4, n_feat // 2],
                 pyconv_kernels=[3, 5, 7],
-                pyconv_groups=[1, 4, 8]))
+                pyconv_groups=[1, 4, 8],
+            )
+        )
         if da:
             modules_body.append(DALayer(n_feat, reduction, wn))
         else:
@@ -365,8 +442,9 @@ class LRSCPYRCAB(nn.Module):
 
     def forward(self, x):
         res = self.body(x)
-        res  = torch.cat([res, x], dim=1)
+        res = torch.cat([res, x], dim=1)
         return res
+
 
 ## Long-Range Skip-connect Residual Group (RG)
 class LRSCResidualGroup(nn.Module):
@@ -379,20 +457,33 @@ class LRSCResidualGroup(nn.Module):
         conv = common.default_conv
         wn = lambda x: torch.nn.utils.weight_norm(x)
 
-        modules_head = [wn(conv(n_feat*(idx+1), n_feat, 1, bias=True))] if idx > 0 else []
+        modules_head = (
+            [wn(conv(n_feat * (idx + 1), n_feat, 1, bias=True))] if idx > 0 else []
+        )
         modules_body = [
             LRSCRCAB(
-                conv, n_feat, kernel_size, reduction, wn=wn, bias=True,
-                bn=False, act=nn.ReLU(True), res_scale=res_scale, da=da, idx=i) \
-            for i in range(n_resblocks)]
-        modules_body.append(wn(conv(n_feat*(n_resblocks+1), n_feat, kernel_size)))
+                conv,
+                n_feat,
+                kernel_size,
+                reduction,
+                wn=wn,
+                bias=True,
+                bn=False,
+                act=nn.ReLU(True),
+                res_scale=res_scale,
+                da=da,
+                idx=i,
+            )
+            for i in range(n_resblocks)
+        ]
+        modules_body.append(wn(conv(n_feat * (n_resblocks + 1), n_feat, kernel_size)))
         self.head = nn.Sequential(*modules_head)
         self.body = nn.Sequential(*modules_body)
 
     def forward(self, x):
         res = self.head(x)
         res = self.body(res)
-        res  = torch.cat([res, x], dim=1)
+        res = torch.cat([res, x], dim=1)
         return res
 
 
@@ -407,13 +498,28 @@ class LRSCPSResidualGroup(nn.Module):
         conv = PSConv2d
         wn = lambda x: torch.nn.utils.weight_norm(x)
 
-        modules_head = [wn(nn.Conv2d(n_feat*(idx+1), n_feat, 1, 1, 0, bias=True))] if idx > 0 else []
+        modules_head = (
+            [wn(nn.Conv2d(n_feat * (idx + 1), n_feat, 1, 1, 0, bias=True))]
+            if idx > 0
+            else []
+        )
         modules_body = [
             LRSCRCAB(
-                conv, n_feat, kernel_size, reduction, wn=wn, bias=True,
-                bn=False, act=nn.ReLU(True), res_scale=res_scale, da=da, idx=i) \
-            for i in range(n_resblocks)]
-        modules_tail = [wn(conv(n_feat*(n_resblocks+1), n_feat, kernel_size))]
+                conv,
+                n_feat,
+                kernel_size,
+                reduction,
+                wn=wn,
+                bias=True,
+                bn=False,
+                act=nn.ReLU(True),
+                res_scale=res_scale,
+                da=da,
+                idx=i,
+            )
+            for i in range(n_resblocks)
+        ]
+        modules_tail = [wn(conv(n_feat * (n_resblocks + 1), n_feat, kernel_size))]
         self.head = nn.Sequential(*modules_head)
         self.body = nn.Sequential(*modules_body)
         self.tail = nn.Sequential(*modules_tail)
@@ -422,7 +528,7 @@ class LRSCPSResidualGroup(nn.Module):
         res = self.head(x)
         res = self.body(res)
         res = self.tail(res)
-        res  = torch.cat([res, x], dim=1)
+        res = torch.cat([res, x], dim=1)
         return res
 
 
@@ -437,13 +543,28 @@ class LRSCPyResidualGroup(nn.Module):
         conv = PyConv2d
         wn = lambda x: torch.nn.utils.weight_norm(x)
 
-        modules_head = [wn(nn.Conv2d(n_feat*(idx+1), n_feat, 1, 1, 0, bias=True))] if idx > 0 else []
+        modules_head = (
+            [wn(nn.Conv2d(n_feat * (idx + 1), n_feat, 1, 1, 0, bias=True))]
+            if idx > 0
+            else []
+        )
         modules_body = [
             LRSCPYRCAB(
-                conv, n_feat, kernel_size, reduction, wn=wn, bias=True,
-                bn=False, act=nn.ReLU(True), res_scale=res_scale, da=da, idx=i) \
-            for i in range(n_resblocks)]
-        modules_tail = [wn(nn.Conv2d(n_feat*(n_resblocks+1), n_feat, 1))]
+                conv,
+                n_feat,
+                kernel_size,
+                reduction,
+                wn=wn,
+                bias=True,
+                bn=False,
+                act=nn.ReLU(True),
+                res_scale=res_scale,
+                da=da,
+                idx=i,
+            )
+            for i in range(n_resblocks)
+        ]
+        modules_tail = [wn(nn.Conv2d(n_feat * (n_resblocks + 1), n_feat, 1))]
         self.head = nn.Sequential(*modules_head)
         self.body = nn.Sequential(*modules_body)
         self.tail = nn.Sequential(*modules_tail)
@@ -452,8 +573,9 @@ class LRSCPyResidualGroup(nn.Module):
         res = self.head(x)
         res = self.body(res)
         res = self.tail(res)
-        res  = torch.cat([res, x], dim=1)
+        res = torch.cat([res, x], dim=1)
         return res
+
 
 class LRSCWideActResBlock(nn.Module):
     def __init__(self, nf=64, idx=0):
@@ -464,17 +586,16 @@ class LRSCWideActResBlock(nn.Module):
         linear = 0.8
         kernel_size = 3
         wn = lambda x: torch.nn.utils.weight_norm(x)
-        act=nn.ReLU(True)
-        head = [wn(nn.Conv2d(nf*(idx+1), nf, 1, bias=True))] if idx > 0 else []
+        act = nn.ReLU(True)
+        head = [wn(nn.Conv2d(nf * (idx + 1), nf, 1, bias=True))] if idx > 0 else []
 
         body = []
-        body.append(
-            wn(nn.Conv2d(nf, nf*expand, 1, padding=1//2)))
+        body.append(wn(nn.Conv2d(nf, nf * expand, 1, padding=1 // 2)))
         body.append(act)
+        body.append(wn(nn.Conv2d(nf * expand, int(nf * linear), 1, padding=1 // 2)))
         body.append(
-            wn(nn.Conv2d(nf*expand, int(nf*linear), 1, padding=1//2)))
-        body.append(
-            wn(nn.Conv2d(int(nf*linear), nf, kernel_size, padding=kernel_size//2)))
+            wn(nn.Conv2d(int(nf * linear), nf, kernel_size, padding=kernel_size // 2))
+        )
 
         self.head = nn.Sequential(*head)
         self.body = nn.Sequential(*body)
@@ -482,8 +603,9 @@ class LRSCWideActResBlock(nn.Module):
     def forward(self, x):
         res = self.head(x)
         res = self.body(res)
-        res  = torch.cat([res, x], dim=1)
+        res = torch.cat([res, x], dim=1)
         return res
+
 
 class LRSCPyWideActResBlock(nn.Module):
     def __init__(self, nf=64, idx=0):
@@ -494,20 +616,21 @@ class LRSCPyWideActResBlock(nn.Module):
         linear = 0.75
         kernel_size = 3
         wn = lambda x: torch.nn.utils.weight_norm(x)
-        act=nn.ReLU(True)
-        head = [wn(nn.Conv2d(nf*(idx+1), nf, 1, bias=True))] if idx > 0 else []
+        act = nn.ReLU(True)
+        head = [wn(nn.Conv2d(nf * (idx + 1), nf, 1, bias=True))] if idx > 0 else []
 
         body = []
-        body.append(
-            wn(nn.Conv2d(nf, nf*expand, 1, padding=1//2)))
+        body.append(wn(nn.Conv2d(nf, nf * expand, 1, padding=1 // 2)))
         body.append(act)
+        body.append(wn(nn.Conv2d(nf * expand, int(nf * linear), 1, padding=1 // 2)))
         body.append(
-            wn(nn.Conv2d(nf*expand, int(nf*linear), 1, padding=1//2)))
-        body.append(
-            PyConv2d(in_channels=int(nf*linear),
-                out_channels=[nf//4, nf//4, nf//2],
+            PyConv2d(
+                in_channels=int(nf * linear),
+                out_channels=[nf // 4, nf // 4, nf // 2],
                 pyconv_kernels=[3, 5, 7],
-                pyconv_groups=[1, 4, 8]))
+                pyconv_groups=[1, 4, 8],
+            )
+        )
 
         self.head = nn.Sequential(*head)
         self.body = nn.Sequential(*body)
@@ -515,7 +638,7 @@ class LRSCPyWideActResBlock(nn.Module):
     def forward(self, x):
         res = self.head(x)
         res = self.body(res)
-        res  = torch.cat([res, x], dim=1)
+        res = torch.cat([res, x], dim=1)
         return res
 
 
@@ -528,10 +651,11 @@ class LRSCPyWideActResGroup(nn.Module):
         conv = PyConv2d
         wn = lambda x: torch.nn.utils.weight_norm(x)
 
-        modules_head = [wn(nn.Conv2d(nf*(idx+1), nf, 1, 1, 0, bias=True))] if idx > 0 else []
-        modules_body = [
-            LRSCPyWideActResBlock(nf=nf, idx=i) for i in range(n_resblocks)]
-        modules_tail = [wn(nn.Conv2d(nf*(n_resblocks+1), nf, 1))]
+        modules_head = (
+            [wn(nn.Conv2d(nf * (idx + 1), nf, 1, 1, 0, bias=True))] if idx > 0 else []
+        )
+        modules_body = [LRSCPyWideActResBlock(nf=nf, idx=i) for i in range(n_resblocks)]
+        modules_tail = [wn(nn.Conv2d(nf * (n_resblocks + 1), nf, 1))]
         self.head = nn.Sequential(*modules_head)
         self.body = nn.Sequential(*modules_body)
         self.tail = nn.Sequential(*modules_tail)
@@ -540,7 +664,7 @@ class LRSCPyWideActResGroup(nn.Module):
         res = self.head(x)
         res = self.body(res)
         res = self.tail(res)
-        res  = torch.cat([res, x], dim=1)
+        res = torch.cat([res, x], dim=1)
         return res
 
 
@@ -553,10 +677,11 @@ class LRSCWideActResGroup(nn.Module):
         conv = PyConv2d
         wn = lambda x: torch.nn.utils.weight_norm(x)
 
-        modules_head = [wn(nn.Conv2d(nf*(idx+1), nf, 1, 1, 0, bias=True))] if idx > 0 else []
-        modules_body = [
-            LRSCWideActResBlock(nf=nf, idx=i) for i in range(n_resblocks)]
-        modules_tail = [wn(nn.Conv2d(nf*(n_resblocks+1), nf, 1))]
+        modules_head = (
+            [wn(nn.Conv2d(nf * (idx + 1), nf, 1, 1, 0, bias=True))] if idx > 0 else []
+        )
+        modules_body = [LRSCWideActResBlock(nf=nf, idx=i) for i in range(n_resblocks)]
+        modules_tail = [wn(nn.Conv2d(nf * (n_resblocks + 1), nf, 1))]
         self.head = nn.Sequential(*modules_head)
         self.body = nn.Sequential(*modules_body)
         self.tail = nn.Sequential(*modules_tail)
@@ -565,8 +690,9 @@ class LRSCWideActResGroup(nn.Module):
         res = self.head(x)
         res = self.body(res)
         res = self.tail(res)
-        res  = torch.cat([res, x], dim=1)
+        res = torch.cat([res, x], dim=1)
         return res
+
 
 ################################################################
 ################################################################
@@ -576,22 +702,39 @@ class LRSCWideActResGroup(nn.Module):
 ## Residual Channel Attention Block (RCAB)
 class PYRCAB(nn.Module):
     def __init__(
-        self, conv, n_feat, kernel_size, reduction, wn,
-        bias=True, bn=False, act=nn.ReLU(True), res_scale=1, da=False):
+        self,
+        conv,
+        n_feat,
+        kernel_size,
+        reduction,
+        wn,
+        bias=True,
+        bn=False,
+        act=nn.ReLU(True),
+        res_scale=1,
+        da=False,
+    ):
         super(PYRCAB, self).__init__()
 
         expand = 6
         linear = 0.75
         modules_body = []
         # for i in range(2):
-        modules_body.append(wn(nn.Conv2d(n_feat, n_feat*expand, 1, bias=bias)))
+        modules_body.append(wn(nn.Conv2d(n_feat, n_feat * expand, 1, bias=bias)))
         modules_body.append(act)
-        modules_body.append(wn(nn.Conv2d(n_feat*expand, int(n_feat*linear), 1, bias=bias)))
+        modules_body.append(
+            wn(nn.Conv2d(n_feat * expand, int(n_feat * linear), 1, bias=bias))
+        )
         # modules_body.append(conv(, n_feat, kernel_size, bias=bias))
-        modules_body.append(PyConv2d(in_channels=int(n_feat*linear),
-                out_channels=[n_feat//4, n_feat//4, n_feat//2],
+        modules_body.append(
+            PyConv2d(
+                in_channels=int(n_feat * linear),
+                out_channels=[n_feat // 4, n_feat // 4, n_feat // 2],
                 pyconv_kernels=[3, 5, 7],
-                pyconv_groups=[1, 4, 8], bias=bias))
+                pyconv_groups=[1, 4, 8],
+                bias=bias,
+            )
+        )
         if da:
             modules_body.append(DALayer(n_feat, reduction, wn))
         else:
@@ -604,6 +747,7 @@ class PYRCAB(nn.Module):
         res = self.body(x)
         res += x
         return res
+
 
 ## Residual Group (RG)
 class PyResidualGroup(nn.Module):
@@ -619,20 +763,34 @@ class PyResidualGroup(nn.Module):
         modules_body = []
         modules_body = [
             PYRCAB(
-                conv, n_feat, kernel_size, reduction, wn=wn, bias=True,
-                bn=False, act=nn.ReLU(True), res_scale=res_scale, da=da) \
-            for _ in range(n_resblocks)]
+                conv,
+                n_feat,
+                kernel_size,
+                reduction,
+                wn=wn,
+                bias=True,
+                bn=False,
+                act=nn.ReLU(True),
+                res_scale=res_scale,
+                da=da,
+            )
+            for _ in range(n_resblocks)
+        ]
         modules_body.append(
-            PyConv2d(in_channels=n_feat,
-                out_channels=[n_feat//4, n_feat//4, n_feat//2],
+            PyConv2d(
+                in_channels=n_feat,
+                out_channels=[n_feat // 4, n_feat // 4, n_feat // 2],
                 pyconv_kernels=[3, 5, 7],
-                pyconv_groups=[1, 4, 8]))
+                pyconv_groups=[1, 4, 8],
+            )
+        )
         self.body = nn.Sequential(*modules_body)
 
     def forward(self, x):
         res = self.body(x)
         res += x
         return res
+
 
 class WideActResBlock(nn.Module):
     def __init__(self, nf=64):
@@ -643,15 +801,14 @@ class WideActResBlock(nn.Module):
         linear = 0.8
         kernel_size = 3
         wn = lambda x: torch.nn.utils.weight_norm(x)
-        act=nn.ReLU(True)
+        act = nn.ReLU(True)
 
-        body.append(
-            wn(nn.Conv2d(nf, nf*expand, 1, padding=1//2)))
+        body.append(wn(nn.Conv2d(nf, nf * expand, 1, padding=1 // 2)))
         body.append(act)
+        body.append(wn(nn.Conv2d(nf * expand, int(nf * linear), 1, padding=1 // 2)))
         body.append(
-            wn(nn.Conv2d(nf*expand, int(nf*linear), 1, padding=1//2)))
-        body.append(
-            wn(nn.Conv2d(int(nf*linear), nf, kernel_size, padding=kernel_size//2)))
+            wn(nn.Conv2d(int(nf * linear), nf, kernel_size, padding=kernel_size // 2))
+        )
 
         self.body = nn.Sequential(*body)
 
@@ -670,15 +827,14 @@ class PSWideActResBlock(nn.Module):
         linear = 0.75
         kernel_size = 3
         wn = lambda x: torch.nn.utils.weight_norm(x)
-        act=nn.ReLU(True)
+        act = nn.ReLU(True)
 
-        body.append(
-            wn(nn.Conv2d(nf, nf*expand, 1, padding=1//2)))
+        body.append(wn(nn.Conv2d(nf, nf * expand, 1, padding=1 // 2)))
         body.append(act)
+        body.append(wn(nn.Conv2d(nf * expand, int(nf * linear), 1, padding=1 // 2)))
         body.append(
-            wn(nn.Conv2d(nf*expand, int(nf*linear), 1, padding=1//2)))
-        body.append(
-            wn(PSConv2d(int(nf*linear), nf, kernel_size, padding=kernel_size//2)))
+            wn(PSConv2d(int(nf * linear), nf, kernel_size, padding=kernel_size // 2))
+        )
 
         self.body = nn.Sequential(*body)
 
@@ -697,20 +853,21 @@ class PyWideActResBlock(nn.Module):
         linear = 0.75
         kernel_size = 3
         wn = lambda x: torch.nn.utils.weight_norm(x)
-        act=nn.ReLU(True)
-        expand_nf = nf*expand
+        act = nn.ReLU(True)
+        expand_nf = nf * expand
         linear_nf = int(nf * linear)
 
-        body.append(
-            wn(nn.Conv2d(nf, nf*expand, 1, padding=1//2)))
+        body.append(wn(nn.Conv2d(nf, nf * expand, 1, padding=1 // 2)))
         body.append(act)
+        body.append(wn(nn.Conv2d(nf * expand, int(nf * linear), 1, padding=1 // 2)))
         body.append(
-            wn(nn.Conv2d(nf*expand, int(nf*linear), 1, padding=1//2)))
-        body.append(
-            PyConv2d(in_channels=linear_nf,
-                out_channels=[nf//4, nf//4, nf//2],
+            PyConv2d(
+                in_channels=linear_nf,
+                out_channels=[nf // 4, nf // 4, nf // 2],
                 pyconv_kernels=[3, 5, 7],
-                pyconv_groups=[1, 4, 8]))
+                pyconv_groups=[1, 4, 8],
+            )
+        )
 
         self.body = nn.Sequential(*body)
 
@@ -720,7 +877,14 @@ class PyWideActResBlock(nn.Module):
         return res
 
 
-def flow_warp(x, flow, interp_mode='bilinear', padding_mode='zeros', align_corners=True, use_pad_mask=False):
+def flow_warp(
+    x,
+    flow,
+    interp_mode="bilinear",
+    padding_mode="zeros",
+    align_corners=True,
+    use_pad_mask=False,
+):
     """Warp an image or feature map with optical flow.
 
     Args:
@@ -744,7 +908,11 @@ def flow_warp(x, flow, interp_mode='bilinear', padding_mode='zeros', align_corne
     x = x.float()
     # create mesh grid
     # grid_y, grid_x = torch.meshgrid(torch.arange(0, h).type_as(x), torch.arange(0, w).type_as(x), indexing='ij') # an illegal memory access on TITAN RTX + PyTorch1.9.1
-    grid_y, grid_x = torch.meshgrid(torch.arange(0, h, dtype=x.dtype, device=x.device), torch.arange(0, w, dtype=x.dtype, device=x.device), indexing='ij')
+    grid_y, grid_x = torch.meshgrid(
+        torch.arange(0, h, dtype=x.dtype, device=x.device),
+        torch.arange(0, w, dtype=x.dtype, device=x.device),
+        indexing="ij",
+    )
     grid = torch.stack((grid_x, grid_y), 2).float()  # W(x), H(y), 2
     grid.requires_grad = False
     grid = grid.type_as(x)
@@ -754,16 +922,42 @@ def flow_warp(x, flow, interp_mode='bilinear', padding_mode='zeros', align_corne
     #     x = F.pad(x, (0,0,0,0,0,1), mode='constant', value=1)
 
     # scale grid to [-1,1]
-    if interp_mode == 'nearest4': # todo: bug, no gradient for flow model in this case!!! but the result is good
+    if (
+        interp_mode == "nearest4"
+    ):  # todo: bug, no gradient for flow model in this case!!! but the result is good
         vgrid_x_floor = 2.0 * torch.floor(vgrid[:, :, :, 0]) / max(w - 1, 1) - 1.0
         vgrid_x_ceil = 2.0 * torch.ceil(vgrid[:, :, :, 0]) / max(w - 1, 1) - 1.0
         vgrid_y_floor = 2.0 * torch.floor(vgrid[:, :, :, 1]) / max(h - 1, 1) - 1.0
         vgrid_y_ceil = 2.0 * torch.ceil(vgrid[:, :, :, 1]) / max(h - 1, 1) - 1.0
 
-        output00 = F.grid_sample(x, torch.stack((vgrid_x_floor, vgrid_y_floor), dim=3), mode='nearest', padding_mode=padding_mode, align_corners=align_corners)
-        output01 = F.grid_sample(x, torch.stack((vgrid_x_floor, vgrid_y_ceil), dim=3), mode='nearest', padding_mode=padding_mode, align_corners=align_corners)
-        output10 = F.grid_sample(x, torch.stack((vgrid_x_ceil, vgrid_y_floor), dim=3), mode='nearest', padding_mode=padding_mode, align_corners=align_corners)
-        output11 = F.grid_sample(x, torch.stack((vgrid_x_ceil, vgrid_y_ceil), dim=3), mode='nearest', padding_mode=padding_mode, align_corners=align_corners)
+        output00 = F.grid_sample(
+            x,
+            torch.stack((vgrid_x_floor, vgrid_y_floor), dim=3),
+            mode="nearest",
+            padding_mode=padding_mode,
+            align_corners=align_corners,
+        )
+        output01 = F.grid_sample(
+            x,
+            torch.stack((vgrid_x_floor, vgrid_y_ceil), dim=3),
+            mode="nearest",
+            padding_mode=padding_mode,
+            align_corners=align_corners,
+        )
+        output10 = F.grid_sample(
+            x,
+            torch.stack((vgrid_x_ceil, vgrid_y_floor), dim=3),
+            mode="nearest",
+            padding_mode=padding_mode,
+            align_corners=align_corners,
+        )
+        output11 = F.grid_sample(
+            x,
+            torch.stack((vgrid_x_ceil, vgrid_y_ceil), dim=3),
+            mode="nearest",
+            padding_mode=padding_mode,
+            align_corners=align_corners,
+        )
 
         return torch.cat([output00, output01, output10, output11], 1)
 
@@ -771,7 +965,13 @@ def flow_warp(x, flow, interp_mode='bilinear', padding_mode='zeros', align_corne
         vgrid_x = 2.0 * vgrid[:, :, :, 0] / max(w - 1, 1) - 1.0
         vgrid_y = 2.0 * vgrid[:, :, :, 1] / max(h - 1, 1) - 1.0
         vgrid_scaled = torch.stack((vgrid_x, vgrid_y), dim=3)
-        output = F.grid_sample(x, vgrid_scaled, mode=interp_mode, padding_mode=padding_mode, align_corners=align_corners)
+        output = F.grid_sample(
+            x,
+            vgrid_scaled,
+            mode=interp_mode,
+            padding_mode=padding_mode,
+            align_corners=align_corners,
+        )
 
         # if use_pad_mask: # for PWCNet
         #     output = _flow_warp_masking(output)

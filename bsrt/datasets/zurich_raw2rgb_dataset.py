@@ -1,48 +1,47 @@
-import torch
-import os
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional
+from typing_extensions import ClassVar
+from datasets.utilities.image_folder_data import ImageFolderData
+from datasets.utilities.downloadable import Downloadable
+from datasets.utilities.provides import ProvidesDataset, ProvidesDatasetPipeline, ProvidesDatasource
+from ray.data.datasource import ImageFolderDatasource
+from ray.data.dataset import Dataset
+from ray.data.dataset_pipeline import DatasetPipeline
+from ray.data import read_datasource
 import numpy as np
-from cv2 import imread
+
+ZuricRaw2RgbData = ImageFolderData[np.uint8]
 
 
-class ZurichRAW2RGB(torch.utils.data.Dataset):
-    """ Canon RGB images from the "Zurich RAW to RGB mapping" dataset. You can download the full
+@dataclass
+class ZurichRaw2RgbDataset(Downloadable, ProvidesDatasource, ProvidesDataset, ProvidesDatasetPipeline):
+    """Canon RGB images from the "Zurich RAW to RGB mapping" dataset. You can download the full
     dataset (22 GB) from http://people.ee.ethz.ch/~ihnatova/pynet.html#dataset. Alternatively, you can only download the
     Canon RGB images (5.5 GB) from https://data.vision.ee.ethz.ch/bhatg/zurich-raw-to-rgb.zip
     """
-    def __init__(self, root, split='train'):
-        super().__init__()
 
-        if split in ['train', 'test']:
-            self.img_pth = os.path.join(root, split, 'canon')
-        else:
-            raise Exception('Unknown split {}'.format(split))
+    url: ClassVar[str] = "https://data.vision.ee.ethz.ch/bhatg/zurich-raw-to-rgb.zip"
+    filename: ClassVar[str] = "zurich-raw-to-rgb.zip"
+    dirname: ClassVar[str] = "zurich-raw-to-rgb"
+    mirrors: ClassVar[list[str]] = [
+        "https://storage.googleapis.com/bsrt-supplemental/zurich-raw-to-rgb.zip"
+    ]
 
-        self.image_list = self._get_image_list(split)
+    data_dir: Path
 
-    def _get_image_list(self, split):
-        if split == 'train':
-            image_list = ['{:d}.jpg'.format(i) for i in range(46839)]
-        elif split == 'test':
-            image_list = ['{:d}.jpg'.format(i) for i in range(1200)]
-        else:
-            raise Exception
+    def provide_dataset_pipeline(
+        self, blocks_per_window: Optional[int] = 100
+    ) -> DatasetPipeline[ZuricRaw2RgbData]:
+        return self.provide_datasource().window(blocks_per_window=blocks_per_window)
 
-        return image_list
+    def provide_dataset(self) -> Dataset[ZuricRaw2RgbData]:
+        return self.provide_datasource()
 
-    def _get_image(self, im_id):
-        path = os.path.join(self.img_pth, self.image_list[im_id])
-        img = imread(path)
-        return img
-
-    def get_image(self, im_id):
-        frame = self._get_image(im_id)
-
-        return frame
-
-    def __len__(self):
-        return len(self.image_list)
-
-    def __getitem__(self, index):
-        frame = self._get_image(index)
-
-        return frame
+    def provide_datasource(self) -> Dataset[ZuricRaw2RgbData]:
+        return read_datasource(
+            ImageFolderDatasource(),
+            root=self.data_dir.as_posix(),
+            size=(448, 448),
+            mode="RGB",
+        ).lazy()

@@ -1,6 +1,6 @@
 import torch.nn.functional as F
 import cv2
-from datasets.synthetic_burst_train_set import SyntheticBurst
+from datasets.synthetic_burst_train_dataset import SyntheticBurstTrainDataset
 from torch.utils.data.dataloader import DataLoader
 from utils.metrics import PSNR
 from utils.postprocessing_functions import SimplePostProcess
@@ -9,8 +9,8 @@ from datasets.zurich_raw2rgb_dataset import ZurichRAW2RGB
 
 
 def main():
-    zurich_raw2rgb = ZurichRAW2RGB(root='PATH_TO_ZURICH_RAW_TO_RGB', split='test')
-    dataset = SyntheticBurst(zurich_raw2rgb, burst_size=3, crop_sz=256)
+    zurich_raw2rgb = ZurichRAW2RGB(root="PATH_TO_ZURICH_RAW_TO_RGB", split="test")
+    dataset = SyntheticBurstTrainDataset(zurich_raw2rgb, burst_size=3, crop_sz=256)
 
     data_loader = DataLoader(dataset, batch_size=2)
 
@@ -26,12 +26,12 @@ def main():
         # A simple baseline which upsamples the base image using bilinear upsampling
         burst_rgb = burst[:, 0, [0, 1, 3]]
         burst_rgb = burst_rgb.view(-1, *burst_rgb.shape[-3:])
-        burst_rgb = F.interpolate(burst_rgb, scale_factor=8, mode='bilinear')
+        burst_rgb = F.interpolate(burst_rgb, scale_factor=8, mode="bilinear")
 
         # Calculate PSNR
         score = psnr_fn(burst_rgb, frame_gt)
 
-        print('PSNR is {:0.3f}'.format(score))
+        print("PSNR is {:0.3f}".format(score))
 
         meta_info = convert_dict(meta_info, burst.shape[0])
 
@@ -43,13 +43,13 @@ def main():
         gt_0 = cv2.cvtColor(gt_0, cv2.COLOR_RGB2BGR)
 
         # Visualize input, ground truth
-        cv2.imshow('Input (Demosaicekd + Upsampled)', pred_0)
-        cv2.imshow('GT', gt_0)
+        cv2.imshow("Input (Demosaicekd + Upsampled)", pred_0)
+        cv2.imshow("GT", gt_0)
 
         input_key = cv2.waitKey(0)
-        if input_key == ord('q'):
+        if input_key == ord("q"):
             return
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

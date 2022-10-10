@@ -2,10 +2,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from bsrt.option import Config
+
+
 class HistEntropy(nn.Module):
-    def __init__(self, args):
+    def __init__(self, config: Config):
         super().__init__()
-        self.args = args
+        self.config = config
 
     def forward(self, x):
         p = torch.softmax(x, dim=1)

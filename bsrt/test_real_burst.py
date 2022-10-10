@@ -1,7 +1,7 @@
 from datasets.burstsr_dataset import flatten_raw_image_batch, pack_raw_image_batch
-from datasets.synthetic_burst_test_set import SyntheticBurstTest
+from datasets.synthetic.test_dataset import SyntheticBurstTest
 from datasets.realworld_burst_test_set import RealWorldBurstTest
-from option import args
+from option import config, Config
 from tqdm import tqdm
 import cv2
 import model
@@ -15,7 +15,7 @@ import torch.utils.data.distributed
 import utility
 
 
-checkpoint = utility.checkpoint(args)
+checkpoint = utility.checkpoint(config)
 
 
 def ttaup(burst):
@@ -35,34 +35,34 @@ def ttadown(bursts):
 
 
 def main():
-    mp.spawn(main_worker, nprocs=1, args=(1, args))
+    mp.spawn(main_worker, nprocs=1, args=(1, config))
 
 
-def main_worker(local_rank, nprocs, args):
+def main_worker(local_rank: int, nprocs: int, config: Config):
     device = "cuda"
     cudnn.benchmark = True
-    args.local_rank = local_rank
+    config.local_rank = local_rank
     utility.setup(local_rank, nprocs)
     torch.cuda.set_device(local_rank)
 
-    if args.data_type == "synthetic":
-        dataset = SyntheticBurstTest(args.root)
+    if config.data_type == "synthetic":
+        dataset = SyntheticBurstTest(config.root)
         out_dir = "bsrt_synburst"
     else:
-        dataset = RealWorldBurstTest(args.root)
+        dataset = RealWorldBurstTest(config.root)
         out_dir = "bsrt_realworld"
 
     os.makedirs(out_dir, exist_ok=True)
 
-    _model = model.Model(args, checkpoint)
+    _model = model.Model(config, checkpoint)
 
     tt = []
     for idx in tqdm(range(len(dataset))):
         burst, meta_info = dataset[idx]
         burst_name = meta_info["burst_name"]
 
-        burst = burst.to(device).unsqueeze(0)
-        if args.data_type == "synthetic":
+        burst = burst.unsqueeze(0)
+        if config.data_type == "synthetic":
             bursts = ttaup(burst)
             srs = []
             with torch.no_grad():
