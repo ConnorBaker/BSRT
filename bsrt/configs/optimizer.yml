@@ -1,0 +1,15 @@
+optimizer:
+  class_path: torch.optim.Adam
+  init_args:
+    lr: 0.001
+    betas:
+    - 0.9
+    - 0.999
+    eps: 1.0e-08
+    weight_decay: 0
+    amsgrad: false
+    foreach: null
+    maximize: false
+    capturable: false
+    differentiable: false
+    fused: false

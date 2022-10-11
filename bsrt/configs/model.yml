@@ -1,0 +1,8 @@
+model:
+  use_swin_checkpoint: true
+  upscale: 4
+  non_local: true
+  swinfeature: true
+  center: 0
+  data_type: synthetic
+  loss_type: L1

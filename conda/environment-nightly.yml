@@ -29,3 +29,4 @@ dependencies:
   - conda-forge::black==22.8.0
   - pip:
     - jsonargparse[signatures]==4.15.1
+    - git+https://github.com/Lightning-AI/lightning-hpo.git@4892e3d39bb3adc140c6fb11451c540e12d4d223#egg=lightning-hpo

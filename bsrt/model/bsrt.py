@@ -1,225 +1,292 @@
+from dataclasses import dataclass, field
+from typing import Callable
+from typing_extensions import Literal
+from datasets.synthetic_burst.train_dataset import TrainData
+from utility import make_loss_fn, make_psnr_fn
 from model.cross_non_local_fusion import CrossNonLocalFusion
 from model.flow_guided_pcd_align import FlowGuidedPCDAlign
 from model.spynet_util import SpyNet
-from option import Config
+from option import DataTypeName, LossName
 from torch.nn.parameter import Parameter
 from utils.bilinear_upsample_2d import bilinear_upsample_2d
 import functools
 import model.arch_util as arch_util
 import model.swin_util as swu
 import torch
+from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
+import pytorch_lightning as pl
+from torchmetrics import Metric
 
 
-class BSRT(nn.Module):
-    def __init__(
-        self,
-        config: Config,
-        nframes=8,
-        img_size=64,
-        patch_size=1,
-        in_chans=3,
-        out_chans=3,
-        embed_dim=96,
-        depths=[6, 6, 6, 6],
-        num_heads=[6, 6, 6, 6],
-        window_size=7,
-        mlp_ratio=4.0,
-        qkv_bias=True,
-        qk_scale=None,
-        drop_rate=0.0,
-        attn_drop_rate=0.0,
-        drop_path_rate=0.1,
-        norm_layer=nn.LayerNorm,
-        ape=False,
-        patch_norm=True,
-        use_swin_checkpoint=False,
-        upscale=4,
-        non_local=False,
-        **kwargs,
-    ):
-        super(BSRT, self).__init__()
-        num_in_ch = in_chans
-        num_out_ch = out_chans
-        num_feat = 64
-        groups = 8
-        # embed_dim = num_feat
-        back_RBs = 5
-        n_resblocks = 6
+@dataclass(eq=False)
+class BSRT(pl.LightningModule):
+    """BurstSR model
 
-        self.config = config
-        self.center = 0
-        self.upscale = upscale
-        self.window_size = window_size
-        self.non_local = non_local
-        self.nframes = nframes
-        self.batch_size = config["batch_size"]
-        self.loss_name = config["loss"]
+    Args:
+        ape (bool): absolute position embedding
+        attn_drop_rate (float): attention drop rate
+        center (int): center
+        data_type (str): Whether operating on synthetic or real data. Must be one of "synthetic" or "real".
+        drop_path_rate (float): drop path rate
+        drop_rate (float): drop rate
+        flow_alignment_groups (int): number of groups for flow alignment
+        in_chans (int): number of input channels
+        loss_type (str): loss function configuration (L1, MSE, CB, or MSSSIM)
+        mlp_ratio (float): mlp ratio
+        model_level (str): S or L for small or large model
+        non_local (bool): non local
+        norm_layer (int -> nn.Module): normalization layer
+        num_features (int): number of features in the feature extraction network
+        num_frames (int): number of frames in the burst
+        out_chans (int): number of output channels
+        patch_norm (bool): patch norm
+        patch_size (int): patch size
+        qk_scale (float | None): qk scale
+        qkv_bias (bool): qkv bias
+        swinfeature (bool): swin feature
+        upscale (int): upscale
+        use_swin_checkpoint (bool): use swin checkpoint
+        window_size (int): window size
+    """
 
-        self.num_layers = len(depths)
-        self.embed_dim = embed_dim
-        self.ape = ape
-        self.patch_norm = patch_norm
-        self.num_features = embed_dim
-        self.mlp_ratio = mlp_ratio
+    ape: bool = False
+    attn_drop_rate: float = 0.0
+    center: int = 0
+    data_type: DataTypeName = "synthetic"
+    drop_path_rate: float = 0.1
+    drop_rate: float = 0.0
+    flow_alignment_groups: int = 8
+    in_chans: int = 4 # RAW images are RGGB or the like, so 4 channels
+    loss_type: LossName = "L1"
+    mlp_ratio: float = 4.0
+    model_level: Literal["S", "L"] = "S"
+    non_local: bool = False
+    norm_layer: Callable[[int], nn.LayerNorm] = nn.LayerNorm
+    num_features: int = 64
+    num_frames: int = 8
+    out_chans: int = 3 # RGB output so 3 channels
+    patch_norm: bool = True
+    patch_size: int = 1
+    qk_scale: float | None = None
+    qkv_bias: bool = True
+    swinfeature: bool = False
+    upscale: int = 4
+    use_swin_checkpoint: bool = False
+    window_size: int = 7
 
+    conv_first: nn.Conv2d = field(init=False)
+    conv_flow: nn.Conv2d = field(init=False)
+    depths: list[int] = field(init=False)
+    embed_dim: int = field(init=False)
+    flow_ps: nn.PixelShuffle = field(init=False)
+    img_size: int = field(init=False)
+    num_heads: list[int] = field(init=False)
+    num_layers: int = field(init=False)
+    patch_embed: swu.PatchEmbed = field(init=False)
+    patch_unembed: swu.PatchUnEmbed = field(init=False)
+    spynet: SpyNet = field(init=False)
+    loss_fn: Metric = field(init=False)
+    psnr_fn: Metric = field(init=False)
+
+    def __post_init__(self):
+        super().__init__()
+
+        if self.model_level == "S":
+            self.depths = [6] * 1 + [6] * 4
+            self.num_heads = [6] * 1 + [6] * 4
+            self.embed_dim = 60
+        elif self.model_level == "L":
+            self.depths = [6] * 1 + [8] * 6
+            self.num_heads = [6] * 1 + [6] * 6
+            self.embed_dim = 180
+
+        # TODO: In the original code, patch_size was only used for calculating img_size.
+        # The rest of the uses of patch_size were using a hardcoded value of one.
+        self.img_size = self.patch_size * 2
+        # TODO: We set patch_size to one here manually to duplicate that behavior.
+        self.patch_size = 1
+        self.loss_fn = make_loss_fn(self.loss_type, self.data_type)
+        self.psnr_fn = make_psnr_fn(self.data_type)
+
+        self.num_layers = len(self.depths)
         self.spynet = SpyNet([3, 4, 5])
-        self.conv_flow = nn.Conv2d(1, 3, kernel_size=3, stride=1, padding=1)
         self.flow_ps = nn.PixelShuffle(2)
 
         # split image into non-overlapping patches
         self.patch_embed = swu.PatchEmbed(
-            img_size=img_size,
-            patch_size=patch_size,
-            in_chans=embed_dim,
-            embed_dim=embed_dim,
-            norm_layer=norm_layer if self.patch_norm else None,
+            img_size=self.img_size,
+            patch_size=self.patch_size,
+            in_chans=self.embed_dim,
+            embed_dim=self.embed_dim,
+            norm_layer=self.norm_layer if self.patch_norm else None,
         )
-        num_patches = self.patch_embed.num_patches
-        patches_resolution = self.patch_embed.patches_resolution
-        self.patches_resolution = patches_resolution
 
         # merge non-overlapping patches into image
         self.patch_unembed = swu.PatchUnEmbed(
-            img_size=img_size,
-            patch_size=patch_size,
-            in_chans=embed_dim,
-            embed_dim=embed_dim,
-            norm_layer=norm_layer if self.patch_norm else None,
+            img_size=self.img_size,
+            patch_size=self.patch_size,
+            in_chans=self.embed_dim,
+            embed_dim=self.embed_dim,
+            norm_layer=self.norm_layer if self.patch_norm else None,
         )
 
         #####################################################################################################
         ################################### 1, shallow feature extraction ###################################
+        self.conv_flow = nn.Conv2d(1, 3, kernel_size=3, stride=1, padding=1)
         self.conv_first = nn.Conv2d(
-            num_in_ch * (1 + 2 * 0), embed_dim, 3, 1, 1, bias=True
+            self.in_chans * (1 + 2 * 0), self.embed_dim, 3, 1, 1, bias=True
         )
 
-        # # stochastic depth
+        # stochastic depth
         dpr = torch.linspace(
-            0, drop_path_rate, sum(depths)
+            0, self.drop_path_rate, sum(self.depths)
         ).tolist()  # stochastic depth decay rule
 
-        if config["swinfeature"]:
-            print("using swinfeature")
+        if self.swinfeature:
             self.pre_layers = nn.ModuleList()
-            for i_layer in range(depths[0]):
+            for i_layer in range(self.depths[0]):
                 layer = swu.SwinTransformerBlock(
-                    dim=embed_dim,
+                    dim=self.embed_dim,
                     input_resolution=(
-                        patches_resolution[0] // 2,
-                        patches_resolution[1] // 2,
+                        self.patch_embed.patches_resolution[0] // 2,
+                        self.patch_embed.patches_resolution[1] // 2,
                     ),
-                    num_heads=num_heads[0],
-                    window_size=window_size,
-                    shift_size=0 if (i_layer % 2 == 0) else window_size // 2,
-                    mlp_ratio=mlp_ratio,
-                    qkv_bias=qkv_bias,
-                    qk_scale=qk_scale,
-                    drop=drop_rate,
-                    attn_drop=attn_drop_rate,
+                    num_heads=self.num_heads[0],
+                    window_size=self.window_size,
+                    shift_size=0 if (i_layer % 2 == 0) else self.window_size // 2,
+                    mlp_ratio=self.mlp_ratio,
+                    qkv_bias=self.qkv_bias,
+                    qk_scale=self.qk_scale,
+                    drop=self.drop_rate,
+                    attn_drop=self.attn_drop_rate,
                     drop_path=dpr[i_layer],
-                    norm_layer=norm_layer,
+                    norm_layer=self.norm_layer,
                 )
                 self.pre_layers.append(layer)
 
-            self.pre_norm = norm_layer(embed_dim)
+            self.pre_norm = self.norm_layer(self.embed_dim)
         else:
-            WARB = functools.partial(arch_util.WideActResBlock, nf=embed_dim)
+            WARB = functools.partial(arch_util.WideActResBlock, nf=self.embed_dim)
             self.feature_extraction = arch_util.make_layer(WARB, 5)
 
         self.conv_after_pre_layer = nn.Conv2d(
-            embed_dim, num_feat * 4, 3, 1, 1, bias=True
+            self.embed_dim, self.num_features * 4, 3, 1, 1, bias=True
         )
         self.mid_ps = nn.PixelShuffle(2)
 
-        self.fea_L2_conv1 = nn.Conv2d(num_feat, num_feat * 2, 3, 2, 1, bias=True)
-        self.fea_L3_conv1 = nn.Conv2d(num_feat * 2, num_feat * 4, 3, 2, 1, bias=True)
+        self.fea_L2_conv1 = nn.Conv2d(
+            self.num_features, self.num_features * 2, 3, 2, 1, bias=True
+        )
+        self.fea_L3_conv1 = nn.Conv2d(
+            self.num_features * 2, self.num_features * 4, 3, 2, 1, bias=True
+        )
 
         #####################################################################################################
         ################################### 2, Feature Enhanced PCD Align ###################################
 
         # Top layers
         self.toplayer = nn.Conv2d(
-            num_feat * 4, num_feat, kernel_size=1, stride=1, padding=0
+            self.num_features * 4, self.num_features, kernel_size=1, stride=1, padding=0
         )
         # Smooth layers
-        self.smooth1 = nn.Conv2d(num_feat, num_feat, kernel_size=3, stride=1, padding=1)
-        self.smooth2 = nn.Conv2d(num_feat, num_feat, kernel_size=3, stride=1, padding=1)
+        self.smooth1 = nn.Conv2d(
+            self.num_features, self.num_features, kernel_size=3, stride=1, padding=1
+        )
+        self.smooth2 = nn.Conv2d(
+            self.num_features, self.num_features, kernel_size=3, stride=1, padding=1
+        )
         # Lateral layers
         self.latlayer1 = nn.Conv2d(
-            num_feat * 2, num_feat, kernel_size=1, stride=1, padding=0
+            self.num_features * 2, self.num_features, kernel_size=1, stride=1, padding=0
         )
         self.latlayer2 = nn.Conv2d(
-            num_feat * 1, num_feat, kernel_size=1, stride=1, padding=0
+            self.num_features * 1, self.num_features, kernel_size=1, stride=1, padding=0
         )
 
-        # self.align = PCD_Align(nf=num_feat, groups=groups)
-        self.align = FlowGuidedPCDAlign(nf=num_feat, groups=groups)
+        self.align = FlowGuidedPCDAlign(
+            nf=self.num_features, groups=self.flow_alignment_groups
+        )
         #####################################################################################################
         ################################### 3, Multi-frame Feature Fusion  ##################################
 
         if self.non_local:
-            print("using non_local")
             self.fusion = CrossNonLocalFusion(
-                nf=num_feat, out_feat=embed_dim, nframes=nframes, center=self.center
+                nf=self.num_features,
+                out_feat=self.embed_dim,
+                nframes=self.num_frames,
+                center=self.center,
             )
         else:
-            self.fusion = nn.Conv2d(nframes * num_feat, embed_dim, 1, 1, bias=True)
+            self.fusion = nn.Conv2d(
+                self.num_frames * self.num_features, self.embed_dim, 1, 1, bias=True
+            )
 
         #####################################################################################################
         ################################### 4, deep feature extraction ######################################
 
         # absolute position embedding
         if self.ape:
-            self.absolute_pos_embed = Parameter(torch.zeros(1, num_patches, embed_dim))
+            self.absolute_pos_embed = Parameter(
+                torch.zeros(1, self.patch_embed.num_patches, self.embed_dim)
+            )
             swu.trunc_normal_(self.absolute_pos_embed, std=0.02)
 
-        self.pos_drop = nn.Dropout(p=drop_rate)
+        self.pos_drop = nn.Dropout(self.drop_rate)
 
         # build Residual Swin Transformer blocks (RSTB)
         self.layers = nn.ModuleList()
         for i_layer in range(1, self.num_layers):
             layer = swu.RSTB(
-                dim=embed_dim,
-                input_resolution=(patches_resolution[0], patches_resolution[1]),
-                depth=depths[i_layer],
-                num_heads=num_heads[i_layer],
-                window_size=window_size,
+                dim=self.embed_dim,
+                input_resolution=(
+                    self.patch_embed.patches_resolution[0],
+                    self.patch_embed.patches_resolution[1],
+                ),
+                depth=self.depths[i_layer],
+                num_heads=self.num_heads[i_layer],
+                window_size=self.window_size,
                 mlp_ratio=self.mlp_ratio,
-                qkv_bias=qkv_bias,
-                qk_scale=qk_scale,
-                drop=drop_rate,
-                attn_drop=attn_drop_rate,
+                qkv_bias=self.qkv_bias,
+                qk_scale=self.qk_scale,
+                drop=self.drop_rate,
+                attn_drop=self.attn_drop_rate,
                 drop_path=dpr[
-                    sum(depths[:i_layer]) : sum(depths[: i_layer + 1])
+                    sum(self.depths[:i_layer]) : sum(self.depths[: i_layer + 1])
                 ],  # no impact on SR results
-                norm_layer=norm_layer,
+                norm_layer=self.norm_layer,
                 downsample=None,
-                use_checkpoint=use_swin_checkpoint,
-                img_size=img_size,
-                patch_size=patch_size,
+                use_checkpoint=self.use_swin_checkpoint,
+                img_size=self.img_size,
+                patch_size=self.patch_size,
             )
             self.layers.append(layer)
 
-        self.norm = norm_layer(self.num_features)
+        self.norm = self.norm_layer(self.embed_dim)
 
         # build the last conv layer in deep feature extraction
-        self.conv_after_body = nn.Conv2d(embed_dim, embed_dim, 3, 1, 1)
+        self.conv_after_body = nn.Conv2d(self.embed_dim, self.embed_dim, 3, 1, 1)
 
         #####################################################################################################
         ################################ 5, high quality image reconstruction ################################
 
-        self.upconv1 = nn.Conv2d(embed_dim, num_feat * 4, 3, 1, 1, bias=True)
-        self.upconv2 = nn.Conv2d(num_feat, 64 * 4, 3, 1, 1, bias=True)
+        self.upconv1 = nn.Conv2d(
+            self.embed_dim, self.num_features * 4, 3, 1, 1, bias=True
+        )
+        self.upconv2 = nn.Conv2d(self.num_features, 64 * 4, 3, 1, 1, bias=True)
         self.pixel_shuffle = nn.PixelShuffle(2)
         self.HRconv = nn.Conv2d(64, 64, 3, 1, 1, bias=True)
-        self.conv_last = nn.Conv2d(64, config["n_colors"], 3, 1, 1, bias=True)
+        self.conv_last = nn.Conv2d(64, self.out_chans, 3, 1, 1, bias=True)
 
         #### skip #############
         self.skip_pixel_shuffle = nn.PixelShuffle(2)
-        self.skipup1 = nn.Conv2d(num_in_ch // 4, num_feat * 4, 3, 1, 1, bias=True)
-        self.skipup2 = nn.Conv2d(num_feat, config["n_colors"] * 4, 3, 1, 1, bias=True)
+        self.skipup1 = nn.Conv2d(
+            self.in_chans // 4, self.num_features * 4, 3, 1, 1, bias=True
+        )
+        self.skipup2 = nn.Conv2d(
+            self.num_features, self.out_chans * 4, 3, 1, 1, bias=True
+        )
 
         #### activation function
         self.lrelu = nn.LeakyReLU(0.1, inplace=True)
@@ -236,26 +303,18 @@ class BSRT(nn.Module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
-    @torch.jit.ignore
-    def no_weight_decay(self):
-        return {"absolute_pos_embed"}
-
-    @torch.jit.ignore
-    def no_weight_decay_keywords(self):
-        return {"relative_position_bias_table"}
-
-    def _upsample_add(self, x, y):
+    def _upsample_add(self, x: Tensor, y: Tensor) -> Tensor:
         return bilinear_upsample_2d(x, scale_factor=2) + y
 
-    def check_image_size(self, x):
+    def check_image_size(self, x: Tensor) -> Tensor:
         _, _, h, w = x.size()
         mod_pad_h = (self.window_size - h % self.window_size) % self.window_size
         mod_pad_w = (self.window_size - w % self.window_size) % self.window_size
         x = F.pad(x, (0, mod_pad_w, 0, mod_pad_h), "reflect")
         return x
 
-    def pre_forward_features(self, x):
-        if self.config["swinfeature"]:
+    def pre_forward_features(self, x: Tensor) -> Tensor:
+        if self.swinfeature:
             x_size = (x.shape[-2], x.shape[-1])
             x = self.patch_embed(x, use_norm=True)
             if self.ape:
@@ -273,7 +332,7 @@ class BSRT(nn.Module):
 
         return x
 
-    def forward_features(self, x):
+    def forward_features(self, x: Tensor) -> Tensor:
         x_size = (x.shape[-2], x.shape[-1])
         x = self.patch_embed(x)
         if self.ape:
@@ -290,7 +349,7 @@ class BSRT(nn.Module):
 
         return x
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         # B: batch size
         # N: number of frames
         # C: number of channels
@@ -383,7 +442,7 @@ class BSRT(nn.Module):
         x = skip2 + x
         return x
 
-    def get_ref_flows(self, x):
+    def get_ref_flows(self, x: Tensor) -> list[Tensor]:
         """Get flow between frames ref and other"""
         b, n, c, h, w = x.size()
         x_nbr = x.reshape(-1, c, h, w)
@@ -394,10 +453,28 @@ class BSRT(nn.Module):
         )
 
         # backward
-        flows = self.spynet(x_ref, x_nbr)
+        flows: Tensor = self.spynet(x_ref, x_nbr)
         flows_list = [
             flow.view(b, n, 2, h // (2 ** (i)), w // (2 ** (i)))
             for flow, i in zip(flows, range(3))
         ]
 
         return flows_list
+
+    def training_step(self, batch: TrainData, batch_idx: int) -> torch.Tensor:
+        bursts = batch["burst"]
+        gts = batch["gt"]
+        srs = self(bursts)
+        loss = self.loss_fn(srs, gts)
+        self.log("train_loss", loss.item())
+        return loss
+
+    def validation_step(self, batch: TrainData, batch_idx: int) -> torch.Tensor:
+        bursts = batch["burst"]
+        gts = batch["gt"]
+        srs = self(bursts)
+        psnr, ssim, lpips = self.psnr_fn(srs, gts)
+        self.log("val_psnr", psnr.item())
+        self.log("val_ssim", ssim.item())
+        self.log("val_lpips", lpips.item())
+        return psnr, ssim, lpips

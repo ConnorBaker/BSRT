@@ -1,0 +1,14 @@
+trainer:
+  accelerator: null
+  strategy: null
+  precision: 32
+  resume_from_checkpoint: null
+  benchmark: null
+  deterministic: null
+  auto_lr_find: false
+  replace_sampler_ddp: true
+  detect_anomaly: false
+  auto_scale_batch_size: false
+  plugins: null
+  amp_backend: native
+  amp_level: null
