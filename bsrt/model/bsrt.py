@@ -33,6 +33,7 @@ class BSRT(pl.LightningModule):
         flow_alignment_groups (int): number of groups for flow alignment
         in_chans (int): number of input channels
         loss_type (str): loss function configuration (L1, MSE, CB, or MSSSIM)
+        lr (float): learning rate
         mlp_ratio (float): mlp ratio
         model_level (str): S or L for small or large model
         non_local (bool): non local
@@ -58,6 +59,7 @@ class BSRT(pl.LightningModule):
     flow_alignment_groups: int = 8
     in_chans: int = 4 # RAW images are RGGB or the like, so 4 channels
     loss_type: LossName = "L1"
+    lr: float = 1e-4
     mlp_ratio: float = 4.0
     model_level: Literal["S", "L"] = "S"
     non_local: bool = False
@@ -463,7 +465,7 @@ class BSRT(pl.LightningModule):
         gts = batch["gt"]
         srs = self(bursts)
         loss = self.loss_fn(srs, gts)
-        self.log("train_loss", loss.item())
+        self.log("loss", loss.item())
         return loss
 
     def validation_step(self, batch: TrainData, batch_idx: int) -> torch.Tensor:

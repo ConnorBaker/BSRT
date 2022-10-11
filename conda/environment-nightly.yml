@@ -10,7 +10,6 @@ dependencies:
 
   - pytorch-nightly::pytorch==1.14.0.dev20221010=py3.10_cuda11.7_cudnn8.5.0_0
   - pytorch-nightly::torchvision==0.15.0.dev20221010=py310_cu117
-  - conda-forge::pytorch-lightning==1.7.7
   - conda-forge::torchmetrics==0.10.0
   - conda-forge::lpips==0.1.3
 
@@ -29,4 +28,5 @@ dependencies:
   - conda-forge::black==22.8.0
   - pip:
     - jsonargparse[signatures]==4.15.1
+    - git+https://github.com/Lightning-AI/lightning.git@da25d1d30d5bd063a71a7a462427702ed7e47ae2
     - git+https://github.com/Lightning-AI/lightning-hpo.git@4892e3d39bb3adc140c6fb11451c540e12d4d223#egg=lightning-hpo

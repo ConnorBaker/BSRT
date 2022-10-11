@@ -2,9 +2,7 @@ data:
   burst_size: 14
   crop_size: 256
   data_dir: /home/ubuntu/working/datasets
-  batch_size: 4
+  batch_size: 32
   num_workers: 30
   pin_memory: true
   drop_last: false
-  timeout: 0.0
-  prefetch_factor: 2

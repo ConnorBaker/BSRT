@@ -6,9 +6,19 @@ trainer:
   resume_from_checkpoint: null
   benchmark: true
   deterministic: false
-  auto_lr_find: false
   replace_sampler_ddp: true
   detect_anomaly: false
-  auto_scale_batch_size: false
   plugins: null
   amp_backend: native
+  callbacks:
+  - class_path: pytorch_lightning.callbacks.early_stopping.EarlyStopping
+    init_args:
+      monitor: loss
+      min_delta: 1e-2
+      patience: 3
+      mode: min
+      strict: true
+      check_finite: true
+  - class_path: pytorch_lightning.callbacks.StochasticWeightAveraging
+    init_args:
+      swa_lrs: 1e-2

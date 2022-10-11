@@ -7,9 +7,3 @@ optimizer:
     - 0.999
     eps: 1.0e-08
     weight_decay: 0
-    amsgrad: false
-    foreach: null
-    maximize: false
-    capturable: false
-    differentiable: false
-    fused: false
