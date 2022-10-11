@@ -3,8 +3,8 @@ data:
   crop_size: 256
   data_dir: /home/ubuntu/working/datasets
   batch_size: 4
-  num_workers: 0
-  pin_memory: false
+  num_workers: 30
+  pin_memory: true
   drop_last: false
   timeout: 0.0
   prefetch_factor: 2

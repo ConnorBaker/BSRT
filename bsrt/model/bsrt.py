@@ -27,7 +27,6 @@ class BSRT(pl.LightningModule):
     Args:
         ape (bool): absolute position embedding
         attn_drop_rate (float): attention drop rate
-        center (int): center
         data_type (str): Whether operating on synthetic or real data. Must be one of "synthetic" or "real".
         drop_path_rate (float): drop path rate
         drop_rate (float): drop rate
@@ -53,7 +52,6 @@ class BSRT(pl.LightningModule):
 
     ape: bool = False
     attn_drop_rate: float = 0.0
-    center: int = 0
     data_type: DataTypeName = "synthetic"
     drop_path_rate: float = 0.1
     drop_rate: float = 0.0
@@ -65,7 +63,7 @@ class BSRT(pl.LightningModule):
     non_local: bool = False
     norm_layer: Callable[[int], nn.LayerNorm] = nn.LayerNorm
     num_features: int = 64
-    num_frames: int = 8
+    num_frames: int = 14
     out_chans: int = 3 # RGB output so 3 channels
     patch_norm: bool = True
     patch_size: int = 1
@@ -76,6 +74,7 @@ class BSRT(pl.LightningModule):
     use_swin_checkpoint: bool = False
     window_size: int = 7
 
+    center: int = field(init=False, default=0)
     conv_first: nn.Conv2d = field(init=False)
     conv_flow: nn.Conv2d = field(init=False)
     depths: list[int] = field(init=False)
@@ -339,10 +338,8 @@ class BSRT(pl.LightningModule):
             x = x + self.absolute_pos_embed
         x = self.pos_drop(x)
 
-        for idx, layer in enumerate(self.layers):
+        for layer in self.layers:
             x = layer(x, x_size)
-            if torch.any(torch.isinf(x)) or torch.any(torch.isnan(x)):
-                print("layer: ", idx)
 
         x = self.norm(x)  # B L C
         x = self.patch_unembed(x, x_size)
