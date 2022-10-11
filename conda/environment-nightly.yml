@@ -26,6 +26,7 @@ dependencies:
   - conda-forge::wandb==0.13.4
 
   - conda-forge::black==22.8.0
+  - conda-forge::git==2.38.0
   - pip:
     - jsonargparse[signatures]==4.15.1
     - git+https://github.com/Lightning-AI/lightning.git@da25d1d30d5bd063a71a7a462427702ed7e47ae2
