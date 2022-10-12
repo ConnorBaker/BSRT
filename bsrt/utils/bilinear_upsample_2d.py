@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Tuple, Union
 
 import torch
 import torch.nn.functional as F
@@ -9,7 +9,7 @@ from torch import Tensor
 def bilinear_upsample_2d(
     t: Tensor,
     scale_factor: Union[float, None] = None,
-    size: Union[tuple[int, int], None] = None,
+    size: Union[Tuple[int, int], None] = None,
     align_corners: bool = False,
     recompute_scale_factor: Union[bool, None] = None,
 ) -> Tensor:
