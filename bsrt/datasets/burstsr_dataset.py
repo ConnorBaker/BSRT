@@ -2,7 +2,7 @@ import os
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, ClassVar, List, Tuple, Union, overload
+from typing import Any, ClassVar, Dict, List, Tuple, Union, overload
 
 import torch
 import torch.nn.functional as F
@@ -116,8 +116,8 @@ class BurstSRDataset(Dataset):
     def __getitem__(
         self, index: int
     ) -> Union[
-        Tuple[Tensor, dict[str, Any]],
-        Tuple[Tensor, Tensor, dict[str, Any], dict[str, Any]],
+        Tuple[Tensor, Dict[str, Any]],
+        Tuple[Tensor, Tensor, Dict[str, Any], Dict[str, Any]],
     ]:
         # Sample the images in the burst, in case a burst_size < 14 is used.
         im_ids: List[int] = self._sample_images()

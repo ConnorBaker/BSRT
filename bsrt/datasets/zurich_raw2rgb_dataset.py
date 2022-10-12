@@ -25,7 +25,7 @@ class ZurichRaw2RgbDataset(VisionDataset, Downloadable):
     ]
 
     data_dir: str
-    transform: Callable[[Tensor], Union[Tensor, dict[str, Tensor]]] = field(
+    transform: Callable[[Tensor], Union[Tensor, Dict[str, Tensor]]] = field(
         default=lambda x: x
     )
 

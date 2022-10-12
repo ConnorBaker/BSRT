@@ -31,7 +31,7 @@ class TestData:
     """
 
     burst: Tensor
-    meta_info: dict[str, Any]
+    meta_info: Dict[str, Any]
 
 
 @dataclass
