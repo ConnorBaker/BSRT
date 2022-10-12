@@ -1,3 +1,5 @@
+from typing import Union
+
 import torch
 import torch.nn as nn
 from metrics.utils.ignore_boundry import ignore_boundary
@@ -15,7 +17,7 @@ def prepare_aligned(
     sr_factor: int,
     kernel_size: int,
     gaussian_kernel: Tensor,
-    boundary_ignore: int | None,
+    boundary_ignore: Union[int, None],
 ) -> tuple[Tensor, Tensor, Tensor]:
     # Estimate flow between the prediction and the ground truth
     with torch.no_grad():

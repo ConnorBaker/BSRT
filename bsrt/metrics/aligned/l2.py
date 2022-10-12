@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import ClassVar
+from typing import ClassVar, Union
 
 import torch
 from metrics.l2 import L2
@@ -15,7 +15,7 @@ from utils.spatial_color_alignment import get_gaussian_kernel
 class AlignedL2(L2):
     full_state_update: ClassVar[bool] = False
     alignment_net: torch.nn.Module
-    boundary_ignore: int | None = None
+    boundary_ignore: Union[int, None] = None
     sr_factor: int = 4
     gauss_kernel: Tensor = field(init=False)
     ksz: int = field(init=False)
@@ -24,7 +24,7 @@ class AlignedL2(L2):
     def __init__(
         self,
         alignment_net: torch.nn.Module,
-        boundary_ignore: int | None = None,
+        boundary_ignore: Union[int, None] = None,
         sr_factor: int = 4,
     ) -> None:
         super().__init__(boundary_ignore=boundary_ignore)

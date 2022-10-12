@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import ClassVar
+from typing import ClassVar, Union
 
 import torch
 from metrics.utils.prepare_aligned import prepare_aligned
@@ -16,7 +16,7 @@ from utils.spatial_color_alignment import get_gaussian_kernel
 class AlignedLPIPS(Metric):
     full_state_update: ClassVar[bool] = False
     alignment_net: torch.nn.Module
-    boundary_ignore: int | None = None
+    boundary_ignore: Union[int, None] = None
     sr_factor: int = 4
     # TODO: We cannot use the default factory with nn.Modules because we must call the super init before we can call the module init.
     loss_fn: LPIPS = field(init=False)
@@ -30,7 +30,7 @@ class AlignedLPIPS(Metric):
     def __init__(
         self,
         alignment_net: torch.nn.Module,
-        boundary_ignore: int | None = None,
+        boundary_ignore: Union[int, None] = None,
         sr_factor: int = 4,
     ) -> None:
         super().__init__()

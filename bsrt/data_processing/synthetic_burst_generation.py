@@ -1,4 +1,5 @@
 import random
+from typing import Union
 
 import cv2
 import numpy as np
@@ -23,7 +24,7 @@ from utils.types import InterpolationType
 
 
 def random_crop(
-    frames: Tensor, crop_sz: float | list[float] | tuple[float, ...]
+    frames: Tensor, crop_sz: Union[float, list[float], tuple[float, ...]]
 ) -> Tensor:
     """Extract a random crop of size crop_sz from the input frames. If the crop_sz is larger than the input image size,
     then the largest possible crop of same aspect ratio as crop_sz will be extracted from frames, and upsampled to
@@ -72,8 +73,8 @@ def rgb2rawburst(
     image: Tensor,
     burst_size: int,
     downsample_factor: float = 1,
-    burst_transformation_params: ImageTransformationParams | None = None,
-    image_processing_params: ImageProcessingParams | None = None,
+    burst_transformation_params: Union[ImageTransformationParams, None] = None,
+    image_processing_params: Union[ImageProcessingParams, None] = None,
     interpolation_type: InterpolationType = "bilinear",
 ) -> tuple[Tensor, Tensor, Tensor, Tensor, MetaInfo]:
     """Generates a synthetic LR RAW burst from the input image. The input sRGB image is first converted to linear
@@ -186,10 +187,10 @@ def get_tmat(
 
 
 def single2lrburst(
-    image: Tensor | npt.NDArray[np.uint8],
+    image: Union[Tensor, npt.NDArray[np.uint8]],
     burst_size: int,
     downsample_factor: float = 1.0,
-    transformation_params: ImageTransformationParams | None = None,
+    transformation_params: Union[ImageTransformationParams, None] = None,
     interpolation_type: InterpolationType = "bilinear",
 ) -> tuple[Tensor, Tensor]:
     """Generates a burst of size burst_size from the input image by applying random transformations defined by
@@ -198,15 +199,14 @@ def single2lrburst(
     if transformation_params is None:
         transformation_params = ImageTransformationParams()
 
-    match interpolation_type:
-        case "bilinear":
-            interpolation = cv2.INTER_LINEAR
-        case "lanczos":
-            interpolation = cv2.INTER_LANCZOS4
-        case "nearest":
-            interpolation = cv2.INTER_NEAREST
-        case "bicubic":
-            interpolation = cv2.INTER_CUBIC
+    if interpolation_type == "nearest":
+        interpolation = cv2.INTER_NEAREST
+    elif interpolation_type == "bilinear":
+        interpolation = cv2.INTER_LINEAR
+    elif interpolation_type == "bicubic":
+        interpolation = cv2.INTER_CUBIC
+    elif interpolation_type == "lanczos":
+        interpolation = cv2.INTER_LANCZOS4
 
     normalize = False
     if isinstance(image, torch.Tensor):

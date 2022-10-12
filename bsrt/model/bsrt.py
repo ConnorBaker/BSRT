@@ -1,6 +1,6 @@
 import functools
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, Union
 
 import model.arch_util as arch_util
 import model.swin_util as swu
@@ -76,7 +76,7 @@ class BSRT(pl.LightningModule):
     out_chans: int = 3  # RGB output so 3 channels
     patch_norm: bool = True
     patch_size: int = 1
-    qk_scale: float | None = None
+    qk_scale: Union[float, None] = None
     qkv_bias: bool = True
     swinfeature: bool = False
     upscale: int = 4

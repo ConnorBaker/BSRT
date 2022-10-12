@@ -1,11 +1,11 @@
 import torch
-from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
 from model import common
 from model.utils.psconv import PSGConv2d as PSConv2d
 from model.utils.psconv import PyConv2d
+from torch import Tensor
 from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 

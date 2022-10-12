@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Callable, Dict, Iterable, Union
 
 import torchvision
 from datasets.utilities.downloadable import Downloadable
@@ -25,16 +25,15 @@ class ZurichRaw2RgbDataset(VisionDataset, Downloadable):
     ]
 
     data_dir: str
-    transform: Callable[[Tensor], Tensor | dict[str, Tensor]] = field(
+    transform: Callable[[Tensor], Union[Tensor, dict[str, Tensor]]] = field(
         default=lambda x: x
     )
 
-    def __getitem__(self, index: int) -> Tensor | dict[str, Tensor]:
+    def __getitem__(self, index: int) -> Union[Tensor, Dict[str, Tensor]]:
         image_path = (
             Path(self.data_dir) / self.dirname / "train" / "canon" / f"{index}.jpg"
         )
         image_file = torchvision.io.read_file(image_path.as_posix())
-        # TODO: Use nvjpg to decode the images more quickly when on CUDA
         image_jpg = torchvision.io.decode_jpeg(image_file)
         transformed = self.transform(image_jpg)
         return transformed

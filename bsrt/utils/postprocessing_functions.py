@@ -1,6 +1,6 @@
 from abc import ABC
 from dataclasses import dataclass
-from typing import overload
+from typing import Union, overload
 
 import numpy as np
 import numpy.typing as npt
@@ -76,7 +76,7 @@ def process_linear_image_rgb(
     gamma: bool = True,
     smoothstep: bool = True,
     return_np: bool = False,
-) -> Tensor | npt.NDArray[np.float32]:
+) -> Union[Tensor, npt.NDArray[np.float32]]:
     if gains:
         image = meta_info.gains.apply(image)
 
@@ -107,7 +107,7 @@ class BurstSRPostProcess(PostProcess):
         self,
         image: Tensor,
         meta_info: MetaInfo,
-        external_norm_factor: float | None = None,
+        external_norm_factor: Union[float, None] = None,
     ):
         return process_burstsr_image_rgb(
             image,
@@ -124,7 +124,7 @@ def process_burstsr_image_rgb(
     im: Tensor,
     meta_info: MetaInfo,
     return_np: bool = False,
-    external_norm_factor: float | None = None,
+    external_norm_factor: Union[float, None] = None,
     gamma: bool = True,
     smoothstep: bool = True,
     no_white_balance: bool = False,

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import overload
+from typing import Union, overload
 
 import cv2 as cv
 import numpy as np
 import numpy.typing as npt
 import torch
 from data_processing.meta_info import MetaInfo
+from data_processing.synthetic_burst_generation import MetaInfo
 from torch import Tensor
 from typing_extensions import Literal
 from utils.data_format_utils import npimage_to_torch, torch_to_npimage
@@ -110,20 +111,18 @@ def mosaic(image: Tensor, mode: Literal["grbg", "rggb"] = "rggb") -> Tensor:
     if image.dim() == 3:
         image = image.unsqueeze(0)
 
-    match mode:
-        case "rggb":
-            red = image[:, 0, 0::2, 0::2]
-            green_red = image[:, 1, 0::2, 1::2]
-            green_blue = image[:, 1, 1::2, 0::2]
-            blue = image[:, 2, 1::2, 1::2]
-            image = torch.stack((red, green_red, green_blue, blue), dim=1)
-
-        case "grbg":
-            green_red = image[:, 1, 0::2, 0::2]
-            red = image[:, 0, 0::2, 1::2]
-            blue = image[:, 2, 0::2, 1::2]
-            green_blue = image[:, 1, 1::2, 1::2]
-            image = torch.stack((green_red, red, blue, green_blue), dim=1)
+    if mode == "rggb":
+        red = image[:, 0, 0::2, 0::2]
+        green_red = image[:, 1, 0::2, 1::2]
+        green_blue = image[:, 1, 1::2, 0::2]
+        blue = image[:, 2, 1::2, 1::2]
+        image = torch.stack((red, green_red, green_blue, blue), dim=1)
+    elif mode == "grbg":
+        green_red = image[:, 1, 0::2, 0::2]
+        red = image[:, 0, 0::2, 1::2]
+        blue = image[:, 2, 0::2, 1::2]
+        green_blue = image[:, 1, 1::2, 1::2]
+        image = torch.stack((green_red, red, blue, green_blue), dim=1)
 
     if len(shape) == 3:
         return image.view((4, shape[-2] // 2, shape[-1] // 2))
@@ -185,7 +184,7 @@ def process_linear_image_rgb(
 
 def process_linear_image_rgb(
     image: Tensor, meta_info: MetaInfo, return_np: bool = False
-) -> Tensor | npt.NDArray[np.float32]:
+) -> Union[Tensor, npt.NDArray[np.float32]]:
     image = meta_info.gains.apply(image)
     image = apply_ccm(image, meta_info.cam2rgb)
 

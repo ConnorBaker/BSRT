@@ -2,7 +2,7 @@ import os
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, ClassVar, overload
+from typing import Any, ClassVar, Union, overload
 
 import torch
 import torch.nn.functional as F
@@ -69,7 +69,7 @@ class BurstSRDataset(Dataset):
         split: Literal["test"],
         burst_id: int,
         im_ids: list[int],
-        info: BurstSRInfo | None = None,
+        info: Union[BurstSRInfo, None] = None,
     ) -> tuple[list[SamsungImage], BurstSRInfo]:
         ...
 
@@ -79,7 +79,7 @@ class BurstSRDataset(Dataset):
         split: Literal["train", "val"],
         burst_id: int,
         im_ids: list[int],
-        info: BurstSRInfo | None = None,
+        info: Union[BurstSRInfo, None] = None,
     ) -> tuple[list[SamsungImage], CanonImage, BurstSRInfo]:
         ...
 
@@ -88,9 +88,10 @@ class BurstSRDataset(Dataset):
         split: Literal["train", "test", "val"],
         burst_id: int,
         im_ids: list[int],
-        info: BurstSRInfo | None = None,
-    ) -> tuple[list[SamsungImage], BurstSRInfo] | tuple[
-        list[SamsungImage], CanonImage, BurstSRInfo
+        info: Union[BurstSRInfo, None] = None,
+    ) -> Union[
+        tuple[list[SamsungImage], BurstSRInfo],
+        tuple[list[SamsungImage], CanonImage, BurstSRInfo],
     ]:
         frames = [self._get_raw_image(burst_id, i) for i in im_ids]
         if info is None:
@@ -114,8 +115,9 @@ class BurstSRDataset(Dataset):
 
     def __getitem__(
         self, index: int
-    ) -> tuple[Tensor, dict[str, Any]] | tuple[
-        Tensor, Tensor, dict[str, Any], dict[str, Any]
+    ) -> Union[
+        tuple[Tensor, dict[str, Any]],
+        tuple[Tensor, Tensor, dict[str, Any], dict[str, Any]],
     ]:
         # Sample the images in the burst, in case a burst_size < 14 is used.
         im_ids: list[int] = self._sample_images()
