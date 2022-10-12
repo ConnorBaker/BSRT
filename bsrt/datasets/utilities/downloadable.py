@@ -1,6 +1,6 @@
 from abc import ABC
 from pathlib import Path
-from typing import Union
+from typing import List, Union
 
 from torchvision.datasets.utils import download_and_extract_archive, extract_archive
 from typing_extensions import ClassVar
@@ -10,7 +10,7 @@ class Downloadable(ABC):
     url: ClassVar[str]
     filename: ClassVar[str]
     dirname: ClassVar[str]
-    mirrors: ClassVar[list[str]]
+    mirrors: ClassVar[List[str]]
     data_dir: Union[str, Path]
 
     def download(self) -> None:

@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, List
 
 import cv2 as cv
 import numpy as np
@@ -37,7 +37,7 @@ def npimage_to_torch(
     return a_t
 
 
-def convert_dict(base_dict: dict[str, Any], batch_sz: int) -> list[Any]:
+def convert_dict(base_dict: dict[str, Any], batch_sz: int) -> List[Any]:
     out_dict = []
     for b_elem in range(batch_sz):
         b_info = {}

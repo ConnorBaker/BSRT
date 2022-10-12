@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Union, overload
+from typing import List, Union, overload
 
 import cv2 as cv
 import numpy as np

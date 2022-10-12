@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import ClassVar, Union
+from typing import ClassVar, List, Union
 
 import torch
 from metrics.l1 import L1
@@ -40,9 +40,9 @@ class AlignedL1(L1):
             gt: (B, C, H, W)
             burst_input: (N, B, C, H, W)
         """
-        pred_warped_ms: list[Tensor] = []
-        gts: list[Tensor] = []
-        valids: list[Tensor] = []
+        pred_warped_ms: List[Tensor] = []
+        gts: List[Tensor] = []
+        valids: List[Tensor] = []
         for pred, gt, burst_input in zip(pred, gt, burst_input):
             pred_warped_m, gt, valid = prepare_aligned(
                 alignment_net=self.alignment_net,

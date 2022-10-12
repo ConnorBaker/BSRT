@@ -1,5 +1,5 @@
 import random
-from typing import Union
+from typing import List, Union
 
 import cv2
 import numpy as np
@@ -24,7 +24,7 @@ from utils.types import InterpolationType
 
 
 def random_crop(
-    frames: Tensor, crop_sz: Union[float, list[float], tuple[float, ...]]
+    frames: Tensor, crop_sz: Union[float, List[float], tuple[float, ...]]
 ) -> Tensor:
     """Extract a random crop of size crop_sz from the input frames. If the crop_sz is larger than the input image size,
     then the largest possible crop of same aspect ratio as crop_sz will be extracted from frames, and upsampled to
@@ -215,8 +215,8 @@ def single2lrburst(
             normalize = True
         image = torch_to_numpy(image).astype(np.uint8)
 
-    burst: list[Tensor] = []
-    sample_pos_inv_all: list[Tensor] = []
+    burst: List[Tensor] = []
+    sample_pos_inv_all: List[Tensor] = []
 
     rvs, cvs = torch.meshgrid(
         [torch.arange(0, image.shape[0]), torch.arange(0, image.shape[1])],

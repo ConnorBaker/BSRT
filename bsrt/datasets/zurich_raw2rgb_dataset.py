@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, Iterable, Union
+from typing import Callable, Dict, Iterable, List, Union
 
 import torchvision
 from datasets.utilities.downloadable import Downloadable
@@ -20,7 +20,7 @@ class ZurichRaw2RgbDataset(VisionDataset, Downloadable):
     url: ClassVar[str] = "https://data.vision.ee.ethz.ch/bhatg/zurich-raw-to-rgb.zip"
     filename: ClassVar[str] = "zurich-raw-to-rgb.zip"
     dirname: ClassVar[str] = "zurich-raw-to-rgb"
-    mirrors: ClassVar[list[str]] = [
+    mirrors: ClassVar[List[str]] = [
         "https://storage.googleapis.com/bsrt-supplemental/zurich-raw-to-rgb.zip"
     ]
 

@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable, List
 
 import cv2
 import numpy as np
@@ -9,7 +9,7 @@ import torchvision
 from datasets.utilities.downloadable import Downloadable
 from torch import Tensor
 from torchvision.datasets import VisionDataset
-from typing_extensions import ClassVar
+from typing_extensions import ClassVar, TypedDict
 
 
 @dataclass
@@ -24,11 +24,12 @@ class ValDataset(VisionDataset, Downloadable):
     url: ClassVar[str] = "https://data.vision.ee.ethz.ch/bhatg/SyntheticBurstVal.zip"
     filename: ClassVar[str] = "SyntheticBurstVal.zip"
     dirname: ClassVar[str] = "SyntheticBurstVal"
-    mirrors: ClassVar[list[str]] = [
+    mirrors: ClassVar[List[str]] = [
         "https://storage.googleapis.com/bsrt-supplemental/SyntheticBurstVal.zip"
     ]
 
-    data_dir: str
+    data_dir: Path
+    burst_list: List[int] = field(default_factory=lambda: list(range(300)))
     burst_size: int = 14
 
     def __post_init__(self) -> None:

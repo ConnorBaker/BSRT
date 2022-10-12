@@ -2,7 +2,7 @@ import os
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, ClassVar, Union, overload
+from typing import Any, ClassVar, List, Union, overload
 
 import torch
 import torch.nn.functional as F
@@ -34,7 +34,7 @@ class BurstSRDataset(Dataset):
         split: Can be 'train' or 'val'
     """
     data_dir: Path
-    burst_list: list[Path] = field(init=False)
+    burst_list: List[Path] = field(init=False)
     burst_size: int = 8
     crop_sz: int = 80
     center_crop: bool = False
@@ -68,9 +68,9 @@ class BurstSRDataset(Dataset):
         self,
         split: Literal["test"],
         burst_id: int,
-        im_ids: list[int],
+        im_ids: List[int],
         info: Union[BurstSRInfo, None] = None,
-    ) -> tuple[list[SamsungImage], BurstSRInfo]:
+    ) -> tuple[List[SamsungImage], BurstSRInfo]:
         ...
 
     @overload
@@ -78,20 +78,20 @@ class BurstSRDataset(Dataset):
         self,
         split: Literal["train", "val"],
         burst_id: int,
-        im_ids: list[int],
+        im_ids: List[int],
         info: Union[BurstSRInfo, None] = None,
-    ) -> tuple[list[SamsungImage], CanonImage, BurstSRInfo]:
+    ) -> tuple[List[SamsungImage], CanonImage, BurstSRInfo]:
         ...
 
     def get_burst(
         self,
         split: Literal["train", "test", "val"],
         burst_id: int,
-        im_ids: list[int],
+        im_ids: List[int],
         info: Union[BurstSRInfo, None] = None,
     ) -> Union[
-        tuple[list[SamsungImage], BurstSRInfo],
-        tuple[list[SamsungImage], CanonImage, BurstSRInfo],
+        tuple[List[SamsungImage], BurstSRInfo],
+        tuple[List[SamsungImage], CanonImage, BurstSRInfo],
     ]:
         frames = [self._get_raw_image(burst_id, i) for i in im_ids]
         if info is None:
@@ -103,7 +103,7 @@ class BurstSRDataset(Dataset):
             gt = self._get_gt_image(burst_id)
             return frames, gt, info
 
-    def _sample_images(self) -> list[int]:
+    def _sample_images(self) -> List[int]:
         ids = random.sample(range(1, self.burst_size), k=self.burst_size - 1)
         ids = [
             0,
@@ -120,7 +120,7 @@ class BurstSRDataset(Dataset):
         tuple[Tensor, Tensor, dict[str, Any], dict[str, Any]],
     ]:
         # Sample the images in the burst, in case a burst_size < 14 is used.
-        im_ids: list[int] = self._sample_images()
+        im_ids: List[int] = self._sample_images()
 
         # Read the burst images along with HR ground truth, if available
         if self.split == "test":

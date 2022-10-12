@@ -1,6 +1,6 @@
 import functools
 from dataclasses import dataclass, field
-from typing import Callable, Union
+from typing import Callable, List, Union
 
 import model.arch_util as arch_util
 import model.swin_util as swu
@@ -86,11 +86,11 @@ class BSRT(pl.LightningModule):
     center: int = field(init=False, default=0)
     conv_first: nn.Conv2d = field(init=False)
     conv_flow: nn.Conv2d = field(init=False)
-    depths: list[int] = field(init=False)
+    depths: List[int] = field(init=False)
     embed_dim: int = field(init=False)
     flow_ps: nn.PixelShuffle = field(init=False)
     img_size: int = field(init=False)
-    num_heads: list[int] = field(init=False)
+    num_heads: List[int] = field(init=False)
     num_layers: int = field(init=False)
     patch_embed: swu.PatchEmbed = field(init=False)
     patch_unembed: swu.PatchUnEmbed = field(init=False)
@@ -460,7 +460,7 @@ class BSRT(pl.LightningModule):
         clamped = x.clamp(0, 1)
         return clamped
 
-    def get_ref_flows(self, x: Tensor) -> list[Tensor]:
+    def get_ref_flows(self, x: Tensor) -> List[Tensor]:
         """Get flow between frames ref and other"""
         b, n, c, h, w = x.size()
         x_nbr = x.reshape(-1, c, h, w)
