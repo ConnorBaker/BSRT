@@ -14,7 +14,7 @@ from torchmetrics.metric import Metric
 
 
 # TODO: Using the derivied equals overwrites the default hash method, which we want to inherit from Metric.
-@dataclass(eq=False, init=False, kw_only=True)
+@dataclass(eq=False, init=False)
 class AlignedSSIM(Metric):
     full_state_update: ClassVar[bool] = False
     alignment_net: torch.nn.Module
