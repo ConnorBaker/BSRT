@@ -29,5 +29,4 @@ dependencies:
   - conda-forge::git==2.38.0
   - pip:
     - jsonargparse[signatures]==4.15.1
-    - git+https://github.com/Lightning-AI/lightning.git@da25d1d30d5bd063a71a7a462427702ed7e47ae2
-    - git+https://github.com/Lightning-AI/lightning-hpo.git@4892e3d39bb3adc140c6fb11451c540e12d4d223#egg=lightning-hpo
+    - git+https://github.com/Lightning-AI/lightning.git@d2840a20bd27a0a86fc59ba54d94543e63523133

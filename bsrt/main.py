@@ -10,7 +10,6 @@ import torch.backends.cuda
 import torch.backends.cudnn
 import logging
 from pytorch_lightning.cli import LightningCLI
-from lightning_hpo import Objective
 
 
 # configure logging at the root level of Lightning
