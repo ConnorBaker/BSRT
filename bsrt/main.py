@@ -17,6 +17,8 @@ logger = logging.getLogger("pytorch_lightning")
 logger.setLevel(logging.INFO)
 
 
+os.environ["NCCL_NSOCKS_PERTHREAD"] = "8"
+os.environ["NCCL_SOCKET_NTHREADS"] = "4"
 os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
 os.environ["TORCH_CUDNN_V8_API_DEBUG"] = "1"
 torch.backends.cuda.matmul.allow_tf32 = True
