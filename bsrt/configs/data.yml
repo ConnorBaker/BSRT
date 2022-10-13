@@ -6,3 +6,4 @@ data:
   num_workers: 30
   pin_memory: true
   drop_last: false
+  persistent_workers: true

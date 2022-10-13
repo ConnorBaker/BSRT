@@ -11,7 +11,6 @@ import torch.backends.cudnn
 import logging
 from pytorch_lightning.cli import LightningCLI
 
-
 # configure logging at the root level of Lightning
 logger = logging.getLogger("pytorch_lightning")
 logger.setLevel(logging.INFO)

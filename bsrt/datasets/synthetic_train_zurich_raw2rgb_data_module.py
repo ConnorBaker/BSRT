@@ -20,6 +20,7 @@ class SyntheticTrainZurichRaw2RgbDatasetDataModule(pl.LightningDataModule):
         batch_size (int): The number of bursts in each batch.
         num_workers (int): The number of subprocesses to use for data loading.
         pin_memory (bool): If ``True``, the data loader will copy Tensors into CUDA pinned memory before returning them.
+        persistent_workers (bool): If ``True``, the data loader will not shutdown the worker processes after a dataset has been consumed.
         drop_last (bool): If ``True``, the data loader will drop the last incomplete batch.
         timeout (float): If positive, the timeout value for collecting a batch from workers.
             Should always be non-negative.
@@ -32,6 +33,7 @@ class SyntheticTrainZurichRaw2RgbDatasetDataModule(pl.LightningDataModule):
     batch_size: int
     num_workers: int = 0
     pin_memory: bool = False
+    persistent_workers: bool = False
     drop_last: bool = False
     timeout: float = 0.0
     prefetch_factor: int = 2
@@ -55,6 +57,7 @@ class SyntheticTrainZurichRaw2RgbDatasetDataModule(pl.LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
+            persistent_workers=self.persistent_workers,
             drop_last=self.drop_last,
             timeout=self.timeout,
             prefetch_factor=self.prefetch_factor,
