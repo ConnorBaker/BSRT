@@ -5,10 +5,9 @@ trainer:
   resume_from_checkpoint: null
   benchmark: true
   deterministic: false
-  replace_sampler_ddp: true
   detect_anomaly: true
   plugins: null
-  profiler: advanced
+  profiler: simple
   amp_backend: native
   strategy:
     class_path: pytorch_lightning.strategies.DDPStrategy
