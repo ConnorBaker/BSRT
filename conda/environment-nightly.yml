@@ -8,8 +8,8 @@ dependencies:
   - conda-forge::python==3.10.6
   - conda-forge::pip==22.2.2
 
-  - pytorch-nightly::pytorch==1.14.0.dev20221011=py3.10_cuda11.7_cudnn8.5.0_0
-  - pytorch-nightly::torchvision==0.15.0.dev20221011=py310_cu117
+  - pytorch-nightly::pytorch==1.14.0.dev20221013=py3.10_cuda11.7_cudnn8.5.0_0
+  - pytorch-nightly::torchvision==0.15.0.dev20221013=py310_cu117
   - conda-forge::torchmetrics==0.10.0
   - conda-forge::lpips==0.1.3
 
@@ -22,11 +22,13 @@ dependencies:
   - fastai::timm==0.6.7
   # Waiting for https://github.com/fsspec/gcsfs/issues/498 in a new release
   - conda-forge::gcsfs==2022.7.1
-  - conda-forge::optuna==3.0.2
+  - conda-forge::optuna==3.0.3
   - conda-forge::wandb==0.13.4
+  - conda-forge::neptune-client==0.16.9
+  - conda-forge::neptune-optuna==0.9.13
 
-  - conda-forge::black==22.8.0
+  - conda-forge::black==22.10.0
   - conda-forge::git==2.38.0
   - pip:
     - jsonargparse[signatures]==4.15.1
-    - git+https://github.com/Lightning-AI/lightning.git@d2840a20bd27a0a86fc59ba54d94543e63523133
+    - git+https://github.com/Lightning-AI/lightning.git@5dd7b6a4787819f12758a7d68d6c0cfdbed405c2

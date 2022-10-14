@@ -40,7 +40,7 @@ trainer:
         cpu_stats: true
     - class_path: pytorch_lightning.callbacks.RichModelSummary
       init_args:
-        max_depth: 3
+        max_depth: 1
     - class_path: pytorch_lightning.callbacks.RichProgressBar
       init_args:
         leave: true

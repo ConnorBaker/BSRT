@@ -1,14 +1,14 @@
 name: bsrt-mac
 channels:
-  - pytorch
+  - pytorch-nightly
   - conda-forge
   - fastai
 dependencies:
   - conda-forge::python==3.10.6
   - conda-forge::pip==22.2.2
 
-  - pytorch::pytorch==1.12.1
-  - pytorch::torchvision==0.13.1
+  - pytorch-nightly::pytorch==1.14.0.dev20221013
+  - pytorch-nightly::torchvision==0.15.0.dev20221013
   - conda-forge::torchmetrics==0.10.0
   - conda-forge::lpips==0.1.3
 
@@ -19,12 +19,13 @@ dependencies:
   - fastai::timm==0.6.7
   # Waiting for https://github.com/fsspec/gcsfs/issues/498 in a new release
   - conda-forge::gcsfs==2022.7.1
-  - conda-forge::optuna==3.0.2
+  - conda-forge::optuna==3.0.3
   - conda-forge::wandb==0.13.4
+  - conda-forge::neptune-client==0.16.9
+  - conda-forge::neptune-optuna==0.9.13
 
-  - conda-forge::black==22.8.0
+  - conda-forge::black==22.10.0
   - conda-forge::git==2.38.0
   - pip:
     - jsonargparse[signatures]==4.15.1
-    - git+https://github.com/Lightning-AI/lightning.git@da25d1d30d5bd063a71a7a462427702ed7e47ae2
-    - git+https://github.com/Lightning-AI/lightning-hpo.git@4892e3d39bb3adc140c6fb11451c540e12d4d223#egg=lightning-hpo
+    - git+https://github.com/Lightning-AI/lightning.git@5dd7b6a4787819f12758a7d68d6c0cfdbed405c2
