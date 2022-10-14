@@ -24,8 +24,6 @@ dependencies:
   - conda-forge::gcsfs==2022.7.1
   - conda-forge::optuna==3.0.3
   - conda-forge::wandb==0.13.4
-  - conda-forge::neptune-client==0.16.9
-  - conda-forge::neptune-optuna==0.9.13
 
   - conda-forge::black==22.10.0
   - conda-forge::git==2.38.0
