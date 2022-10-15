@@ -23,6 +23,7 @@ dependencies:
   - fastai::timm==0.6.7
   # Waiting for https://github.com/fsspec/gcsfs/issues/498 in a new release
   - conda-forge::gcsfs==2022.7.1
+  - conda-forge::pg8000==1.29.2
   - conda-forge::optuna==3.0.3
   - conda-forge::wandb==0.13.4
 

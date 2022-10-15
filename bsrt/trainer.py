@@ -202,7 +202,7 @@ if __name__ == "__main__":
     assert DB_PORT is not None, "DB_PORT environment variable must be set"
     DB_NAME = os.environ["DB_NAME"]
     assert DB_NAME is not None, "DB_NAME environment variable must be set"
-    DB_URI = f"postgresql+asyncpg://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    DB_URI = f"postgresql+pg8000://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
     study = optuna.create_study(
         study_name="bsrt-32-hyperparameter-tuning",
