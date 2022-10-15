@@ -1,13 +1,13 @@
 seed_everything: 1
 trainer:
   accelerator: auto
-  limit_train_batches: 10
+  limit_train_batches: 50
   max_epochs: 10
   resume_from_checkpoint: null
 
   # Speed related settings
-  precision: 16
-  log_every_n_steps: 5
+  precision: 32
+  log_every_n_steps: 10
   benchmark: true
   deterministic: false
   detect_anomaly: false

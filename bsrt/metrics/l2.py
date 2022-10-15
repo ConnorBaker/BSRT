@@ -1,17 +1,15 @@
 from __future__ import annotations
-
 from dataclasses import dataclass, field
-from typing import ClassVar
-
-import torch
-import torch.nn.functional as F
 from metrics.utils.ignore_boundry import ignore_boundary
 from torch import Tensor
 from torchmetrics.functional.image.ssim import (
     structural_similarity_index_measure as compute_ssim,
 )
-from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity as LPIPS
 from torchmetrics.metric import Metric
+from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity as LPIPS
+from typing import ClassVar
+import torch
+import torch.nn.functional as F
 
 
 # TODO: Using the derivied equals overwrites the default hash method, which we want to inherit from Metric.
@@ -67,7 +65,7 @@ class L2(Metric):
             reduction="elementwise_mean",
             data_range=1.0,
         )  # type: ignore
-        self.lpips = self.loss_fn(pred.contiguous(), gt.contiguous())
+        self.lpips = self.loss_fn(pred.clamp(min=-1.0, max=-1.0).contiguous(), gt.clamp(min=-1.0, max=-1.0).contiguous())
 
         acc_mse: Tensor = torch.tensor(0.0, device=pred.device)
         if valid is None:
