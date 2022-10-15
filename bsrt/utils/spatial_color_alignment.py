@@ -1,8 +1,9 @@
 import math
+
 import torch
 import torch.nn.functional as F
-from utils.bilinear_upsample_2d import bilinear_upsample_2d
 from metrics.utils.ignore_boundry import ignore_boundary
+from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 
 def gauss_1d(sz, sigma, center, end_pad=0, density=False):

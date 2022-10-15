@@ -1,11 +1,13 @@
 from __future__ import annotations
+
 from dataclasses import dataclass, field
+from typing import ClassVar
+
+import torch
+import torch.nn.functional as F
 from metrics.utils.ignore_boundry import ignore_boundary
 from torch import Tensor
 from torchmetrics.metric import Metric
-from typing import ClassVar
-import torch
-import torch.nn.functional as F
 
 
 # TODO: Using the derivied equals overwrites the default hash method, which we want to inherit from Metric.

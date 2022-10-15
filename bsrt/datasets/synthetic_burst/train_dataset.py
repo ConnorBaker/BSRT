@@ -1,14 +1,15 @@
-from utils.types import InterpolationType
+from dataclasses import dataclass, field
+
 from data_processing.synthetic_burst_generation import (
-    rgb2rawburst,
-    random_crop,
     ImageProcessingParams,
     ImageTransformationParams,
+    random_crop,
+    rgb2rawburst,
 )
-from dataclasses import dataclass, field
 from metrics.utils.ignore_boundry import ignore_boundary
 from torch import Tensor
 from typing_extensions import ClassVar, TypedDict
+from utils.types import InterpolationType
 
 
 class TrainData(TypedDict):

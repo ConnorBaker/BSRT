@@ -1,11 +1,13 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
+
 import math
+from dataclasses import dataclass, field
+from typing import ClassVar
+
+import torch
 from metrics.l2 import L2
 from torch import Tensor
 from torchmetrics.metric import Metric
-from typing import ClassVar
-import torch
 
 
 # TODO: This serves as a catch-all loss function. We should split it into multiple loss functions, and use metrics provided by torchmetrics where possible.

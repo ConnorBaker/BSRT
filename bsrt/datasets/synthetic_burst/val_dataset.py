@@ -1,14 +1,15 @@
+import pickle as pkl
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-from typing_extensions import ClassVar, TypedDict
-import torch
-from torch import Tensor
+
 import cv2
 import numpy as np
-import pickle as pkl
-from datasets.utilities.provides import ProvidesDatasetPipeline, ProvidesDatasource
+import torch
 from datasets.utilities.downloadable import Downloadable
+from datasets.utilities.provides import ProvidesDatasetPipeline, ProvidesDatasource
+from torch import Tensor
+from typing_extensions import ClassVar, TypedDict
 
 
 class ValData(TypedDict):
@@ -19,9 +20,9 @@ class ValData(TypedDict):
 
 import ray
 from ray.air import session
-from ray.data import DatasetPipeline, Dataset
+from ray.air.config import DatasetConfig, ScalingConfig
+from ray.data import Dataset, DatasetPipeline
 from ray.train.torch import TorchTrainer
-from ray.air.config import ScalingConfig, DatasetConfig
 
 
 @dataclass

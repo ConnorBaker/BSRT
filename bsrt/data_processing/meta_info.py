@@ -1,6 +1,7 @@
+from dataclasses import dataclass, field
+
 from data_processing.noises import Noises
 from data_processing.rgb_gains import RgbGains
-from dataclasses import dataclass, field
 from torch import Tensor
 
 

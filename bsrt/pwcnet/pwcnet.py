@@ -1,8 +1,9 @@
 # Based on run.py from PWCNet
-import torch
-from utils.bilinear_upsample_2d import bilinear_upsample_2d
 import math
 import sys
+
+import torch
+from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 try:
     from pwcnet.correlation import correlation  # the custom cost volume layer

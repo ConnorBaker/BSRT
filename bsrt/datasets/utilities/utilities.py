@@ -1,6 +1,6 @@
-import torch
 import cv2
 import numpy as np
+import torch
 
 
 def pack_raw_image(im_raw):

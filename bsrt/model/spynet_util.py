@@ -1,9 +1,9 @@
 import math
+
+import model.arch_util as arch_util
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-import model.arch_util as arch_util
 from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 

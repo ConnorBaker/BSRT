@@ -1,10 +1,11 @@
 from dataclasses import dataclass, field
-from datasets.synthetic_burst.train_dataset import TrainDataProcessor
-from datasets.zurich_raw2rgb_dataset import ZurichRaw2RgbDataset
-from datasets.utilities.image_folder_data import ImageFolderData
-import pytorch_lightning as pl
-from torch.utils.data import DataLoader
+
 import numpy as np
+import pytorch_lightning as pl
+from datasets.synthetic_burst.train_dataset import TrainDataProcessor
+from datasets.utilities.image_folder_data import ImageFolderData
+from datasets.zurich_raw2rgb_dataset import ZurichRaw2RgbDataset
+from torch.utils.data import DataLoader
 
 ZuricRaw2RgbData = ImageFolderData[np.uint8]
 

@@ -1,16 +1,17 @@
-from dataclasses import dataclass, field
 import os
+import random
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar, overload
-from typing_extensions import Literal
+
 import torch
-from torch import Tensor
 import torch.nn.functional as F
-import random
-from torch.utils.data import Dataset
-from datasets.cameras.samsung import SamsungImage
 from datasets.cameras.canon import CanonImage
+from datasets.cameras.samsung import SamsungImage
 from datasets.utilities.utilities import flatten_raw_image, pack_raw_image
+from torch import Tensor
+from torch.utils.data import Dataset
+from typing_extensions import Literal
 
 
 @dataclass

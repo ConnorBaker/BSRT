@@ -1,16 +1,17 @@
 from __future__ import annotations
+
+import pickle as pkl
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import overload
-from typing_extensions import Literal
-import torch
-from torch import Tensor
+
 import cv2
 import numpy as np
-import pickle as pkl
-from datasets.cameras.metadata import ImageMetadata
 import numpy.typing as npt
-import numpy as np
+import torch
+from datasets.cameras.metadata import ImageMetadata
+from torch import Tensor
+from typing_extensions import Literal
 
 
 @dataclass

@@ -1,6 +1,7 @@
 import torch
-from torch import Tensor
 import torch.nn.functional as F
+from torch import Tensor
+
 
 # TODO: Remove when https://github.com/pytorch/pytorch/pull/80340 is merged
 def bilinear_upsample_2d(

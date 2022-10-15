@@ -1,10 +1,12 @@
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import ClassVar
+
 import torch
-from torch import Tensor
-from metrics.utils.ignore_boundry import ignore_boundary
 from loss.charbonnier import CharbonnierLoss as CBLoss
+from metrics.utils.ignore_boundry import ignore_boundary
+from torch import Tensor
 from torchmetrics.metric import Metric
 
 

@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 
 import math
+
 import moviepy
 import moviepy.editor
 import numpy
 import PIL
 import PIL.Image
-import PIL.ImageFont
 import PIL.ImageDraw
+import PIL.ImageFont
 
 intX = 32
 intY = 436 - 64

@@ -1,7 +1,8 @@
 from abc import ABC
 from pathlib import Path
-from typing_extensions import ClassVar
+
 from torchvision.datasets.utils import download_and_extract_archive, extract_archive
+from typing_extensions import ClassVar
 
 
 class Downloadable(ABC):

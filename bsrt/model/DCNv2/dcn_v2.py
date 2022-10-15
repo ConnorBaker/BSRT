@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from torchvision.ops import deform_conv2d, DeformConv2d
+from torchvision.ops import DeformConv2d, deform_conv2d
 
 
 class DCN_sep(DeformConv2d):

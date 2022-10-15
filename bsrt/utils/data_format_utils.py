@@ -1,9 +1,10 @@
-import numpy.typing as npt
+from typing import Any
+
+import cv2 as cv
 import numpy as np
+import numpy.typing as npt
 import torch
 from torch import Tensor
-from typing import Any
-import cv2 as cv
 
 
 def numpy_to_torch(a: npt.NDArray):

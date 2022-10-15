@@ -1,8 +1,10 @@
 from __future__ import annotations
-from dataclasses import dataclass
-from torch import Tensor
+
 import random
+from dataclasses import dataclass
+
 import torch
+from torch import Tensor
 
 
 @dataclass

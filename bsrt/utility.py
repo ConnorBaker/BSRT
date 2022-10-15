@@ -1,5 +1,10 @@
+import os
 from typing import cast
-from utils.types import BayerPattern, NormalizationMode
+
+import torch
+import torch.nn.functional as F
+import torch.optim as optim
+import torch.optim.lr_scheduler as lrs
 from metrics.aligned.l1 import AlignedL1
 from metrics.aligned.psnr import AlignedPSNR
 from metrics.charbonnier_loss import CharbonnierLoss
@@ -7,17 +12,12 @@ from metrics.l1 import L1
 from metrics.l2 import L2
 from metrics.ms_ssim_loss import MSSSIMLoss
 from metrics.psnr import PSNR
-from option import LossName, DataTypeName
-from torch import Tensor
+from option import DataTypeName, LossName
+from torch import Tensor, nn
 from torchmetrics.metric import Metric
 from typing_extensions import Literal, get_args, overload
 from utils.postprocessing_functions import BurstSRPostProcess, SimplePostProcess
-import os
-import torch
-from torch import nn
-import torch.nn.functional as F
-import torch.optim as optim
-import torch.optim.lr_scheduler as lrs
+from utils.types import BayerPattern, NormalizationMode
 
 
 def make_loss_fn(loss: LossName, data_type: DataTypeName) -> Metric:

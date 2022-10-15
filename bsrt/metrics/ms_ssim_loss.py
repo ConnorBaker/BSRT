@@ -1,12 +1,13 @@
 from dataclasses import dataclass, field
+from typing import ClassVar
+
+import torch
 from metrics.utils.ignore_boundry import ignore_boundary
 from torch import Tensor
 from torchmetrics.functional.image.ssim import (
     multiscale_structural_similarity_index_measure as compute_msssim,
 )
 from torchmetrics.metric import Metric
-from typing import ClassVar
-import torch
 
 
 # TODO: Using the derivied equals overwrites the default hash method, which we want to inherit from Metric.

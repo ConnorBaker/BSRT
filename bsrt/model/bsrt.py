@@ -1,23 +1,24 @@
+import functools
 from dataclasses import dataclass, field
 from typing import Callable
-from typing_extensions import Literal
+
+import model.arch_util as arch_util
+import model.swin_util as swu
+import pytorch_lightning as pl
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from datasets.synthetic_burst.train_dataset import TrainData
-from utility import make_loss_fn, make_psnr_fn
 from model.cross_non_local_fusion import CrossNonLocalFusion
 from model.flow_guided_pcd_align import FlowGuidedPCDAlign
 from model.spynet_util import SpyNet
 from option import DataTypeName, LossName
-from torch.nn.parameter import Parameter
-from utils.bilinear_upsample_2d import bilinear_upsample_2d
-import functools
-import model.arch_util as arch_util
-import model.swin_util as swu
-import torch
 from torch import Tensor
-import torch.nn as nn
-import torch.nn.functional as F
-import pytorch_lightning as pl
+from torch.nn.parameter import Parameter
 from torchmetrics import Metric
+from typing_extensions import Literal
+from utility import make_loss_fn, make_psnr_fn
+from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 
 @dataclass(eq=False)

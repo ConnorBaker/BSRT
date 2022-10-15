@@ -1,10 +1,12 @@
 from __future__ import annotations
+
 from dataclasses import dataclass, field
+from typing import ClassVar
+
+import torch
+from metrics.aligned.l2 import AlignedL2
 from metrics.l2 import L2
 from metrics.psnr import PSNR
-from metrics.aligned.l2 import AlignedL2
-from typing import ClassVar
-import torch
 
 
 # TODO: Using the derivied equals overwrites the default hash method, which we want to inherit from Metric.

@@ -1,12 +1,13 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterable
-from typing_extensions import ClassVar
-from datasets.utilities.downloadable import Downloadable
+
 import torchvision
+from datasets.utilities.downloadable import Downloadable
 from torch import Tensor
-from torchvision.datasets import VisionDataset
 from torch.utils.data import Sampler
+from torchvision.datasets import VisionDataset
+from typing_extensions import ClassVar
 
 
 @dataclass

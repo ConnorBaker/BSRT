@@ -1,5 +1,5 @@
-from typing_extensions import overload
 from torch import Tensor
+from typing_extensions import overload
 
 
 @overload
