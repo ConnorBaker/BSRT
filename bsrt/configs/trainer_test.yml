@@ -1,13 +1,14 @@
 seed_everything: 1
 trainer:
   accelerator: auto
-  precision: bf16
+  precision: 32
+  limit_train_batches: 10
+  max_epochs: 10
+  log_every_n_steps: 5
   resume_from_checkpoint: null
   benchmark: true
   deterministic: false
   detect_anomaly: true
-  plugins: null
-  profiler: simple
   amp_backend: native
   strategy:
     class_path: pytorch_lightning.strategies.DDPStrategy
@@ -15,8 +16,6 @@ trainer:
       ddp_comm_state:
         class_path: torch.distributed.algorithms.ddp_comm_hooks.post_localSGD_hook.PostLocalSGDState
         init_args:
-          process_group: null
-          subgroup: null
           start_localSGD_iter: 8
       model_averaging_period: 4
       find_unused_parameters: true
@@ -25,7 +24,7 @@ trainer:
   callbacks:
     - class_path: pytorch_lightning.callbacks.early_stopping.EarlyStopping
       init_args:
-        monitor: loss
+        monitor: train/loss
         min_delta: 1e-2
         patience: 3
         mode: min
@@ -34,9 +33,6 @@ trainer:
     - class_path: pytorch_lightning.callbacks.StochasticWeightAveraging
       init_args:
         swa_lrs: 1e-2
-    - class_path: pytorch_lightning.callbacks.DeviceStatsMonitor
-      init_args:
-        cpu_stats: true
     - class_path: pytorch_lightning.callbacks.RichModelSummary
       init_args:
         max_depth: 1

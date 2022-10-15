@@ -74,6 +74,7 @@ def make_psnr_fn(data_type: DataTypeName) -> Metric:
                 param.requires_grad = False
             return AlignedPSNR(alignment_net=alignment_net, boundary_ignore=40)
 
+
 ######################## BayerUnifyAug ############################
 
 

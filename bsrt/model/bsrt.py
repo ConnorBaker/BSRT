@@ -57,7 +57,7 @@ class BSRT(pl.LightningModule):
     drop_path_rate: float = 0.1
     drop_rate: float = 0.0
     flow_alignment_groups: int = 8
-    in_chans: int = 4 # RAW images are RGGB or the like, so 4 channels
+    in_chans: int = 4  # RAW images are RGGB or the like, so 4 channels
     loss_type: LossName = "L1"
     lr: float = 1e-4
     mlp_ratio: float = 4.0
@@ -66,7 +66,7 @@ class BSRT(pl.LightningModule):
     norm_layer: Callable[[int], nn.LayerNorm] = nn.LayerNorm
     num_features: int = 64
     num_frames: int = 14
-    out_chans: int = 3 # RGB output so 3 channels
+    out_chans: int = 3  # RGB output so 3 channels
     patch_norm: bool = True
     patch_size: int = 1
     qk_scale: float | None = None
@@ -460,20 +460,28 @@ class BSRT(pl.LightningModule):
 
         return flows_list
 
-    def training_step(self, batch: TrainData, batch_idx: int) -> torch.Tensor:
-        bursts = batch["burst"]
-        gts = batch["gt"]
-        srs = self(bursts)
-        loss = self.loss_fn(srs, gts)
-        self.log("loss", loss.item())
-        return loss
 
-    def validation_step(self, batch: TrainData, batch_idx: int) -> torch.Tensor:
-        bursts = batch["burst"]
-        gts = batch["gt"]
-        srs = self(bursts)
-        psnr, ssim, lpips = self.psnr_fn(srs, gts)
-        self.log("val_psnr", psnr.item())
-        self.log("val_ssim", ssim.item())
-        self.log("val_lpips", lpips.item())
-        return psnr, ssim, lpips
+def training_step(self, batch: TrainData, batch_idx: int) -> torch.Tensor:
+    bursts = batch["burst"]
+    gts = batch["gt"]
+    srs = self(bursts)
+    loss = self.loss_fn(srs, gts)
+    psnr, ssim, lpips = self.psnr_fn(srs, gts)
+    self.log("train/loss", loss, on_step=True, prog_bar=True)
+    self.log("train/psnr", psnr, on_step=True, prog_bar=True)
+    self.log("train/ssim", ssim, on_step=True, prog_bar=True)
+    self.log("train/lpips", lpips, on_step=True, prog_bar=True)
+    return loss
+
+
+def validation_step(self, batch: TrainData, batch_idx: int) -> torch.Tensor:
+    bursts = batch["burst"]
+    gts = batch["gt"]
+    srs = self(bursts)
+    loss = self.loss_fn(srs, gts)
+    psnr, ssim, lpips = self.psnr_fn(srs, gts)
+    self.log("val/loss", loss, on_step=True, prog_bar=True)
+    self.log("val/psnr", psnr, on_step=True, prog_bar=True)
+    self.log("val/ssim", ssim, on_step=True, prog_bar=True)
+    self.log("val/lpips", lpips, on_step=True, prog_bar=True)
+    return loss
