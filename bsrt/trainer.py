@@ -1,14 +1,13 @@
 from typing import cast, get_args
 
 import optuna
-from datasets.synthetic_train_zurich_raw2rgb_data_module import \
-    SyntheticTrainZurichRaw2RgbDatasetDataModule
+from datasets.synthetic_train_zurich_raw2rgb_data_module import (
+    SyntheticTrainZurichRaw2RgbDatasetDataModule,
+)
 from model.bsrt import BSRT
-from optuna.integration.pytorch_lightning import \
-    PyTorchLightningPruningCallback
+from optuna.integration.pytorch_lightning import PyTorchLightningPruningCallback
 from optuna.integration.wandb import WeightsAndBiasesCallback
-from optuna.pruners import (HyperbandPruner, MedianPruner,
-                            SuccessiveHalvingPruner)
+from optuna.pruners import HyperbandPruner, MedianPruner, SuccessiveHalvingPruner
 from optuna.study import StudyDirection
 from pytorch_lightning.cli import LightningCLI
 from pytorch_lightning.loggers.wandb import WandbLogger
@@ -19,13 +18,15 @@ OptimizerName = Literal["Adam", "AdamW", "RMSprop", "SGD"]
 
 if __name__ == "__main__":
     import os
+
     os.environ["NCCL_NSOCKS_PERTHREAD"] = "8"
     os.environ["NCCL_SOCKET_NTHREADS"] = "4"
     os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
     os.environ["TORCH_CUDNN_V8_API_DEBUG"] = "1"
-    
+
     import torch.backends.cuda
     import torch.backends.cudnn
+
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
     torch.backends.cudnn.allow_tf32 = True
@@ -44,7 +45,12 @@ if __name__ == "__main__":
         as_multirun=True,
     )
 
-    cli = LightningCLI(BSRT, SyntheticTrainZurichRaw2RgbDatasetDataModule, run=False, save_config_callback=None)
+    cli = LightningCLI(
+        BSRT,
+        SyntheticTrainZurichRaw2RgbDatasetDataModule,
+        run=False,
+        save_config_callback=None,
+    )
 
     # Decorator adds trial/run number to the name of the run
     @wandbc.track_in_wandb()
@@ -76,11 +82,11 @@ if __name__ == "__main__":
         mlp_ratio = trial.suggest_float("mlp_ratio", 1.0, 32.0, log=True)
         cli.config.model.mlp_ratio = mlp_ratio
         hyperparameters["mlp_ratio"] = mlp_ratio
-        
+
         # Must be a multiple of flow alignment groups
-        num_features_pow = trial.suggest_int("num_features_pow", 5, 10)        
+        num_features_pow = trial.suggest_int("num_features_pow", 5, 10)
         hyperparameters["num_features_pow"] = num_features_pow
-        num_features = 2 ** num_features_pow
+        num_features = 2**num_features_pow
         cli.config.model.num_features = num_features
         hyperparameters["num_features"] = num_features
 
@@ -100,10 +106,10 @@ if __name__ == "__main__":
         ### Loss Hyperparameters ###
         # gan_k = trial.suggest_int("gan_k", 1, 5)
         # hyperparameters["gan_k"] = gan_k
-        
+
         # gamma = trial.suggest_float("gamma", 1e-4, 1.0, log=True)
         # hyperparameters["gamma"] = gamma
-        
+
         ### Optimizer Hyperparameters ###
         # decay_milestones: Categorical = tune.choice(
         #     [[x, y] for x in range(40, 300, 20) for y in range(80, 400, 20) if x < y]
@@ -122,7 +128,7 @@ if __name__ == "__main__":
 
         weight_decay = trial.suggest_float("weight_decay", 1e-10, 1e-4, log=True)
         hyperparameters["weight_decay"] = weight_decay
-        
+
         optimizer_name: OptimizerName = cast(
             OptimizerName,
             trial.suggest_categorical("optimizer_name", get_args(OptimizerName)),
@@ -130,24 +136,48 @@ if __name__ == "__main__":
         hyperparameters["optimizer_name"] = optimizer_name
         match optimizer_name:
             case "Adam":
-                optimizer = Adam(cli.config_init.model.parameters(), lr=lr, betas=(beta_gradient, beta_square), eps=epsilon, weight_decay=weight_decay)
+                optimizer = Adam(
+                    cli.config_init.model.parameters(),
+                    lr=lr,
+                    betas=(beta_gradient, beta_square),
+                    eps=epsilon,
+                    weight_decay=weight_decay,
+                )
             case "AdamW":
-                optimizer = AdamW(cli.config_init.model.parameters(), lr=lr, betas=(beta_gradient, beta_square), eps=epsilon, weight_decay=weight_decay)
+                optimizer = AdamW(
+                    cli.config_init.model.parameters(),
+                    lr=lr,
+                    betas=(beta_gradient, beta_square),
+                    eps=epsilon,
+                    weight_decay=weight_decay,
+                )
             case "RMSprop":
                 alpha = trial.suggest_float("alpha", 1e-4, 1.0, log=True)
                 hyperparameters["alpha"] = alpha
-                optimizer = RMSprop(cli.config_init.model.parameters(), lr=lr, alpha=alpha, eps=epsilon, weight_decay=weight_decay, momentum=momentum)
+                optimizer = RMSprop(
+                    cli.config_init.model.parameters(),
+                    lr=lr,
+                    alpha=alpha,
+                    eps=epsilon,
+                    weight_decay=weight_decay,
+                    momentum=momentum,
+                )
             case "SGD":
-                optimizer = SGD(cli.config_init.model.parameters(), lr=lr, momentum=momentum, weight_decay=weight_decay)
+                optimizer = SGD(
+                    cli.config_init.model.parameters(),
+                    lr=lr,
+                    momentum=momentum,
+                    weight_decay=weight_decay,
+                )
 
         cli.config_init.optimizer = optimizer
-
 
         ### Setup the trainer ###
         if cli.config_init.trainer.callbacks is None:
             cli.config_init.trainer.callbacks = []
-        cli.config_init.trainer.callbacks.append(PyTorchLightningPruningCallback(trial, monitor="train/loss"))
-        
+        cli.config_init.trainer.callbacks.append(
+            PyTorchLightningPruningCallback(trial, monitor="train/loss")
+        )
 
         cli.instantiate_classes()
         model = cli.model
@@ -162,9 +192,21 @@ if __name__ == "__main__":
 
         return trainer.callback_metrics["train/loss"].item()
 
+    DB_USER = os.environ["DB_USER"]
+    assert DB_USER is not None, "DB_USER environment variable must be set"
+    DB_PASS = os.environ["DB_PASS"]
+    assert DB_PASS is not None, "DB_PASS environment variable must be set"
+    DB_HOST = os.environ["DB_HOST"]
+    assert DB_HOST is not None, "DB_HOST environment variable must be set"
+    DB_PORT = os.environ["DB_PORT"]
+    assert DB_PORT is not None, "DB_PORT environment variable must be set"
+    DB_NAME = os.environ["DB_NAME"]
+    assert DB_NAME is not None, "DB_NAME environment variable must be set"
+    DB_URI = f"postgresql+asyncpg://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
     study = optuna.create_study(
         study_name="bsrt-32-hyperparameter-tuning",
-        storage="sqlite:///bsrt.db",
+        storage=DB_URI,
         direction=StudyDirection.MINIMIZE,
         pruner=MedianPruner(),
         load_if_exists=True,
@@ -172,24 +214,8 @@ if __name__ == "__main__":
 
     study.optimize(
         objective,
+        catch=(Exception,),
         n_trials=1000,
         callbacks=[wandbc],
         n_jobs=1,
     )
-
-    # TODO: Add a way to save the best model and the figures from the best run
-    # for param_name, param_value in study.best_trial.params.items():
-    #     wandb.run.summary[f"best_{param_name}"] = param_value
-
-    # wandb.run.summary["best accuracy"] = study.best_trial.value
-    # wandb.log(
-    #     {
-    #         "optuna_optimization_history": optuna.visualization.plot_optimization_history(
-    #             study
-    #         ),
-    #         "optuna_param_importances": optuna.visualization.plot_param_importances(
-    #             study
-    #         ),
-    #     }
-    # )
-    # wandb.finish()

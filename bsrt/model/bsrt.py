@@ -461,28 +461,26 @@ class BSRT(pl.LightningModule):
 
         return flows_list
 
+    def training_step(self, batch: TrainData, batch_idx: int) -> torch.Tensor:
+        bursts = batch["burst"]
+        gts = batch["gt"]
+        srs = self(bursts)
+        loss = self.loss_fn(srs, gts)
+        psnr, ssim, lpips = self.psnr_fn(srs, gts)
+        self.log("train/loss", loss, on_step=True, prog_bar=True)
+        self.log("train/psnr", psnr, on_step=True, prog_bar=True)
+        self.log("train/ssim", ssim, on_step=True, prog_bar=True)
+        self.log("train/lpips", lpips, on_step=True, prog_bar=True)
+        return loss
 
-def training_step(self, batch: TrainData, batch_idx: int) -> torch.Tensor:
-    bursts = batch["burst"]
-    gts = batch["gt"]
-    srs = self(bursts)
-    loss = self.loss_fn(srs, gts)
-    psnr, ssim, lpips = self.psnr_fn(srs, gts)
-    self.log("train/loss", loss, on_step=True, prog_bar=True)
-    self.log("train/psnr", psnr, on_step=True, prog_bar=True)
-    self.log("train/ssim", ssim, on_step=True, prog_bar=True)
-    self.log("train/lpips", lpips, on_step=True, prog_bar=True)
-    return loss
-
-
-def validation_step(self, batch: TrainData, batch_idx: int) -> torch.Tensor:
-    bursts = batch["burst"]
-    gts = batch["gt"]
-    srs = self(bursts)
-    loss = self.loss_fn(srs, gts)
-    psnr, ssim, lpips = self.psnr_fn(srs, gts)
-    self.log("val/loss", loss, on_step=True, prog_bar=True)
-    self.log("val/psnr", psnr, on_step=True, prog_bar=True)
-    self.log("val/ssim", ssim, on_step=True, prog_bar=True)
-    self.log("val/lpips", lpips, on_step=True, prog_bar=True)
-    return loss
+    def validation_step(self, batch: TrainData, batch_idx: int) -> torch.Tensor:
+        bursts = batch["burst"]
+        gts = batch["gt"]
+        srs = self(bursts)
+        loss = self.loss_fn(srs, gts)
+        psnr, ssim, lpips = self.psnr_fn(srs, gts)
+        self.log("val/loss", loss, on_step=True, prog_bar=True)
+        self.log("val/psnr", psnr, on_step=True, prog_bar=True)
+        self.log("val/ssim", ssim, on_step=True, prog_bar=True)
+        self.log("val/lpips", lpips, on_step=True, prog_bar=True)
+        return loss
