@@ -35,7 +35,7 @@ if __name__ == "__main__":
     wandb_kwargs = {
         "entity": "connorbaker",
         "project": "bsrt",
-        "group": "PL",
+        "group": "32",
         "dir": None,
         "reinit": True,
     }
@@ -102,7 +102,7 @@ if __name__ == "__main__":
         return trainer.callback_metrics["train/loss"].item()
 
     study = optuna.create_study(
-        study_name="bsrt",
+        study_name="bsrt-32",
         storage="sqlite:///bsrt.db",
         direction=StudyDirection.MINIMIZE,
         pruner=MedianPruner(),
@@ -121,7 +121,6 @@ if __name__ == "__main__":
         n_trials=100,
         callbacks=[wandbc],
         n_jobs=1,
-        show_progress_bar=True,
     )
 
     print(f"Study name: {study.study_name}")
