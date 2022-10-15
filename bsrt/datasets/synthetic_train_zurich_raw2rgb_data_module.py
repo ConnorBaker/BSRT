@@ -44,13 +44,16 @@ class SyntheticTrainZurichRaw2RgbDatasetDataModule(pl.LightningDataModule):
         self,
     ) -> None:
         super().__init__()
+
+    def prepare_data(self) -> None:
+        # Download the dataset if not present
+        ZurichRaw2RgbDataset(data_dir=self.data_dir).download()
+
+    def setup(self, stage: str | None = None) -> None:
         self.dataset = ZurichRaw2RgbDataset(
             data_dir=self.data_dir,
             transform=TrainDataProcessor(burst_size=self.burst_size, crop_sz=self.crop_size),  # type: ignore
         )
-
-    def prepare_data(self) -> None:
-        self.dataset.download()
 
     def train_dataloader(self) -> DataLoader[ZuricRaw2RgbData]:
         return DataLoader(
