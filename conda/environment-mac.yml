@@ -15,7 +15,7 @@ dependencies:
   - conda-forge::numpy==1.23.3
   - conda-forge::pandas==1.5.0
 
-  - fastai::opencv-python-headless==4.6.0.66
+  - conda-forge::opencv==4.6.0
   - fastai::timm==0.6.7
   # Waiting for https://github.com/fsspec/gcsfs/issues/498 in a new release
   - conda-forge::gcsfs==2022.7.1
@@ -23,6 +23,7 @@ dependencies:
   - conda-forge::wandb==0.13.4
 
   - conda-forge::black==22.10.0
+  - conda-forge::isort==5.10.1
   - conda-forge::git==2.38.0
   - pip:
     - jsonargparse[signatures]==4.15.1

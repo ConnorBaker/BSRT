@@ -26,6 +26,7 @@ dependencies:
   - conda-forge::wandb==0.13.4
 
   - conda-forge::black==22.10.0
+  - conda-forge::isort==5.10.1
   - conda-forge::git==2.38.0
   - pip:
     - jsonargparse[signatures]==4.15.1
