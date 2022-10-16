@@ -4,22 +4,17 @@ import math
 from typing import ClassVar
 
 import torch
-from metrics.l2 import L2
+from metrics.mse import MSE
 from torch import Tensor
-from torchmetrics.metric import Metric
 
 
-# TODO: This serves as a catch-all loss function. We should split it into multiple loss functions, and use metrics provided by torchmetrics where possible.
-class PSNR(Metric):
+class PSNR(MSE):
     full_state_update: ClassVar[bool] = False
     boundary_ignore: int | None = None
     max_value: float = 1.0
-    l2: L2
 
     # Losses
     psnr: Tensor
-    ssim: Tensor
-    lpips: Tensor
 
     def __init__(
         self, boundary_ignore: int | None = None, max_value: float = 1.0
@@ -27,10 +22,7 @@ class PSNR(Metric):
         super().__init__()
         self.boundary_ignore = boundary_ignore
         self.max_value = max_value
-        self.l2 = L2(boundary_ignore=self.boundary_ignore)
         self.add_state("psnr", default=torch.tensor(0), dist_reduce_fx="mean")
-        self.add_state("ssim", default=torch.tensor(0), dist_reduce_fx="mean")
-        self.add_state("lpips", default=torch.tensor(0), dist_reduce_fx="mean")
 
     def update(self, pred: Tensor, gt: Tensor, valid: Tensor | None = None) -> None:
         """
@@ -45,12 +37,8 @@ class PSNR(Metric):
         assert (
             pred.shape == gt.shape
         ), f"pred and gt must have the same shape, got {pred.shape} and {gt.shape}"
+        mse = super()(pred, gt, valid)
+        self.psnr = 20 * math.log10(self.max_value) - 10.0 * mse.log10()
 
-        mse, ssim, lpips = self.l2(pred, gt, valid=valid)
-        psnr = 20 * math.log10(self.max_value) - 10.0 * mse.log10()
-        self.psnr = psnr
-        self.ssim = ssim
-        self.lpips = lpips
-
-    def compute(self) -> tuple[Tensor, Tensor, Tensor]:
-        return self.psnr, self.ssim, self.lpips
+    def compute(self) -> Tensor:
+        return self.psnr

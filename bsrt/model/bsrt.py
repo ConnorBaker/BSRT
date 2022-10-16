@@ -12,6 +12,12 @@ import torch.nn.functional as F
 import wandb
 from data_processing.camera_pipeline import demosaic
 from datasets.synthetic_burst.train_dataset import TrainData
+from metrics.charbonnier_loss import CharbonnierLoss
+from metrics.lpips import LPIPS
+from metrics.ms_ssim import MS_SSIM
+from metrics.mse import MSE
+from metrics.psnr import PSNR
+from metrics.ssim import SSIM
 from model.cross_non_local_fusion import CrossNonLocalFusion
 from model.flow_guided_pcd_align import FlowGuidedPCDAlign
 from model.spynet_util import SpyNet
@@ -22,7 +28,6 @@ from torch.nn.parameter import Parameter
 from torchmetrics import Metric
 from torchvision.utils import make_grid
 from typing_extensions import Literal
-from utility import make_loss_fn, make_psnr_fn
 from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 
@@ -94,8 +99,13 @@ class BSRT(pl.LightningModule):
     patch_embed: swu.PatchEmbed = field(init=False)
     patch_unembed: swu.PatchUnEmbed = field(init=False)
     spynet: SpyNet = field(init=False)
-    loss_fn: Metric = field(init=False)
-    psnr_fn: Metric = field(init=False)
+
+    loss: Metric = field(init=False)
+    charbonnier_loss: Metric = field(init=False)
+    lpips: Metric = field(init=False)
+    ssim: Metric = field(init=False)
+    ms_ssim: Metric = field(init=False)
+    psnr: Metric = field(init=False)
 
     def __post_init__(self):
         super().__init__()
@@ -114,8 +124,14 @@ class BSRT(pl.LightningModule):
         self.img_size = self.patch_size * 2
         # TODO: We set patch_size to one here manually to duplicate that behavior.
         self.patch_size = 1
-        self.loss_fn = make_loss_fn(self.loss_type, self.data_type)
-        self.psnr_fn = make_psnr_fn(self.data_type)
+
+        # Initialize loss functions
+        self.loss = MSE()
+        self.charbonnier_loss = CharbonnierLoss()
+        self.lpips = LPIPS()
+        self.ssim = SSIM()
+        self.ms_ssim = MS_SSIM()
+        self.psnr = PSNR()
 
         self.num_layers = len(self.depths)
         self.spynet = SpyNet([3, 4, 5])
@@ -472,10 +488,21 @@ class BSRT(pl.LightningModule):
         bursts = batch["burst"]
         gts = batch["gt"]
         srs = self(bursts)
-        loss = self.loss_fn(srs, gts)
-        self.psnr_fn(srs, gts)
-        self.log("train/loss", self.loss_fn)
-        self.log("train/psnr", self.psnr_fn)
+
+        # Calculate losses
+        loss = self.loss(srs, gts)
+        self.charbonnier_loss(srs, gts)
+        self.lpips(srs, gts)
+        self.ssim(srs, gts)
+        self.ms_ssim(srs, gts)
+        self.psnr(srs, gts)
+
+        self.log("train/loss", self.loss)
+        self.log("train/charbonnier_loss", self.charbonnier_loss)
+        self.log("train/lpips", self.lpips)
+        self.log("train/ssim", self.ssim)
+        self.log("train/ms_ssim", self.ms_ssim)
+        self.log("train/psnr", self.psnr)
 
         return loss
 
@@ -483,10 +510,21 @@ class BSRT(pl.LightningModule):
         bursts = batch["burst"]
         gts = batch["gt"]
         srs = self(bursts)
-        loss = self.loss_fn(srs, gts)
-        self.psnr_fn(srs, gts)
-        self.log("val/loss", self.loss_fn)
-        self.log("val/psnr", self.psnr_fn)
+
+        # Calculate losses
+        loss = self.loss(srs, gts)
+        self.charbonnier_loss(srs, gts)
+        self.lpips(srs, gts)
+        self.ssim(srs, gts)
+        self.ms_ssim(srs, gts)
+        self.psnr(srs, gts)
+
+        self.log("val/loss", self.loss)
+        self.log("val/charbonnier_loss", self.charbonnier_loss)
+        self.log("val/lpips", self.lpips)
+        self.log("val/ssim", self.ssim)
+        self.log("val/ms_ssim", self.ms_ssim)
+        self.log("val/psnr", self.psnr)
 
         # Log the image only for the first batch
         # TODO: We could log different images with different names

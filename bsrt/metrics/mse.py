@@ -9,7 +9,7 @@ from torch import Tensor
 from torchmetrics.metric import Metric
 
 
-class L1(Metric):
+class MSE(Metric):
     full_state_update: ClassVar[bool] = False
     boundary_ignore: int | None = None
 

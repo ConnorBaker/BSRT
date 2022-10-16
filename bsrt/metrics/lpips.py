@@ -6,9 +6,6 @@ import torch
 import torch.nn.functional as F
 from metrics.utils.ignore_boundry import ignore_boundary
 from torch import Tensor
-from torchmetrics.functional.image.ssim import (
-    structural_similarity_index_measure as compute_ssim,
-)
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity as LPIPS
 from torchmetrics.metric import Metric
 
@@ -20,16 +17,12 @@ class L2(Metric):
     loss_fn: LPIPS
 
     # Losses
-    mse: Tensor
-    ssim: Tensor
     lpips: Tensor
 
     def __init__(self, boundary_ignore: int | None = None) -> None:
         super().__init__()
         self.boundary_ignore = boundary_ignore
         self.loss_fn = LPIPS(net="alex", lpips=True, normalize=True)
-        self.add_state("mse", default=torch.tensor(0), dist_reduce_fx="mean")
-        self.add_state("ssim", default=torch.tensor(0), dist_reduce_fx="mean")
         self.add_state("lpips", default=torch.tensor(0), dist_reduce_fx="mean")
 
     def update(self, pred: Tensor, gt: Tensor, valid: Tensor | None = None) -> None:
@@ -54,33 +47,10 @@ class L2(Metric):
             (gt.device == valid.device) if valid is not None else True
         ), f"pred, gt, and valid must be on the same device"
 
-        self.ssim: Tensor = compute_ssim(
-            pred.contiguous(),
-            gt.contiguous(),
-            gaussian_kernel=True,
-            kernel_size=11,
-            sigma=1.5,
-            reduction="elementwise_mean",
-            data_range=1.0,
-        )  # type: ignore
         self.lpips = self.loss_fn(
             pred.contiguous(),
             gt.contiguous(),
         )
 
-        acc_mse: Tensor = torch.tensor(0.0, device=pred.device)
-        if valid is None:
-            self.mse = sum(map(F.mse_loss, pred, gt), acc_mse) / len(pred)
-        else:
-            eps: float = 1e-12
-            for _pred, _gt, _valid in zip(pred, gt, valid):
-                mse_tensor: Tensor = F.mse_loss(_pred, _gt, reduction="none")
-                elem_ratio: float = mse_tensor.numel() / _valid.numel()
-                mse: Tensor = (mse_tensor * _valid).sum() / (
-                    _valid.sum() * elem_ratio + eps
-                )
-                acc_mse += mse
-            self.mse = acc_mse / len(pred)
-
-    def compute(self) -> tuple[Tensor, Tensor, Tensor]:
-        return self.mse, self.ssim, self.lpips
+    def compute(self) -> Tensor:
+        return self.lpips

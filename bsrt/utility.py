@@ -8,10 +8,11 @@ import torch.optim.lr_scheduler as lrs
 from metrics.aligned.l1 import AlignedL1
 from metrics.aligned.psnr import AlignedPSNR
 from metrics.charbonnier_loss import CharbonnierLoss
-from metrics.l1 import L1
-from metrics.l2 import L2
-from metrics.ms_ssim_loss import MSSSIMLoss
+from metrics.lpips import LPIPS
+from metrics.ms_ssim import MS_SSIM
+from metrics.mse import MSE
 from metrics.psnr import PSNR
+from metrics.ssim import SSIM
 from option import DataTypeName, LossName
 from torch import Tensor, nn
 from torchmetrics.metric import Metric
@@ -25,7 +26,7 @@ def make_loss_fn(loss: LossName, data_type: DataTypeName) -> Metric:
         case "L1":
             match data_type:
                 case "synthetic":
-                    return L1()
+                    return MSE()
                 case "real":
                     # FIXME: Reduce duplication with make_psnr_fn by using the same alignment_net
                     from pwcnet.pwcnet import PWCNet
@@ -35,11 +36,11 @@ def make_loss_fn(loss: LossName, data_type: DataTypeName) -> Metric:
                         param.requires_grad = False
                     return AlignedL1(alignment_net=alignment_net, boundary_ignore=40)
         case "MSE":
-            return L2()
+            return MSE()
         case "CB":
             return CharbonnierLoss()
         case "MSSSIM":
-            return MSSSIMLoss()
+            return MS_SSIM()
 
 
 @overload

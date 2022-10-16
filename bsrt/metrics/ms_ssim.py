@@ -9,22 +9,22 @@ from torchmetrics.functional.image.ssim import (
 from torchmetrics.metric import Metric
 
 
-class MSSSIMLoss(Metric):
+class MS_SSIM(Metric):
     full_state_update: ClassVar[bool] = False
     boundary_ignore: int | None = None
 
     # Losses
-    loss: Tensor
+    ms_ssim: Tensor
 
     def __init__(self, boundary_ignore: int | None = None) -> None:
         super().__init__()
         self.boundary_ignore = boundary_ignore
-        self.add_state("loss", default=torch.tensor(0), dist_reduce_fx="mean")
+        self.add_state("ms_ssim", default=torch.tensor(0), dist_reduce_fx="mean")
 
     def update(self, pred: Tensor, gt: Tensor) -> None:
         pred = ignore_boundary(pred, self.boundary_ignore)
         gt = ignore_boundary(gt, self.boundary_ignore)
-        self.loss: Tensor = compute_msssim(
+        self.ms_ssim: Tensor = compute_msssim(
             pred.type_as(gt).contiguous(),
             gt.contiguous(),
             gaussian_kernel=True,
@@ -36,4 +36,4 @@ class MSSSIMLoss(Metric):
         )
 
     def compute(self) -> Tensor:
-        return self.loss
+        return self.ms_ssim
