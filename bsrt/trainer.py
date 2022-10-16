@@ -1,8 +1,8 @@
 from typing import cast, get_args
 
 import optuna
-from datasets.synthetic_train_val_zurich_raw2rgb_data_module import (
-    SyntheticTrainValZurichRaw2RgbDataModule,
+from datasets.synthetic_zurich_raw2rgb_data_module import (
+    SyntheticZurichRaw2RgbDataModule,
 )
 from model.bsrt import BSRT
 from optuna.integration.pytorch_lightning import PyTorchLightningPruningCallback
@@ -47,7 +47,7 @@ if __name__ == "__main__":
 
     cli = LightningCLI(
         BSRT,
-        SyntheticTrainValZurichRaw2RgbDataModule,
+        SyntheticZurichRaw2RgbDataModule,
         run=False,
         save_config_callback=None,
     )

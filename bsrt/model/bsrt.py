@@ -472,10 +472,10 @@ class BSRT(pl.LightningModule):
         srs = self(bursts)
         loss = self.loss_fn(srs, gts)
         psnr, ssim, lpips = self.psnr_fn(srs, gts)
-        self.log("train/loss", loss, on_step=True, prog_bar=True)
-        self.log("train/psnr", psnr, on_step=True, prog_bar=True)
-        self.log("train/ssim", ssim, on_step=True, prog_bar=True)
-        self.log("train/lpips", lpips, on_step=True, prog_bar=True)
+        self.log("train/loss", loss, prog_bar=True)
+        self.log("train/psnr", psnr, prog_bar=True)
+        self.log("train/ssim", ssim, prog_bar=True)
+        self.log("train/lpips", lpips, prog_bar=True)
 
         return loss
 
@@ -485,10 +485,10 @@ class BSRT(pl.LightningModule):
         srs = self(bursts)
         loss = self.loss_fn(srs, gts)
         psnr, ssim, lpips = self.psnr_fn(srs, gts)
-        self.log("val/loss", loss, on_step=True, prog_bar=True)
-        self.log("val/psnr", psnr, on_step=True, prog_bar=True)
-        self.log("val/ssim", ssim, on_step=True, prog_bar=True)
-        self.log("val/lpips", lpips, on_step=True, prog_bar=True)
+        self.log("val/loss", loss, prog_bar=True)
+        self.log("val/psnr", psnr, prog_bar=True)
+        self.log("val/ssim", ssim, prog_bar=True)
+        self.log("val/lpips", lpips, prog_bar=True)
 
         if isinstance(self.logger, WandbLogger):
             burst = demosaic(bursts[0, 0])
