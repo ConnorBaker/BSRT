@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 
+import torch
 from data_processing.synthetic_burst_generation import (
     ImageProcessingParams,
     ImageTransformationParams,
@@ -67,11 +68,11 @@ class TrainDataProcessor:
         border_crop=24,
     )
     image_processing_params: ImageProcessingParams = ImageProcessingParams(
-        random_ccm=True,
-        random_gains=True,
-        smoothstep=True,
-        compress_gamma=True,
-        add_noise=True,
+        random_ccm=False,
+        random_gains=False,
+        smoothstep=False,
+        compress_gamma=False,
+        add_noise=False,
     )
     interpolation_type: InterpolationType = "bilinear"
 
@@ -83,6 +84,10 @@ class TrainDataProcessor:
     def __call__(self, frame: Tensor) -> TrainData:
         # Extract a random crop from the image
         cropped_frame = random_crop(frame, self.final_crop_sz)
+
+        # If the image is uint8, convert it to float32
+        if cropped_frame.dtype == torch.uint8:
+            cropped_frame = cropped_frame.float() / 255.0
 
         burst, gt, _burst_rgb, flow_vectors, meta_info = rgb2rawburst(
             cropped_frame,

@@ -92,12 +92,6 @@ def rgb2rawburst(
         rgb2cam = torch.eye(3).float()
     cam2rgb = rgb2cam.inverse()
 
-    # Sample gains
-    if image_processing_params.random_gains:
-        gains = RgbGains.random_gains()
-    else:
-        gains = RgbGains(1.0, 1.0, 1.0)
-
     # Approximately inverts global tone mapping.
     if image_processing_params.smoothstep:
         image = invert_smoothstep(image)
@@ -109,8 +103,14 @@ def rgb2rawburst(
     # Inverts color correction.
     image = apply_ccm(image, rgb2cam)
 
-    # Approximately inverts white balance and brightening.
-    image = gains.safe_invert_gains(image)
+    # Sample gains
+    # FIXME: This just makes the image VERY green.
+    if image_processing_params.random_gains:
+        # Approximately inverts white balance and brightening.
+        gains = RgbGains.random_gains()
+        image = gains.safe_invert_gains(image)
+    else:
+        gains = RgbGains(1.0, 1.0, 1.0)
 
     # Clip saturated pixels.
     image = image.clamp(0.0, 1.0)

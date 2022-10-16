@@ -1,4 +1,5 @@
 import functools
+from ctypes import cast
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -8,14 +9,18 @@ import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import wandb
+from data_processing.camera_pipeline import demosaic
 from datasets.synthetic_burst.train_dataset import TrainData
 from model.cross_non_local_fusion import CrossNonLocalFusion
 from model.flow_guided_pcd_align import FlowGuidedPCDAlign
 from model.spynet_util import SpyNet
 from option import DataTypeName, LossName
+from pytorch_lightning.loggers.wandb import WandbLogger
 from torch import Tensor
 from torch.nn.parameter import Parameter
 from torchmetrics import Metric
+from torchvision.utils import make_grid
 from typing_extensions import Literal
 from utility import make_loss_fn, make_psnr_fn
 from utils.bilinear_upsample_2d import bilinear_upsample_2d
@@ -471,6 +476,17 @@ class BSRT(pl.LightningModule):
         self.log("train/psnr", psnr, on_step=True, prog_bar=True)
         self.log("train/ssim", ssim, on_step=True, prog_bar=True)
         self.log("train/lpips", lpips, on_step=True, prog_bar=True)
+
+        if isinstance(self.logger, WandbLogger):
+            burst = demosaic(bursts[0, 0])
+            gt = gts[0]
+            sr = srs[0]
+            self.logger.log_image(
+                key="train/samples",
+                images=[burst, sr, gt],
+                caption=["Low Resolution", "Super Resolution", "Ground Truth"],
+            )
+
         return loss
 
     def validation_step(self, batch: TrainData, batch_idx: int) -> torch.Tensor:

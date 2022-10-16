@@ -9,7 +9,7 @@ import torch
 from data_processing.meta_info import MetaInfo
 from torch import Tensor
 from typing_extensions import Literal
-from utils.data_format_utils import torch_to_npimage
+from utils.data_format_utils import npimage_to_torch, torch_to_npimage
 
 """ Based on http://timothybrooks.com/tech/unprocessing
 Functions for forward and inverse camera pipeline. All functions input a torch float tensor of shape (c, h, w).
@@ -152,9 +152,7 @@ def demosaic(image: Tensor) -> Tensor:
     im_sc_np: npt.NDArray[np.uint8] = im_sc.numpy().astype(np.uint8)
 
     out: list[Tensor] = [
-        df_utils.npimage_to_torch(
-            cv.cvtColor(im, cv.COLOR_BAYER_BG2RGB), input_bgr=False
-        )
+        npimage_to_torch(cv.cvtColor(im, cv.COLOR_BAYER_BG2RGB), input_bgr=False)
         for im in im_sc_np
     ]
 
