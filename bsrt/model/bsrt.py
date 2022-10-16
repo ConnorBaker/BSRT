@@ -1,5 +1,4 @@
 import functools
-from ctypes import cast
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -9,15 +8,8 @@ import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import wandb
 from data_processing.camera_pipeline import demosaic
 from datasets.synthetic_burst.train_dataset import TrainData
-from metrics.charbonnier_loss import CharbonnierLoss
-from metrics.lpips import LPIPS
-from metrics.ms_ssim import MS_SSIM
-from metrics.mse import MSE
-from metrics.psnr import PSNR
-from metrics.ssim import SSIM
 from model.cross_non_local_fusion import CrossNonLocalFusion
 from model.flow_guided_pcd_align import FlowGuidedPCDAlign
 from model.spynet_util import SpyNet
@@ -25,7 +17,14 @@ from option import DataTypeName, LossName
 from pytorch_lightning.loggers.wandb import WandbLogger
 from torch import Tensor
 from torch.nn.parameter import Parameter
-from torchmetrics import Metric
+from torchmetrics import MetricCollection
+from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity as LPIPS
+from torchmetrics.image.psnr import PeakSignalNoiseRatio as PSNR
+from torchmetrics.image.ssim import (
+    MultiScaleStructuralSimilarityIndexMeasure as MS_SSIM,
+)
+from torchmetrics.image.ssim import StructuralSimilarityIndexMeasure as SSIM
+from torchmetrics.regression.mse import MeanSquaredError
 from torchvision.utils import make_grid
 from typing_extensions import Literal
 from utils.bilinear_upsample_2d import bilinear_upsample_2d
@@ -100,12 +99,8 @@ class BSRT(pl.LightningModule):
     patch_unembed: swu.PatchUnEmbed = field(init=False)
     spynet: SpyNet = field(init=False)
 
-    loss: Metric = field(init=False)
-    charbonnier_loss: Metric = field(init=False)
-    lpips: Metric = field(init=False)
-    ssim: Metric = field(init=False)
-    ms_ssim: Metric = field(init=False)
-    psnr: Metric = field(init=False)
+    train_metrics: MetricCollection = field(init=False)
+    valid_metrics: MetricCollection = field(init=False)
 
     def __post_init__(self):
         super().__init__()
@@ -126,12 +121,17 @@ class BSRT(pl.LightningModule):
         self.patch_size = 1
 
         # Initialize loss functions
-        self.loss = MSE()
-        self.charbonnier_loss = CharbonnierLoss()
-        self.lpips = LPIPS()
-        self.ssim = SSIM()
-        self.ms_ssim = MS_SSIM()
-        self.psnr = PSNR()
+        metrics = MetricCollection(
+            [
+                MeanSquaredError(squared=True),
+                PSNR(data_range=1.0),
+                SSIM(data_range=1.0),
+                MS_SSIM(data_range=1.0),
+                LPIPS(net_type="alex", normalize=True).requires_grad_(False),
+            ]
+        )
+        self.train_metrics = metrics.clone(prefix="train/")
+        self.valid_metrics = metrics.clone(prefix="val/")
 
         self.num_layers = len(self.depths)
         self.spynet = SpyNet([3, 4, 5])
@@ -484,59 +484,40 @@ class BSRT(pl.LightningModule):
 
         return flows_list
 
-    def training_step(self, batch: TrainData, batch_idx: int) -> torch.Tensor:
+    def training_step(self, batch: TrainData, batch_idx: int) -> dict[str, Tensor]:
         bursts = batch["burst"]
         gts = batch["gt"]
         srs = self(bursts)
 
         # Calculate losses
-        loss = self.loss(srs, gts)
-        self.charbonnier_loss(srs, gts)
-        self.lpips(srs, gts)
-        self.ssim(srs, gts)
-        self.ms_ssim(srs, gts)
-        self.psnr(srs, gts)
+        loss: dict[str, Tensor] = self.train_metrics(srs, gts)
 
-        self.log("train/loss", self.loss)
-        self.log("train/charbonnier_loss", self.charbonnier_loss)
-        self.log("train/lpips", self.lpips)
-        self.log("train/ssim", self.ssim)
-        self.log("train/ms_ssim", self.ms_ssim)
-        self.log("train/psnr", self.psnr)
+        self.log_dict(self.train_metrics, prog_bar=True, on_step=True, on_epoch=True)  # type: ignore
 
+        # Rename train_MeanSquaredError to loss to comply with PyTorch Lightning's requirement that when training_step returns a dict, it must contain a key named loss
+        loss["loss"] = loss.pop("train/MeanSquaredError")
         return loss
 
-    def validation_step(self, batch: TrainData, batch_idx: int) -> torch.Tensor:
+    def validation_step(self, batch: TrainData, batch_idx: int) -> dict[str, Tensor]:
         bursts = batch["burst"]
         gts = batch["gt"]
         srs = self(bursts)
 
         # Calculate losses
-        loss = self.loss(srs, gts)
-        self.charbonnier_loss(srs, gts)
-        self.lpips(srs, gts)
-        self.ssim(srs, gts)
-        self.ms_ssim(srs, gts)
-        self.psnr(srs, gts)
+        loss: dict[str, Tensor] = self.valid_metrics(srs, gts)
 
-        self.log("val/loss", self.loss)
-        self.log("val/charbonnier_loss", self.charbonnier_loss)
-        self.log("val/lpips", self.lpips)
-        self.log("val/ssim", self.ssim)
-        self.log("val/ms_ssim", self.ms_ssim)
-        self.log("val/psnr", self.psnr)
+        self.log_dict(self.valid_metrics, prog_bar=True, on_step=True, on_epoch=True)  # type: ignore
 
         # Log the image only for the first batch
         # TODO: We could log different images with different names
         if batch_idx == 0 and isinstance(self.logger, WandbLogger):
             nn_busrt: Tensor = F.interpolate(
-                demosaic(bursts[0, 0]).unsqueeze(0),
+                demosaic(bursts[:, 0, :, :]),
                 scale_factor=4,
                 mode="nearest-exact",
-            ).squeeze(0)
-            gt = gts[0]
-            sr = srs[0]
-            grid = make_grid([nn_busrt, sr, gt], nrow=3)
+            )
+
+            grid = make_grid(sum(map(list, zip(nn_busrt, srs, gts)), []), nrows=3)
             self.logger.log_image(
                 key="val/samples",
                 images=[grid],
@@ -545,4 +526,6 @@ class BSRT(pl.LightningModule):
                 ],
             )
 
+        # Rename train_MeanSquaredError to loss to comply with PyTorch Lightning's requirement that when validation_step returns a dict, it must contain a key named loss
+        loss["loss"] = loss.pop("val/MeanSquaredError")
         return loss

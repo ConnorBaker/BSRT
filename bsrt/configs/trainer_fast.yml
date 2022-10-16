@@ -3,10 +3,9 @@ trainer:
   accelerator: auto
   resume_from_checkpoint: null
   max_epochs: 10
-  limit_train_batches: 100
-  limit_val_batches: 10
-  check_val_every_n_epoch: 1
-  val_check_interval: 1
+  limit_train_batches: 0.1
+  limit_val_batches: 0.1
+  check_val_every_n_epoch: 2
   log_every_n_steps: 10
 
   # Speed related settings

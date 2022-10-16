@@ -37,8 +37,8 @@ class PSNR(MSE):
         assert (
             pred.shape == gt.shape
         ), f"pred and gt must have the same shape, got {pred.shape} and {gt.shape}"
-        mse = super()(pred, gt, valid)
-        self.psnr = 20 * math.log10(self.max_value) - 10.0 * mse.log10()
+        MSE.update(self, pred, gt, valid)
+        self.psnr = 20 * math.log10(self.max_value) - 10.0 * self.mse.log10()
 
     def compute(self) -> Tensor:
         return self.psnr
