@@ -103,6 +103,7 @@ def apply_ccm(image: Tensor, ccm: Tensor) -> Tensor:
     return image.view(shape)
 
 
+# TODO: Refactor to only accept batches of the shape (B, C, H, W)
 def mosaic(image: Tensor, mode: Literal["grbg", "rggb"] = "rggb") -> Tensor:
     """Extracts RGGB Bayer planes from an RGB image."""
     shape = image.shape
@@ -130,26 +131,32 @@ def mosaic(image: Tensor, mode: Literal["grbg", "rggb"] = "rggb") -> Tensor:
         return image.view((-1, 4, shape[-2] // 2, shape[-1] // 2))
 
 
+# TODO: Refactor to only accept batches of the shape (B, C, H, W)
 def demosaic(image: Tensor) -> Tensor:
     assert isinstance(image, torch.Tensor)
-    image = image.clamp(0.0, 1.0) * 255
+    image_normed = (image.clamp(0.0, 1.0) * 255).type(torch.uint8)
 
-    if image.dim() == 4:
-        num_images = image.dim()
+    if image_normed.dim() == 4:
+        num_images = image_normed.dim()
         batch_input = True
     else:
         num_images = 1
         batch_input = False
-        image = image.unsqueeze(0)
+        image_normed = image_normed.unsqueeze(0)
 
     # Generate single channel input for opencv
-    im_sc = torch.zeros((num_images, image.shape[-2] * 2, image.shape[-1] * 2, 1))
-    im_sc[:, ::2, ::2, 0] = image[:, 0, :, :]
-    im_sc[:, ::2, 1::2, 0] = image[:, 1, :, :]
-    im_sc[:, 1::2, ::2, 0] = image[:, 2, :, :]
-    im_sc[:, 1::2, 1::2, 0] = image[:, 3, :, :]
+    im_sc = torch.zeros(
+        (num_images, image_normed.shape[-2] * 2, image_normed.shape[-1] * 2, 1),
+        device=image_normed.device,
+        dtype=torch.uint8,
+    )
+    im_sc[:, ::2, ::2, 0] = image_normed[:, 0, :, :]
+    im_sc[:, ::2, 1::2, 0] = image_normed[:, 1, :, :]
+    im_sc[:, 1::2, ::2, 0] = image_normed[:, 2, :, :]
+    im_sc[:, 1::2, 1::2, 0] = image_normed[:, 3, :, :]
 
-    im_sc_np: npt.NDArray[np.uint8] = im_sc.numpy().astype(np.uint8)
+    # We cannot convert a tensor on the GPU to a numpy array, so we need to move it to the CPU first.
+    im_sc_np: npt.NDArray[np.uint8] = im_sc.cpu().numpy()
 
     out: list[Tensor] = [
         npimage_to_torch(cv.cvtColor(im, cv.COLOR_BAYER_BG2RGB), input_bgr=False)
@@ -157,9 +164,9 @@ def demosaic(image: Tensor) -> Tensor:
     ]
 
     if batch_input:
-        return torch.stack(out, dim=0)
+        return torch.stack(out, dim=0).to(image.device).type(image.dtype)
     else:
-        return out[0]
+        return out[0].to(image.device).type(image.dtype)
 
 
 @overload

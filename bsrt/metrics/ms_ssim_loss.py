@@ -1,4 +1,3 @@
-from dataclasses import dataclass, field
 from typing import ClassVar
 
 import torch
@@ -10,23 +9,21 @@ from torchmetrics.functional.image.ssim import (
 from torchmetrics.metric import Metric
 
 
-# TODO: Using the derivied equals overwrites the default hash method, which we want to inherit from Metric.
-@dataclass(eq=False)
 class MSSSIMLoss(Metric):
     full_state_update: ClassVar[bool] = False
     boundary_ignore: int | None = None
 
     # Losses
-    loss: Tensor = field(init=False)
+    loss: Tensor
 
-    def __post_init__(self) -> None:
+    def __init__(self, boundary_ignore: int | None = None) -> None:
         super().__init__()
+        self.boundary_ignore = boundary_ignore
         self.add_state("loss", default=torch.tensor(0), dist_reduce_fx="mean")
 
     def update(self, pred: Tensor, gt: Tensor) -> None:
         pred = ignore_boundary(pred, self.boundary_ignore)
         gt = ignore_boundary(gt, self.boundary_ignore)
-        # TODO: The generated superresolution image regularly has a range greater than 1.0. Is this a problem?
         self.loss: Tensor = compute_msssim(
             pred.type_as(gt).contiguous(),
             gt.contiguous(),

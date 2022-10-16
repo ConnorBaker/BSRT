@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import ClassVar
 
 import torch
@@ -14,23 +13,21 @@ from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity as LPI
 from torchmetrics.metric import Metric
 
 
-# TODO: Using the derivied equals overwrites the default hash method, which we want to inherit from Metric.
-@dataclass(eq=False)
 class L2(Metric):
     full_state_update: ClassVar[bool] = False
     boundary_ignore: int | None = None
     # FIXME: Why does LPIPS have unused model parameters when lpips=True (the default setting)?
-    # TODO: We cannot use the default factory with nn.Modules because we must call the super init before we can call the module init.
-    loss_fn: LPIPS = field(init=False)
+    loss_fn: LPIPS
 
     # Losses
-    mse: Tensor = field(init=False)
-    ssim: Tensor = field(init=False)
-    lpips: Tensor = field(init=False)
+    mse: Tensor
+    ssim: Tensor
+    lpips: Tensor
 
-    def __post_init__(self) -> None:
+    def __init__(self, boundary_ignore: int | None = None) -> None:
         super().__init__()
-        self.loss_fn = LPIPS(net="alex", lpips=False)
+        self.boundary_ignore = boundary_ignore
+        self.loss_fn = LPIPS(net="alex", lpips=True, normalize=True)
         self.add_state("mse", default=torch.tensor(0), dist_reduce_fx="mean")
         self.add_state("ssim", default=torch.tensor(0), dist_reduce_fx="mean")
         self.add_state("lpips", default=torch.tensor(0), dist_reduce_fx="mean")
@@ -57,7 +54,6 @@ class L2(Metric):
             (gt.device == valid.device) if valid is not None else True
         ), f"pred, gt, and valid must be on the same device"
 
-        # TODO: The generated superresolution image regularly has a range greater than 1.0. Is this a problem?
         self.ssim: Tensor = compute_ssim(
             pred.contiguous(),
             gt.contiguous(),
@@ -68,8 +64,8 @@ class L2(Metric):
             data_range=1.0,
         )  # type: ignore
         self.lpips = self.loss_fn(
-            pred.clamp(min=-1.0, max=-1.0).contiguous(),
-            gt.clamp(min=-1.0, max=-1.0).contiguous(),
+            pred.contiguous(),
+            gt.contiguous(),
         )
 
         acc_mse: Tensor = torch.tensor(0.0, device=pred.device)

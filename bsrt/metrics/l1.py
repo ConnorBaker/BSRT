@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import ClassVar
 
 import torch
@@ -10,17 +9,16 @@ from torch import Tensor
 from torchmetrics.metric import Metric
 
 
-# TODO: Using the derivied equals overwrites the default hash method, which we want to inherit from Metric.
-@dataclass(eq=False)
 class L1(Metric):
     full_state_update: ClassVar[bool] = False
     boundary_ignore: int | None = None
 
     # Losses
-    mse: Tensor = field(init=False)
+    mse: Tensor
 
-    def __post_init__(self) -> None:
+    def __init__(self, boundary_ignore: int | None = None) -> None:
         super().__init__()
+        self.boundary_ignore = boundary_ignore
         self.add_state("mse", default=torch.tensor(0), dist_reduce_fx="mean")
 
     def update(self, pred: Tensor, gt: Tensor, valid: Tensor | None = None) -> None:

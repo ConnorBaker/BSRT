@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
 from typing import ClassVar
 
 import torch
@@ -11,22 +10,23 @@ from torchmetrics.metric import Metric
 
 
 # TODO: This serves as a catch-all loss function. We should split it into multiple loss functions, and use metrics provided by torchmetrics where possible.
-# TODO: Using the derivied equals overwrites the default hash method, which we want to inherit from Metric.
-@dataclass(eq=False)
 class PSNR(Metric):
     full_state_update: ClassVar[bool] = False
     boundary_ignore: int | None = None
     max_value: float = 1.0
-    # TODO: We cannot use the default factory with nn.Modules because we must call the super init before we can call the module init.
-    l2: L2 = field(init=False)
+    l2: L2
 
     # Losses
-    psnr: Tensor = field(init=False)
-    ssim: Tensor = field(init=False)
-    lpips: Tensor = field(init=False)
+    psnr: Tensor
+    ssim: Tensor
+    lpips: Tensor
 
-    def __post_init__(self) -> None:
+    def __init__(
+        self, boundary_ignore: int | None = None, max_value: float = 1.0
+    ) -> None:
         super().__init__()
+        self.boundary_ignore = boundary_ignore
+        self.max_value = max_value
         self.l2 = L2(boundary_ignore=self.boundary_ignore)
         self.add_state("psnr", default=torch.tensor(0), dist_reduce_fx="mean")
         self.add_state("ssim", default=torch.tensor(0), dist_reduce_fx="mean")

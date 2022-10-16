@@ -7,8 +7,8 @@ dependencies:
   - conda-forge::python==3.10.6
   - conda-forge::pip==22.2.2
 
-  - pytorch-nightly::pytorch==1.14.0.dev20221013
-  - pytorch-nightly::torchvision==0.15.0.dev20221013
+  - pytorch-nightly::pytorch==1.14.0.dev20221016
+  - pytorch-nightly::torchvision==0.15.0.dev20221016
   - conda-forge::torchmetrics==0.10.0
   - conda-forge::lpips==0.1.3
 

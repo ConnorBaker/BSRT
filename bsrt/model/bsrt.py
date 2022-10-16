@@ -445,7 +445,9 @@ class BSRT(pl.LightningModule):
         x = self.conv_last(x)
 
         x = skip2 + x
-        return x
+
+        clamped = x.clamp(0, 1)
+        return clamped
 
     def get_ref_flows(self, x: Tensor) -> list[Tensor]:
         """Get flow between frames ref and other"""
@@ -471,11 +473,9 @@ class BSRT(pl.LightningModule):
         gts = batch["gt"]
         srs = self(bursts)
         loss = self.loss_fn(srs, gts)
-        psnr, ssim, lpips = self.psnr_fn(srs, gts)
-        self.log("train/loss", loss, prog_bar=True)
-        self.log("train/psnr", psnr, prog_bar=True)
-        self.log("train/ssim", ssim, prog_bar=True)
-        self.log("train/lpips", lpips, prog_bar=True)
+        self.psnr_fn(srs, gts)
+        self.log("train/loss", self.loss_fn)
+        self.log("train/psnr", self.psnr_fn)
 
         return loss
 
@@ -484,20 +484,27 @@ class BSRT(pl.LightningModule):
         gts = batch["gt"]
         srs = self(bursts)
         loss = self.loss_fn(srs, gts)
-        psnr, ssim, lpips = self.psnr_fn(srs, gts)
-        self.log("val/loss", loss, prog_bar=True)
-        self.log("val/psnr", psnr, prog_bar=True)
-        self.log("val/ssim", ssim, prog_bar=True)
-        self.log("val/lpips", lpips, prog_bar=True)
+        self.psnr_fn(srs, gts)
+        self.log("val/loss", self.loss_fn)
+        self.log("val/psnr", self.psnr_fn)
 
-        if isinstance(self.logger, WandbLogger):
-            burst = demosaic(bursts[0, 0])
+        # Log the image only for the first batch
+        # TODO: We could log different images with different names
+        if batch_idx == 0 and isinstance(self.logger, WandbLogger):
+            nn_busrt: Tensor = F.interpolate(
+                demosaic(bursts[0, 0]).unsqueeze(0),
+                scale_factor=4,
+                mode="nearest-exact",
+            ).squeeze(0)
             gt = gts[0]
             sr = srs[0]
+            grid = make_grid([nn_busrt, sr, gt], nrow=3)
             self.logger.log_image(
                 key="val/samples",
-                images=[burst, sr, gt],
-                caption=["Low Resolution", "Super Resolution", "Ground Truth"],
+                images=[grid],
+                caption=[
+                    "Left: Low Resolution, Middle: Super Resolution, Right: Ground Truth"
+                ],
             )
 
         return loss
