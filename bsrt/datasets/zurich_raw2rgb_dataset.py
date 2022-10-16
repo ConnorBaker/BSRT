@@ -28,18 +28,16 @@ class ZurichRaw2RgbDataset(VisionDataset, Downloadable):
     transform: Callable[[Tensor], Tensor | dict[str, Tensor]] = field(
         default=lambda x: x
     )
-    path_strs: list[str] = field(init=False)
-
-    def __post_init__(self) -> None:
-        dataset_dir = Path(self.data_dir) / self.dirname
-        self.path_strs = [path.as_posix() for path in dataset_dir.rglob("*.jpg")]
 
     def __getitem__(self, index: int) -> Tensor | dict[str, Tensor]:
-        image_file = torchvision.io.read_file(self.path_strs[index])
+        image_path = (
+            Path(self.data_dir) / self.dirname / "train" / "canon" / f"{index}.jpg"
+        )
+        image_file = torchvision.io.read_file(image_path.as_posix())
         # TODO: Use nvjpg to decode the images more quickly when on CUDA
         image_jpg = torchvision.io.decode_jpeg(image_file)
         transformed = self.transform(image_jpg)
         return transformed
 
     def __len__(self) -> int:
-        return len(self.path_strs)
+        return 46839

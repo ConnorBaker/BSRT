@@ -20,7 +20,6 @@ class BurstSRInfo:
     path: Path
 
 
-# TODO: Migrate to Ray's dataset classes
 @dataclass
 class BurstSRDataset(Dataset):
     """Real-world burst super-resolution dataset."""

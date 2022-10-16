@@ -477,16 +477,6 @@ class BSRT(pl.LightningModule):
         self.log("train/ssim", ssim, on_step=True, prog_bar=True)
         self.log("train/lpips", lpips, on_step=True, prog_bar=True)
 
-        if isinstance(self.logger, WandbLogger):
-            burst = demosaic(bursts[0, 0])
-            gt = gts[0]
-            sr = srs[0]
-            self.logger.log_image(
-                key="train/samples",
-                images=[burst, sr, gt],
-                caption=["Low Resolution", "Super Resolution", "Ground Truth"],
-            )
-
         return loss
 
     def validation_step(self, batch: TrainData, batch_idx: int) -> torch.Tensor:
@@ -499,4 +489,15 @@ class BSRT(pl.LightningModule):
         self.log("val/psnr", psnr, on_step=True, prog_bar=True)
         self.log("val/ssim", ssim, on_step=True, prog_bar=True)
         self.log("val/lpips", lpips, on_step=True, prog_bar=True)
+
+        if isinstance(self.logger, WandbLogger):
+            burst = demosaic(bursts[0, 0])
+            gt = gts[0]
+            sr = srs[0]
+            self.logger.log_image(
+                key="val/samples",
+                images=[burst, sr, gt],
+                caption=["Low Resolution", "Super Resolution", "Ground Truth"],
+            )
+
         return loss

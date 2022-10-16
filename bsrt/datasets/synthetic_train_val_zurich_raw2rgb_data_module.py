@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pytorch_lightning as pl
 from datasets.synthetic_burst.train_dataset import TrainDataProcessor
+from datasets.synthetic_burst.val_dataset import ValDataset
 from datasets.utilities.image_folder_data import ImageFolderData
 from datasets.zurich_raw2rgb_dataset import ZurichRaw2RgbDataset
 from torch.utils.data import DataLoader
@@ -11,7 +12,7 @@ ZuricRaw2RgbData = ImageFolderData[np.uint8]
 
 
 @dataclass
-class SyntheticTrainZurichRaw2RgbDatasetDataModule(pl.LightningDataModule):
+class SyntheticTrainValZurichRaw2RgbDataModule(pl.LightningDataModule):
     """DataModule for the "Zurich RAW to RGB mapping" dataset.
 
     Args:
@@ -38,7 +39,8 @@ class SyntheticTrainZurichRaw2RgbDatasetDataModule(pl.LightningDataModule):
     drop_last: bool = False
     timeout: float = 0.0
     prefetch_factor: int = 2
-    dataset: ZurichRaw2RgbDataset = field(init=False)
+    train_dataset: ZurichRaw2RgbDataset = field(init=False)
+    val_dataset: ValDataset = field(init=False)
 
     def __post_init__(
         self,
@@ -48,16 +50,32 @@ class SyntheticTrainZurichRaw2RgbDatasetDataModule(pl.LightningDataModule):
     def prepare_data(self) -> None:
         # Download the dataset if not present
         ZurichRaw2RgbDataset(data_dir=self.data_dir).download()
+        ValDataset(data_dir=self.data_dir).download()
 
     def setup(self, stage: str | None = None) -> None:
-        self.dataset = ZurichRaw2RgbDataset(
+        self.train_dataset = ZurichRaw2RgbDataset(
             data_dir=self.data_dir,
             transform=TrainDataProcessor(burst_size=self.burst_size, crop_sz=self.crop_size),  # type: ignore
+        )
+        self.val_dataset = ValDataset(
+            data_dir=self.data_dir, burst_size=self.burst_size
         )
 
     def train_dataloader(self) -> DataLoader[ZuricRaw2RgbData]:
         return DataLoader(
-            self.dataset,
+            self.train_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
+            persistent_workers=self.persistent_workers,
+            drop_last=self.drop_last,
+            timeout=self.timeout,
+            prefetch_factor=self.prefetch_factor,
+        )
+
+    def val_dataloader(self) -> DataLoader:
+        return DataLoader(
+            self.val_dataset,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
