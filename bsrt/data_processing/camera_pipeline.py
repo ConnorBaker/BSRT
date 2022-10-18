@@ -137,7 +137,7 @@ def demosaic(image: Tensor) -> Tensor:
     image_normed = (image.clamp(0.0, 1.0) * 255).type(torch.uint8)
 
     if image_normed.dim() == 4:
-        num_images = image_normed.dim()
+        num_images = image_normed.shape[0]
         batch_input = True
     else:
         num_images = 1

@@ -122,19 +122,17 @@ class BSRT(pl.LightningModule):
 
         # Initialize loss functions
         metrics = MetricCollection(
-            [
-                MeanSquaredError(squared=True),
-                PSNR(data_range=1.0),
-                SSIM(data_range=1.0),
-                MS_SSIM(data_range=1.0),
-                LPIPS(net_type="alex", normalize=True).requires_grad_(False),
-            ]
+            {
+                "psnr": PSNR(data_range=1.0),
+                "ms_ssim": MS_SSIM(data_range=1.0),
+                "lpips": LPIPS(net_type="alex", normalize=True).requires_grad_(False),
+            }
         )
         self.train_metrics = metrics.clone(prefix="train/")
         self.valid_metrics = metrics.clone(prefix="val/")
 
         self.num_layers = len(self.depths)
-        self.spynet = SpyNet([3, 4, 5])
+        self.spynet = SpyNet([3, 4, 5]).eval().requires_grad_(False)
         self.flow_ps = nn.PixelShuffle(2)
 
         # split image into non-overlapping patches
@@ -491,11 +489,10 @@ class BSRT(pl.LightningModule):
 
         # Calculate losses
         loss: dict[str, Tensor] = self.train_metrics(srs, gts)
+        self.log_dict(self.train_metrics, on_step=True, on_epoch=False)  # type: ignore
 
-        self.log_dict(self.train_metrics, prog_bar=True, on_step=True, on_epoch=True)  # type: ignore
-
-        # Rename train_MeanSquaredError to loss to comply with PyTorch Lightning's requirement that when training_step returns a dict, it must contain a key named loss
-        loss["loss"] = loss.pop("train/MeanSquaredError")
+        # PyTorch Lightning requires that when validation_step returns a dict, it must contain a key named loss
+        loss["loss"] = loss["train/lpips"]
         return loss
 
     def validation_step(self, batch: TrainData, batch_idx: int) -> dict[str, Tensor]:
@@ -505,27 +502,31 @@ class BSRT(pl.LightningModule):
 
         # Calculate losses
         loss: dict[str, Tensor] = self.valid_metrics(srs, gts)
-
-        self.log_dict(self.valid_metrics, prog_bar=True, on_step=True, on_epoch=True)  # type: ignore
+        self.log_dict(self.valid_metrics, on_step=False, on_epoch=True)  # type: ignore
 
         # Log the image only for the first batch
         # TODO: We could log different images with different names
         if batch_idx == 0 and isinstance(self.logger, WandbLogger):
-            nn_busrt: Tensor = F.interpolate(
-                demosaic(bursts[:, 0, :, :]),
+            # Gross hack to work around "RuntimeError: "upsample_nearest2d_out_frame" not implemented for 'BFloat16'"
+            nn_busrts: Tensor = F.interpolate(
+                demosaic(
+                    bursts[:, 0, :, :].to(
+                        torch.float32
+                        if bursts.dtype == torch.bfloat16
+                        else bursts.dtype
+                    )
+                ),
                 scale_factor=4,
                 mode="nearest-exact",
-            )
+            ).to(bursts.dtype)
 
-            grid = make_grid(sum(map(list, zip(nn_busrt, srs, gts)), []), nrows=3)
-            self.logger.log_image(
-                key="val/samples",
-                images=[grid],
-                caption=[
-                    "Left: Low Resolution, Middle: Super Resolution, Right: Ground Truth"
-                ],
-            )
+            for i, (nn_burst, sr, gt) in enumerate(zip(nn_busrts, srs, gts)):
+                self.logger.log_image(
+                    key=f"val/sample_{i}",
+                    images=[nn_burst, sr, gt],
+                    caption=["LR", "SR", "GT"],
+                )
 
-        # Rename train_MeanSquaredError to loss to comply with PyTorch Lightning's requirement that when validation_step returns a dict, it must contain a key named loss
-        loss["loss"] = loss.pop("val/MeanSquaredError")
+        # PyTorch Lightning requires that when validation_step returns a dict, it must contain a key named loss
+        loss["loss"] = loss["val/lpips"]
         return loss

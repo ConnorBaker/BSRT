@@ -55,9 +55,9 @@ class TrainDataProcessor:
     Jiawen and Sharlet, Dillon and Barron, Jonathan T, CVPR 2019
     """
 
-    _is_fittable: ClassVar[bool] = False
     burst_size: int
     crop_sz: int
+    dtype: torch.dtype
     final_crop_sz: int = field(init=False)
     downsample_factor: int = 4
     burst_transformation_params: ImageTransformationParams = ImageTransformationParams(
@@ -99,4 +99,8 @@ class TrainDataProcessor:
         )
         gt = ignore_boundary(gt, self.burst_transformation_params.border_crop)
 
-        return TrainData(burst=burst, gt=gt, flow_vectors=flow_vectors)
+        return TrainData(
+            burst=burst.type(self.dtype),
+            gt=gt.type(self.dtype),
+            flow_vectors=flow_vectors.type(self.dtype),
+        )

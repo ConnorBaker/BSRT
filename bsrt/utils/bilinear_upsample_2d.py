@@ -13,7 +13,7 @@ def bilinear_upsample_2d(
 ) -> Tensor:
     orig_precision = t.dtype
     if orig_precision == torch.bfloat16:
-        t = t.to(torch.float16)
+        t = t.to(torch.float32)
 
     ret = F.interpolate(
         t,

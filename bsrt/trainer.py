@@ -1,4 +1,6 @@
-from typing import cast, get_args
+import logging
+import sys
+from typing import Sequence, cast, get_args
 
 import optuna
 from datasets.synthetic_zurich_raw2rgb_data_module import (
@@ -7,14 +9,29 @@ from datasets.synthetic_zurich_raw2rgb_data_module import (
 from model.bsrt import BSRT
 from optuna.integration.pytorch_lightning import PyTorchLightningPruningCallback
 from optuna.integration.wandb import WeightsAndBiasesCallback
-from optuna.pruners import HyperbandPruner, MedianPruner, SuccessiveHalvingPruner
+from optuna.pruners import SuccessiveHalvingPruner
+from optuna.storages import RDBStorage
 from optuna.study import StudyDirection
 from pytorch_lightning.cli import LightningCLI
 from pytorch_lightning.loggers.wandb import WandbLogger
-from torch.optim import SGD, Adam, AdamW, RMSprop
+from torch.optim import SGD, AdamW
+from torch.optim.lr_scheduler import (
+    CosineAnnealingWarmRestarts,
+    CyclicLR,
+    ExponentialLR,
+    OneCycleLR,
+    ReduceLROnPlateau,
+)
 from typing_extensions import Literal
 
-OptimizerName = Literal["Adam", "AdamW", "RMSprop", "SGD"]
+OptimizerName = Literal["AdamW", "SGD"]
+SchedulerName = Literal[
+    "ExponentialLR",
+    "ReduceLROnPlateau",
+    "CyclicLR",
+    "OneCycleLR",
+    "CosineAnnealingWarmRestarts",
+]
 
 if __name__ == "__main__":
     import os
@@ -35,7 +52,7 @@ if __name__ == "__main__":
     wandb_kwargs = {
         "entity": "connorbaker",
         "project": "bsrt",
-        "group": "32-hyperparameter-tuning",
+        "group": "16-hyperparameter-tuning-4",
         "dir": None,
         "reinit": True,
     }
@@ -52,9 +69,15 @@ if __name__ == "__main__":
         save_config_callback=None,
     )
 
+    metric_names_and_directions: list[tuple[str, StudyDirection]] = [
+        ("train/lpips", StudyDirection.MINIMIZE),
+        ("train/psnr", StudyDirection.MAXIMIZE),
+        ("train/ms_ssim", StudyDirection.MAXIMIZE),
+    ]
+
     # Decorator adds trial/run number to the name of the run
     @wandbc.track_in_wandb()
-    def objective(trial: optuna.trial.Trial) -> float:
+    def objective(trial: optuna.trial.Trial) -> Sequence[float]:
         # Update the existing configurations from the CLI
         # NOTE: When updating values which do not require initialization, use
         # cli.config. For classes like the logger or callbacks, use cli.
@@ -75,11 +98,13 @@ if __name__ == "__main__":
         cli.config.model.drop_path_rate = drop_path_rate
         hyperparameters["drop_path_rate"] = drop_path_rate
 
-        drop_rate = trial.suggest_float("drop_rate", 1e-8, 1.0, log=True)
+        drop_rate = trial.suggest_float("drop_rate", 0.0, 1.0)
         cli.config.model.drop_rate = drop_rate
         hyperparameters["drop_rate"] = drop_rate
 
-        mlp_ratio = trial.suggest_float("mlp_ratio", 1.0, 32.0, log=True)
+        mlp_ratio_pow = trial.suggest_int("mlp_ratio_pow", 1, 5, log=True)
+        hyperparameters["mlp_ratio_pow"] = mlp_ratio_pow
+        mlp_ratio = 2.0**mlp_ratio_pow
         cli.config.model.mlp_ratio = mlp_ratio
         hyperparameters["mlp_ratio"] = mlp_ratio
 
@@ -93,7 +118,7 @@ if __name__ == "__main__":
         use_qk_scale = trial.suggest_categorical("use_qk_scale", [True, False])
         hyperparameters["use_qk_scale"] = use_qk_scale
         if use_qk_scale:
-            qk_scale = trial.suggest_float("qk_scale", 1e-8, 1.0, log=True)
+            qk_scale = trial.suggest_float("qk_scale", 1e-8, 1.0)
             cli.config.model.qk_scale = qk_scale
             hyperparameters["qk_scale"] = qk_scale
         else:
@@ -114,18 +139,6 @@ if __name__ == "__main__":
         # decay_milestones: Categorical = tune.choice(
         #     [[x, y] for x in range(40, 300, 20) for y in range(80, 400, 20) if x < y]
         # )
-        momentum = trial.suggest_float("momentum", 1e-4, 1.0, log=True)
-        hyperparameters["momentum"] = momentum
-
-        beta_gradient = trial.suggest_float("beta_gradient", 1e-4, 1.0, log=True)
-        hyperparameters["beta_gradient"] = beta_gradient
-
-        beta_square = trial.suggest_float("beta_square", 1e-4, 1.0, log=True)
-        hyperparameters["beta_square"] = beta_square
-
-        epsilon = trial.suggest_float("epsilon", 1e-10, 1e-4, log=True)
-        hyperparameters["epsilon"] = epsilon
-
         weight_decay = trial.suggest_float("weight_decay", 1e-10, 1e-4, log=True)
         hyperparameters["weight_decay"] = weight_decay
 
@@ -135,48 +148,133 @@ if __name__ == "__main__":
         )
         hyperparameters["optimizer_name"] = optimizer_name
         match optimizer_name:
-            case "Adam":
-                optimizer = Adam(
-                    cli.config_init.model.parameters(),
-                    lr=lr,
-                    betas=(beta_gradient, beta_square),
-                    eps=epsilon,
-                    weight_decay=weight_decay,
-                )
             case "AdamW":
+                beta_gradient = trial.suggest_float(
+                    "beta_gradient", 1e-4, 1.0, log=True
+                )
+                hyperparameters["beta_gradient"] = beta_gradient
+
+                beta_square = trial.suggest_float(
+                    "beta_square", beta_gradient, 1.0, log=True
+                )
+                hyperparameters["beta_square"] = beta_square
+
+                epsilon = trial.suggest_float("epsilon", 1e-10, 1e-3, log=True)
+                hyperparameters["epsilon"] = epsilon
+
+                amsgrad = bool(trial.suggest_categorical("amsgrad", [True, False]))
+                hyperparameters["amsgrad"] = amsgrad
+
                 optimizer = AdamW(
                     cli.config_init.model.parameters(),
                     lr=lr,
                     betas=(beta_gradient, beta_square),
                     eps=epsilon,
                     weight_decay=weight_decay,
-                )
-            case "RMSprop":
-                alpha = trial.suggest_float("alpha", 1e-4, 1.0, log=True)
-                hyperparameters["alpha"] = alpha
-                optimizer = RMSprop(
-                    cli.config_init.model.parameters(),
-                    lr=lr,
-                    alpha=alpha,
-                    eps=epsilon,
-                    weight_decay=weight_decay,
-                    momentum=momentum,
+                    amsgrad=amsgrad,
                 )
             case "SGD":
+                momentum = trial.suggest_float("momentum", 1e-4, 1.0, log=True)
+                hyperparameters["momentum"] = momentum
+
+                dampening = trial.suggest_float("dampening", 1e-4, 1.0, log=True)
+                hyperparameters["dampening"] = dampening
+
                 optimizer = SGD(
                     cli.config_init.model.parameters(),
                     lr=lr,
                     momentum=momentum,
+                    dampening=dampening,
                     weight_decay=weight_decay,
                 )
 
         cli.config_init.optimizer = optimizer
 
+        ### Scheduler Hyperparameters ###
+        scheduler_names = list(get_args(SchedulerName))
+        if optimizer_name == "AdamW":
+            scheduler_names.remove("CyclicLR")
+            scheduler_names.remove("OneCycleLR")
+
+        scheduler_name: SchedulerName = cast(
+            SchedulerName,
+            trial.suggest_categorical("scheduler_name", scheduler_names),
+        )
+        hyperparameters["scheduler_name"] = scheduler_name
+
+        match scheduler_name:
+            case "ExponentialLR":
+                gamma = trial.suggest_float("gamma", 1e-4, 1.0, log=True)
+                hyperparameters["gamma"] = gamma
+
+                lr_scheduler = ExponentialLR(
+                    optimizer,
+                    gamma=gamma,
+                )
+
+            case "ReduceLROnPlateau":
+                factor = trial.suggest_float("factor", 1e-4, 1.0, log=True)
+                hyperparameters["factor"] = factor
+
+                lr_scheduler = ReduceLROnPlateau(optimizer, factor=factor, patience=10)
+
+            case "CyclicLR":
+                hyperparameters["base_lr"] = lr
+
+                max_lr = trial.suggest_float("max_lr", 1e-5, 1e-1, log=True)
+                hyperparameters["max_lr"] = max_lr
+
+                mode = str(
+                    trial.suggest_categorical(
+                        "mode", ["triangular", "triangular2", "exp_range"]
+                    )
+                )
+                hyperparameters["mode"] = mode
+
+                lr_scheduler = CyclicLR(
+                    optimizer,
+                    base_lr=lr,
+                    max_lr=max_lr,
+                    mode=mode,
+                )
+
+            case "OneCycleLR":
+                max_lr = trial.suggest_float("max_lr", lr, 1e-1, log=True)
+                hyperparameters["max_lr"] = max_lr
+
+                lr_scheduler = OneCycleLR(
+                    optimizer,
+                    max_lr=max_lr,
+                    steps_per_epoch=cli.config.data.batch_size,
+                    epochs=cli.config.trainer.max_epochs,
+                )
+
+            case "CosineAnnealingWarmRestarts":
+                T_0 = trial.suggest_int("T_0", 1, 1000)
+                hyperparameters["T_0"] = T_0
+
+                T_mult = trial.suggest_int("T_mult", 1, 10)
+                hyperparameters["T_mult"] = T_mult
+
+                eta_min = trial.suggest_float("eta_min", 1e-10, 1e-3, log=True)
+                hyperparameters["eta_min"] = eta_min
+
+                lr_scheduler = CosineAnnealingWarmRestarts(
+                    optimizer,
+                    T_0=T_0,
+                    T_mult=T_mult,
+                    eta_min=eta_min,
+                )
+
+        cli.config_init.lr_scheduler = lr_scheduler
+
         ### Setup the trainer ###
         if cli.config_init.trainer.callbacks is None:
             cli.config_init.trainer.callbacks = []
-        cli.config_init.trainer.callbacks.append(
-            PyTorchLightningPruningCallback(trial, monitor="train/loss")
+
+        cli.config_init.trainer.callbacks.extend(
+            PyTorchLightningPruningCallback(trial, monitor=metric_name)
+            for (metric_name, _) in metric_names_and_directions
         )
 
         cli.instantiate_classes()
@@ -188,9 +286,13 @@ if __name__ == "__main__":
         ), "Logger should be set to the WandbLogger"
 
         logger.log_hyperparams(hyperparameters)
+        logger.watch(model, log="all", log_graph=True)
         trainer.fit(model, datamodule=cli.datamodule)
 
-        return trainer.callback_metrics["train/loss"].item()
+        return [
+            trainer.callback_metrics[metric_name].item()
+            for (metric_name, _) in metric_names_and_directions
+        ]
 
     DB_USER = os.environ["DB_USER"]
     assert DB_USER is not None, "DB_USER environment variable must be set"
@@ -204,18 +306,22 @@ if __name__ == "__main__":
     assert DB_NAME is not None, "DB_NAME environment variable must be set"
     DB_URI = f"postgresql+pg8000://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
+    optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
     study = optuna.create_study(
-        study_name="bsrt-32-hyperparameter-tuning",
-        storage=DB_URI,
-        direction=StudyDirection.MINIMIZE,
-        pruner=MedianPruner(),
+        study_name="bsrt-16-hyperparameter-tuning-4",
+        storage=RDBStorage(url=DB_URI, heartbeat_interval=60, grace_period=120),
+        directions=[
+            metric_direction for (_, metric_direction) in metric_names_and_directions
+        ],
+        pruner=SuccessiveHalvingPruner(),
         load_if_exists=True,
     )
 
     study.optimize(
         objective,
         catch=(Exception,),
-        n_trials=1,
+        n_trials=1000,
         callbacks=[wandbc],
         n_jobs=1,
+        show_progress_bar=True,
     )
