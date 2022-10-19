@@ -9,7 +9,7 @@ trainer:
   log_every_n_steps: 10
 
   # Speed related settings
-  precision: 16
+  precision: bf16
   benchmark: true
   deterministic: false
   detect_anomaly: false
