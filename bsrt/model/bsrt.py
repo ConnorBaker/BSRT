@@ -23,9 +23,6 @@ from torchmetrics.image.psnr import PeakSignalNoiseRatio as PSNR
 from torchmetrics.image.ssim import (
     MultiScaleStructuralSimilarityIndexMeasure as MS_SSIM,
 )
-from torchmetrics.image.ssim import StructuralSimilarityIndexMeasure as SSIM
-from torchmetrics.regression.mse import MeanSquaredError
-from torchvision.utils import make_grid
 from typing_extensions import Literal
 from utils.bilinear_upsample_2d import bilinear_upsample_2d
 

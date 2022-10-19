@@ -12,6 +12,7 @@ from optuna.integration.wandb import WeightsAndBiasesCallback
 from optuna.pruners import SuccessiveHalvingPruner
 from optuna.storages import RDBStorage
 from optuna.study import StudyDirection
+from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAveraging
 from pytorch_lightning.cli import LightningCLI
 from pytorch_lightning.loggers.wandb import WandbLogger
 from torch.optim import SGD, AdamW
@@ -268,10 +269,15 @@ if __name__ == "__main__":
 
         cli.config_init.lr_scheduler = lr_scheduler
 
+        swa_lrs = trial.suggest_float("swa_lr", 1e-5, 1e-1, log=True)
+        hyperparameters["swa_lr"] = swa_lrs
+        swa = StochasticWeightAveraging(swa_lrs=swa_lrs)
+
         ### Setup the trainer ###
         if cli.config_init.trainer.callbacks is None:
             cli.config_init.trainer.callbacks = []
 
+        cli.config_init.trainer.callbacks.append(swa)
         cli.config_init.trainer.callbacks.extend(
             PyTorchLightningPruningCallback(trial, monitor=metric_name)
             for (metric_name, _) in metric_names_and_directions
@@ -319,7 +325,7 @@ if __name__ == "__main__":
 
     study.optimize(
         objective,
-        catch=(Exception,),
+        catch=(Exception,RuntimeError),
         n_trials=1000,
         callbacks=[wandbc],
         n_jobs=1,
