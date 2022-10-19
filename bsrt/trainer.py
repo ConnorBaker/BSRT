@@ -18,7 +18,6 @@ from pytorch_lightning.loggers.wandb import WandbLogger
 from torch.optim import SGD, AdamW
 from torch.optim.lr_scheduler import (
     CosineAnnealingWarmRestarts,
-    CyclicLR,
     ExponentialLR,
     OneCycleLR,
     ReduceLROnPlateau,
@@ -29,7 +28,6 @@ OptimizerName = Literal["AdamW", "SGD"]
 SchedulerName = Literal[
     "ExponentialLR",
     "ReduceLROnPlateau",
-    "CyclicLR",
     "OneCycleLR",
     "CosineAnnealingWarmRestarts",
 ]
@@ -40,7 +38,6 @@ if __name__ == "__main__":
     os.environ["NCCL_NSOCKS_PERTHREAD"] = "8"
     os.environ["NCCL_SOCKET_NTHREADS"] = "4"
     os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
-    os.environ["TORCH_CUDNN_V8_API_DEBUG"] = "1"
 
     import torch.backends.cuda
     import torch.backends.cudnn
@@ -192,17 +189,11 @@ if __name__ == "__main__":
         cli.config_init.optimizer = optimizer
 
         ### Scheduler Hyperparameters ###
-        scheduler_names = list(get_args(SchedulerName))
-        if optimizer_name == "AdamW":
-            scheduler_names.remove("CyclicLR")
-            scheduler_names.remove("OneCycleLR")
-
         scheduler_name: SchedulerName = cast(
             SchedulerName,
-            trial.suggest_categorical("scheduler_name", scheduler_names),
+            trial.suggest_categorical("scheduler_name", get_args(SchedulerName)),
         )
         hyperparameters["scheduler_name"] = scheduler_name
-
         match scheduler_name:
             case "ExponentialLR":
                 gamma = trial.suggest_float("gamma", 1e-4, 1.0, log=True)
@@ -218,26 +209,6 @@ if __name__ == "__main__":
                 hyperparameters["factor"] = factor
 
                 lr_scheduler = ReduceLROnPlateau(optimizer, factor=factor, patience=10)
-
-            case "CyclicLR":
-                hyperparameters["base_lr"] = lr
-
-                max_lr = trial.suggest_float("max_lr", 1e-5, 1e-1, log=True)
-                hyperparameters["max_lr"] = max_lr
-
-                mode = str(
-                    trial.suggest_categorical(
-                        "mode", ["triangular", "triangular2", "exp_range"]
-                    )
-                )
-                hyperparameters["mode"] = mode
-
-                lr_scheduler = CyclicLR(
-                    optimizer,
-                    base_lr=lr,
-                    max_lr=max_lr,
-                    mode=mode,
-                )
 
             case "OneCycleLR":
                 max_lr = trial.suggest_float("max_lr", lr, 1e-1, log=True)
@@ -325,7 +296,7 @@ if __name__ == "__main__":
 
     study.optimize(
         objective,
-        catch=(Exception,RuntimeError),
+        catch=(Exception, RuntimeError),
         n_trials=1000,
         callbacks=[wandbc],
         n_jobs=1,
