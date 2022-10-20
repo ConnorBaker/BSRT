@@ -1,0 +1,9 @@
+data:
+  burst_size: 14
+  crop_size: 256
+  data_dir: /home/ubuntu/working/datasets
+  batch_size: 32
+  precision: bf16
+  pin_memory: true
+  drop_last: false
+  persistent_workers: true

@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 
-import torch
-from utils.bilinear_upsample_2d import bilinear_upsample_2d
 import getopt
 import math
+import sys
+
 import numpy
 import PIL
 import PIL.Image
-import sys
+import torch
+from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 try:
     from .correlation import correlation  # the custom cost volume layer

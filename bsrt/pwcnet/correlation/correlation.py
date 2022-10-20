@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 
-import torch
+import re
 
 import cupy
-import re
+import torch
 
 kernel_Correlation_rearrange = """
 	extern "C" __global__ void kernel_Correlation_rearrange(

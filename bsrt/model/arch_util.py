@@ -1,9 +1,10 @@
 import torch
 import torch.nn as nn
-import torch.nn.init as init
 import torch.nn.functional as F
+import torch.nn.init as init
 from model import common
-from model.utils.psconv import PSGConv2d as PSConv2d, PyConv2d
+from model.utils.psconv import PSGConv2d as PSConv2d
+from model.utils.psconv import PyConv2d
 from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 
@@ -913,7 +914,7 @@ def flow_warp(
         indexing="ij",
     )
     grid = torch.stack((grid_x, grid_y), 2).float()  # W(x), H(y), 2
-    grid.requires_grad = False
+    grid.requires_grad_(False)
     grid = grid.type_as(x)
     vgrid = grid + flow
 

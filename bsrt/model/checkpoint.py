@@ -1,5 +1,6 @@
-import torch
 import warnings
+
+import torch
 
 
 def detach_variable(inputs):

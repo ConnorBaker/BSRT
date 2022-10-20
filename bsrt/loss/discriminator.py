@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
-from torch import Tensor
+
 import torch.nn as nn
+from torch import Tensor
 
 
 @dataclass(eq=False, init=False)

@@ -1,14 +1,15 @@
 from dataclasses import dataclass, field
-from bsrt.option import Config
-import utility
 from types import SimpleNamespace
-from loss.discriminator import Discriminator
 
 import torch
-from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
+import utility
+from loss.discriminator import Discriminator
+from torch import Tensor
 from utils.types import GanType
+
+from bsrt.option import Config
 
 
 @dataclass(eq=False, init=False)

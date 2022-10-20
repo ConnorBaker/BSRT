@@ -1,9 +1,9 @@
 import math
+
+import model.arch_util as arch_util
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-import model.arch_util as arch_util
 from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 
@@ -146,12 +146,10 @@ class SpyNet(nn.Module):
                 )
                 flow_out[:, 0, :, :] *= float(w // scale) / float(w_floor // scale)
                 flow_out[:, 1, :, :] *= float(h // scale) / float(h_floor // scale)
+
                 if torch.abs(flow_out).mean() > 200:
-                    print(
-                        f"level {level}, flow > 200: {torch.abs(flow_out).mean():.4f}"
-                    )
-                    # return None
                     flow_out.clamp(-250, 250)
+
                 flow_list.insert(0, flow_out)
 
         return flow_list

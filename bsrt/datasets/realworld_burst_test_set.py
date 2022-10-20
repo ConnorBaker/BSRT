@@ -1,7 +1,8 @@
-import torch
+import pickle as pkl
+
 import cv2
 import numpy as np
-import pickle as pkl
+import torch
 from torch.utils.data import Dataset
 
 

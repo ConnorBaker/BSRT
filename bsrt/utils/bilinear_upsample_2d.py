@@ -1,6 +1,7 @@
 import torch
-from torch import Tensor
 import torch.nn.functional as F
+from torch import Tensor
+
 
 # TODO: Remove when https://github.com/pytorch/pytorch/pull/80340 is merged
 def bilinear_upsample_2d(
@@ -12,7 +13,7 @@ def bilinear_upsample_2d(
 ) -> Tensor:
     orig_precision = t.dtype
     if orig_precision == torch.bfloat16:
-        t = t.to(torch.float16)
+        t = t.to(torch.float32)
 
     ret = F.interpolate(
         t,

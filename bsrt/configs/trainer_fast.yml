@@ -1,0 +1,29 @@
+seed_everything: 1
+trainer:
+  accelerator: auto
+  resume_from_checkpoint: null
+  max_epochs: 20
+  limit_train_batches: 0.2
+  limit_val_batches: 0.1
+  check_val_every_n_epoch: 1
+  log_every_n_steps: 10
+
+  # Speed related settings
+  precision: bf16
+  benchmark: true
+  deterministic: false
+  detect_anomaly: false
+  enable_progress_bar: false
+  enable_model_summary: false
+  enable_checkpointing: false
+  replace_sampler_ddp: false
+  logger: false
+
+  amp_backend: native
+  strategy:
+    class_path: pytorch_lightning.strategies.DDPStrategy
+    init_args:
+      # Speed-related settings
+      find_unused_parameters: false
+      gradient_as_bucket_view: true
+      static_graph: true

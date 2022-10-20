@@ -5,6 +5,9 @@
 # -----------------------------------------------------------------------------------
 
 import math
+import time
+from functools import lru_cache, reduce
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -12,8 +15,6 @@ import torch.nn.functional as F
 # import torch.utils.checkpoint as checkpoint
 from model.checkpoint import CheckpointFunction as checkpoint
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
-import time
-from functools import reduce, lru_cache
 
 
 class Mlp(nn.Module):

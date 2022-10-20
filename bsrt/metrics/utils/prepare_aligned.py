@@ -1,10 +1,10 @@
 import torch
-from torch import Tensor
 import torch.nn as nn
+from metrics.utils.ignore_boundry import ignore_boundary
+from torch import Tensor
+from utils.bilinear_upsample_2d import bilinear_upsample_2d
 from utils.spatial_color_alignment import match_colors
 from utils.warp import warp
-from metrics.utils.ignore_boundry import ignore_boundary
-from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 
 def prepare_aligned(

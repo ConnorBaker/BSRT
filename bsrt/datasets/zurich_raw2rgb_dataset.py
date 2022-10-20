@@ -1,26 +1,17 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing_extensions import ClassVar
-from datasets.utilities.image_folder_data import ImageFolderData
-from datasets.utilities.downloadable import Downloadable
-from datasets.utilities.provides import (
-    ProvidesDataset,
-    ProvidesDatasetPipeline,
-    ProvidesDatasource,
-)
-from ray.data.datasource import ImageFolderDatasource
-from ray.data.dataset import Dataset
-from ray.data.dataset_pipeline import DatasetPipeline
-from ray.data import read_datasource
-import numpy as np
+from typing import Callable, Iterable
 
-ZuricRaw2RgbData = ImageFolderData[np.uint8]
+import torchvision
+from datasets.utilities.downloadable import Downloadable
+from torch import Tensor
+from torch.utils.data import Sampler
+from torchvision.datasets import VisionDataset
+from typing_extensions import ClassVar
 
 
 @dataclass
-class ZurichRaw2RgbDataset(
-    Downloadable, ProvidesDatasource, ProvidesDataset, ProvidesDatasetPipeline
-):
+class ZurichRaw2RgbDataset(VisionDataset, Downloadable):
     """Canon RGB images from the "Zurich RAW to RGB mapping" dataset. You can download the full
     dataset (22 GB) from http://people.ee.ethz.ch/~ihnatova/pynet.html#dataset. Alternatively, you can only download the
     Canon RGB images (5.5 GB) from https://data.vision.ee.ethz.ch/bhatg/zurich-raw-to-rgb.zip
@@ -33,25 +24,20 @@ class ZurichRaw2RgbDataset(
         "https://storage.googleapis.com/bsrt-supplemental/zurich-raw-to-rgb.zip"
     ]
 
-    data_dir: Path
-    dataset_dir: Path = field(init=False)
+    data_dir: str
+    transform: Callable[[Tensor], Tensor | dict[str, Tensor]] = field(
+        default=lambda x: x
+    )
 
-    def __post_init__(self) -> None:
-        self.download()
-        self.dataset_dir: Path = self.data_dir / self.dirname
-
-    def provide_dataset_pipeline(
-        self, blocks_per_window: int = 100
-    ) -> DatasetPipeline[ZuricRaw2RgbData]:
-        return self.provide_datasource().window(blocks_per_window=blocks_per_window)
-
-    def provide_dataset(self) -> Dataset[ZuricRaw2RgbData]:
-        return self.provide_datasource()
-
-    def provide_datasource(self) -> Dataset[ZuricRaw2RgbData]:
-        return read_datasource(
-            ImageFolderDatasource(),
-            root=self.dataset_dir.as_posix(),
-            size=(448, 448),
-            mode="RGB",
+    def __getitem__(self, index: int) -> Tensor | dict[str, Tensor]:
+        image_path = (
+            Path(self.data_dir) / self.dirname / "train" / "canon" / f"{index}.jpg"
         )
+        image_file = torchvision.io.read_file(image_path.as_posix())
+        # TODO: Use nvjpg to decode the images more quickly when on CUDA
+        image_jpg = torchvision.io.decode_jpeg(image_file)
+        transformed = self.transform(image_jpg)
+        return transformed
+
+    def __len__(self) -> int:
+        return 46839

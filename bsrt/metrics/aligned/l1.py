@@ -1,11 +1,13 @@
 from __future__ import annotations
+
 from dataclasses import dataclass, field
+from typing import ClassVar
+
+import torch
 from metrics.l1 import L1
 from metrics.utils.prepare_aligned import prepare_aligned
 from torch import Tensor
-from typing import ClassVar
 from utils.spatial_color_alignment import get_gaussian_kernel
-import torch
 
 
 # TODO: Using the derivied equals overwrites the default hash method, which we want to inherit from Metric.

@@ -1,24 +1,25 @@
-from data_processing.meta_info import MetaInfo
-from data_processing.noises import Noises
-from data_processing.rgb_gains import RgbGains
-from data_processing.image_processing_params import ImageProcessingParams
-from data_processing.image_transformation_params import ImageTransformationParams
-from utils.types import InterpolationType
-from data_processing.camera_pipeline import (
-    random_ccm,
-    apply_ccm,
-    mosaic,
-    invert_smoothstep,
-    gamma_expansion,
-)
-from torch import Tensor
-from utils.bilinear_upsample_2d import bilinear_upsample_2d
-from utils.data_format_utils import torch_to_numpy, numpy_to_torch
+import random
+
 import cv2
 import numpy as np
 import numpy.typing as npt
-import random
 import torch
+from data_processing.camera_pipeline import (
+    apply_ccm,
+    gamma_expansion,
+    invert_smoothstep,
+    mosaic,
+    random_ccm,
+)
+from data_processing.image_processing_params import ImageProcessingParams
+from data_processing.image_transformation_params import ImageTransformationParams
+from data_processing.meta_info import MetaInfo
+from data_processing.noises import Noises
+from data_processing.rgb_gains import RgbGains
+from torch import Tensor
+from utils.bilinear_upsample_2d import bilinear_upsample_2d
+from utils.data_format_utils import numpy_to_torch, torch_to_numpy
+from utils.types import InterpolationType
 
 
 def random_crop(
@@ -91,12 +92,6 @@ def rgb2rawburst(
         rgb2cam = torch.eye(3).float()
     cam2rgb = rgb2cam.inverse()
 
-    # Sample gains
-    if image_processing_params.random_gains:
-        gains = RgbGains.random_gains()
-    else:
-        gains = RgbGains(1.0, 1.0, 1.0)
-
     # Approximately inverts global tone mapping.
     if image_processing_params.smoothstep:
         image = invert_smoothstep(image)
@@ -108,8 +103,14 @@ def rgb2rawburst(
     # Inverts color correction.
     image = apply_ccm(image, rgb2cam)
 
-    # Approximately inverts white balance and brightening.
-    image = gains.safe_invert_gains(image)
+    # Sample gains
+    # FIXME: This just makes the image VERY green.
+    if image_processing_params.random_gains:
+        # Approximately inverts white balance and brightening.
+        gains = RgbGains.random_gains()
+        image = gains.safe_invert_gains(image)
+    else:
+        gains = RgbGains(1.0, 1.0, 1.0)
 
     # Clip saturated pixels.
     image = image.clamp(0.0, 1.0)
