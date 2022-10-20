@@ -339,7 +339,7 @@ class BSRT(pl.LightningModule):
                 x = x + self.absolute_pos_embed
             x = self.pos_drop(x)
 
-            for idx, layer in enumerate(self.pre_layers):
+            for layer in self.pre_layers:
                 x = layer(x, x_size)
 
             x = self.pre_norm(x)

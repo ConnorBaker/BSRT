@@ -914,7 +914,7 @@ def flow_warp(
         indexing="ij",
     )
     grid = torch.stack((grid_x, grid_y), 2).float()  # W(x), H(y), 2
-    grid.requires_grad = False
+    grid.requires_grad_(False)
     grid = grid.type_as(x)
     vgrid = grid + flow
 

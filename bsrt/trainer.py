@@ -1,5 +1,3 @@
-import logging
-import sys
 from typing import Sequence, cast, get_args
 
 import optuna
@@ -47,10 +45,11 @@ if __name__ == "__main__":
     torch.backends.cudnn.allow_tf32 = True
     torch.backends.cudnn.deterministic = False
     torch.backends.cudnn.benchmark = True
+
     wandb_kwargs = {
         "entity": "connorbaker",
         "project": "bsrt",
-        "group": "16-hyperparameter-tuning-4",
+        "group": "16-hyperparameter-tuning-5",
         "dir": None,
         "reinit": True,
     }
@@ -283,9 +282,8 @@ if __name__ == "__main__":
     assert DB_NAME is not None, "DB_NAME environment variable must be set"
     DB_URI = f"postgresql+pg8000://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
-    optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
     study = optuna.create_study(
-        study_name="bsrt-16-hyperparameter-tuning-4",
+        study_name=wandb_kwargs["group"],
         storage=RDBStorage(url=DB_URI, heartbeat_interval=60, grace_period=120),
         directions=[
             metric_direction for (_, metric_direction) in metric_names_and_directions
