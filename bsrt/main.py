@@ -1,8 +1,9 @@
-from datasets.synthetic_train_zurich_raw2rgb_data_module import (
-    SyntheticTrainZurichRaw2RgbDatasetDataModule,
+from datasets.synthetic_zurich_raw2rgb_data_module import (
+    SyntheticZurichRaw2RgbDataModule,
 )
 from model.bsrt import BSRT
 from pytorch_lightning.cli import LightningCLI
+from pytorch_lightning.loggers.wandb import WandbLogger
 
 if __name__ == "__main__":
     import os
@@ -10,8 +11,7 @@ if __name__ == "__main__":
     os.environ["NCCL_NSOCKS_PERTHREAD"] = "8"
     os.environ["NCCL_SOCKET_NTHREADS"] = "4"
     os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
-    os.environ["TORCH_CUDNN_V8_API_DEBUG"] = "1"
-    import torch
+
     import torch.backends.cuda
     import torch.backends.cudnn
 
@@ -20,6 +20,28 @@ if __name__ == "__main__":
     torch.backends.cudnn.allow_tf32 = True
     torch.backends.cudnn.deterministic = False
     torch.backends.cudnn.benchmark = True
-    LightningCLI(
-        BSRT, SyntheticTrainZurichRaw2RgbDatasetDataModule, save_config_callback=None
+
+    wandb_kwargs = {
+        "entity": "connorbaker",
+        "project": "bsrt",
+        "group": "16-hyperparameter-tuning-6",
+        "dir": None,
+        "reinit": True,
+    }
+
+    cli = LightningCLI(
+        BSRT,
+        SyntheticZurichRaw2RgbDataModule,
+        run=False,
+        save_config_callback=None,
     )
+
+    cli.instantiate_classes()
+    model = cli.model
+    trainer = cli.trainer
+    logger = trainer.logger = WandbLogger(**wandb_kwargs)
+    assert isinstance(logger, WandbLogger), "Logger should be set to the WandbLogger"
+
+    logger.log_hyperparams(model.hparams)
+    logger.watch(model, log="all", log_graph=True)
+    trainer.fit(model, datamodule=cli.datamodule)
