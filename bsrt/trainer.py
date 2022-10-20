@@ -292,11 +292,18 @@ if __name__ == "__main__":
         load_if_exists=True,
     )
 
-    study.optimize(
-        objective,
-        catch=(Exception, RuntimeError),
-        n_trials=1000,
-        callbacks=[wandbc],
-        n_jobs=1,
-        show_progress_bar=True,
-    )
+    while True:
+        try:
+            study.optimize(
+                objective,
+                n_trials=1000,
+                # Catch CUDA OOM errors
+                catch=(RuntimeError,),
+                callbacks=[wandbc],
+                n_jobs=1,
+                show_progress_bar=True,
+            )
+        except TypeError:
+            # The WandbCallback expects there to be at least one completed trial.
+            # If there are no completed trials, it performs a len() on an NoneType (because there are no trials).
+            continue
