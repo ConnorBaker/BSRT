@@ -48,6 +48,9 @@ class SyntheticZurichRaw2RgbDataModule(pl.LightningDataModule):
     def __post_init__(
         self,
     ) -> None:
+        # NOTE: We initialize and assign everything in __post_init__ instead of
+        # in prepare_data and setup because it allows us to share the same
+        # dataset across processes.
         super().__init__()
         if self.num_workers == -1:
             cpu_count = os.cpu_count()
@@ -56,11 +59,8 @@ class SyntheticZurichRaw2RgbDataModule(pl.LightningDataModule):
             ), "Could not determine the number of CPUs and num_workers was not set."
             self.num_workers = cpu_count
 
-    def prepare_data(self) -> None:
         # Download the dataset if not present
         ZurichRaw2RgbDataset(data_dir=self.data_dir).download()
-
-    def setup(self, stage: str | None = None) -> None:
         precision_map = {"bf16": torch.bfloat16, 16: torch.float16, 32: torch.float32}
         dtype = precision_map[self.precision]
         dataset = ZurichRaw2RgbDataset(
