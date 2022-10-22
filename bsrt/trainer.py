@@ -1,4 +1,4 @@
-from typing import Callable, Sequence, cast, get_args
+from typing import Callable, List, Sequence, Tuple, cast, get_args
 
 import optuna
 import wandb
@@ -281,7 +281,7 @@ if __name__ == "__main__":
         save_config_callback=None,
     )
 
-    metric_names_and_directions: list[tuple[str, StudyDirection]] = [
+    metric_names_and_directions: List[Tuple[str, StudyDirection]] = [
         ("train/lpips", StudyDirection.MINIMIZE),
         ("train/psnr", StudyDirection.MAXIMIZE),
         ("train/ms_ssim", StudyDirection.MAXIMIZE),

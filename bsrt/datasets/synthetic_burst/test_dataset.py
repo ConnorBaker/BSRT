@@ -31,7 +31,7 @@ class TestData:
     """
 
     burst: Tensor
-    meta_info: dict[str, Any]
+    meta_info: Dict[str, Any]
 
 
 @dataclass
@@ -45,7 +45,7 @@ class TestDataset(
     url: ClassVar[str] = "https://data.vision.ee.ethz.ch/bhatg/synburst_test_2022.zip"
     filename: ClassVar[str] = "synburst_test_2022.zip"
     dirname: ClassVar[str] = "synburst_test_2022"
-    mirrors: ClassVar[list[str]] = [
+    mirrors: ClassVar[List[str]] = [
         "https://storage.googleapis.com/bsrt-supplemental/synburst_test_2022.zip"
     ]
 

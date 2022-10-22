@@ -5,6 +5,7 @@
 # -----------------------------------------------------------------------------------
 
 import math
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -248,7 +249,7 @@ class WindowAttention(nn.Module):
 
 
 def calculate_mask(
-    x_size, window_size, shift_size, device: str | None = None, dtype=None
+    x_size, window_size, shift_size, device: Optional[str] = None, dtype=None
 ):
     # calculate attention mask for SW-MSA
     H, W = x_size

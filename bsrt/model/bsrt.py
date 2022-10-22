@@ -1,6 +1,6 @@
 import functools
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, Dict, List, Union
 
 import model.arch_util as arch_util
 import model.swin_util as swu
@@ -76,7 +76,7 @@ class BSRT(pl.LightningModule):
     out_chans: int = 3  # RGB output so 3 channels
     patch_norm: bool = True
     patch_size: int = 1
-    qk_scale: float | None = None
+    qk_scale: Union[float, None] = None
     qkv_bias: bool = True
     swinfeature: bool = False
     upscale: int = 4
@@ -86,11 +86,11 @@ class BSRT(pl.LightningModule):
     center: int = field(init=False, default=0)
     conv_first: nn.Conv2d = field(init=False)
     conv_flow: nn.Conv2d = field(init=False)
-    depths: list[int] = field(init=False)
+    depths: List[int] = field(init=False)
     embed_dim: int = field(init=False)
     flow_ps: nn.PixelShuffle = field(init=False)
     img_size: int = field(init=False)
-    num_heads: list[int] = field(init=False)
+    num_heads: List[int] = field(init=False)
     num_layers: int = field(init=False)
     patch_embed: swu.PatchEmbed = field(init=False)
     patch_unembed: swu.PatchUnEmbed = field(init=False)
@@ -460,7 +460,7 @@ class BSRT(pl.LightningModule):
         clamped = x.clamp(0, 1)
         return clamped
 
-    def get_ref_flows(self, x: Tensor) -> list[Tensor]:
+    def get_ref_flows(self, x: Tensor) -> List[Tensor]:
         """Get flow between frames ref and other"""
         b, n, c, h, w = x.size()
         x_nbr = x.reshape(-1, c, h, w)
@@ -479,26 +479,26 @@ class BSRT(pl.LightningModule):
 
         return flows_list
 
-    def training_step(self, batch: TrainData, batch_idx: int) -> dict[str, Tensor]:
+    def training_step(self, batch: TrainData, batch_idx: int) -> Dict[str, Tensor]:
         bursts = batch["burst"]
         gts = batch["gt"]
         srs = self(bursts)
 
         # Calculate losses
-        loss: dict[str, Tensor] = self.train_metrics(srs, gts)
+        loss: Dict[str, Tensor] = self.train_metrics(srs, gts)
         self.log_dict(self.train_metrics, on_step=True, on_epoch=False)  # type: ignore
 
         # PyTorch Lightning requires that when validation_step returns a dict, it must contain a key named loss
         loss["loss"] = loss["train/lpips"]
         return loss
 
-    def validation_step(self, batch: TrainData, batch_idx: int) -> dict[str, Tensor]:
+    def validation_step(self, batch: TrainData, batch_idx: int) -> Dict[str, Tensor]:
         bursts = batch["burst"]
         gts = batch["gt"]
         srs = self(bursts)
 
         # Calculate losses
-        loss: dict[str, Tensor] = self.valid_metrics(srs, gts)
+        loss: Dict[str, Tensor] = self.valid_metrics(srs, gts)
         self.log_dict(self.valid_metrics, on_step=False, on_epoch=True)  # type: ignore
 
         # Log the image only for the first batch

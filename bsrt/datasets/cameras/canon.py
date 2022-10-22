@@ -3,7 +3,7 @@ from __future__ import annotations
 import pickle as pkl
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import overload
+from typing import Tuple, Union, overload
 
 import cv2
 import numpy as np
@@ -63,7 +63,7 @@ class CanonImage:
 
         self.metadata.norm_factor = 16383.0
 
-    def shape(self) -> tuple[int, int, int]:
+    def shape(self) -> Tuple[int, int, int]:
         shape = (3, self.im_raw.shape[1], self.im_raw.shape[2])
         return shape
 
@@ -114,7 +114,9 @@ class CanonImage:
     def postprocess(self, return_np: Literal[True]) -> npt.NDArray[np.uint8]:
         ...
 
-    def postprocess(self, return_np: bool = True) -> Tensor | npt.NDArray[np.uint8]:
+    def postprocess(
+        self, return_np: bool = True
+    ) -> Union[Tensor, npt.NDArray[np.uint8]]:
         # Convert to rgb
         im = self.im_raw
 

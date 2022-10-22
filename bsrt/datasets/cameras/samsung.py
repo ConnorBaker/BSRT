@@ -3,7 +3,7 @@ from __future__ import annotations
 import pickle as pkl
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import overload
+from typing import Union, overload
 
 import cv2
 import numpy as np
@@ -77,19 +77,19 @@ class SamsungImage:
 
     @overload
     def postprocess(
-        self, return_np: Literal[False], norm_factor: float | None = None
+        self, return_np: Literal[False], norm_factor: Union[float, None] = None
     ) -> Tensor:
         ...
 
     @overload
     def postprocess(
-        self, return_np: Literal[True], norm_factor: float | None = None
+        self, return_np: Literal[True], norm_factor: Union[float, None] = None
     ) -> npt.NDArray[np.uint8]:
         ...
 
     def postprocess(
-        self, return_np: bool = True, norm_factor: float | None = None
-    ) -> Tensor | npt.NDArray[np.uint8]:
+        self, return_np: bool = True, norm_factor: Union[float, None] = None
+    ) -> Union[Tensor, npt.NDArray[np.uint8]]:
         # Convert to rgb
         im = self.im_raw
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import ClassVar
+from typing import ClassVar, Union
 
 import torch
 import utils.spatial_color_alignment as sca_utils
@@ -14,11 +14,11 @@ from torchmetrics.metric import Metric
 
 
 # TODO: Using the derivied equals overwrites the default hash method, which we want to inherit from Metric.
-@dataclass(eq=False, init=False, kw_only=True)
+@dataclass(eq=False, init=False)
 class AlignedSSIM(Metric):
     full_state_update: ClassVar[bool] = False
     alignment_net: torch.nn.Module
-    boundary_ignore: int | None = None
+    boundary_ignore: Union[int, None] = None
     sr_factor: int = 4
     gauss_kernel: Tensor = field(init=False)
     ksz: int = field(init=False)
@@ -30,7 +30,7 @@ class AlignedSSIM(Metric):
     def __init__(
         self,
         alignment_net: torch.nn.Module,
-        boundary_ignore: int | None = None,
+        boundary_ignore: Union[int, None] = None,
         sr_factor: int = 4,
     ) -> None:
         super().__init__()

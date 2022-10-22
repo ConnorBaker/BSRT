@@ -1,5 +1,5 @@
 import os
-from typing import cast
+from typing import Union, cast
 
 import torch
 import torch.nn.functional as F
@@ -8,8 +8,11 @@ import torch.optim.lr_scheduler as lrs
 from metrics.aligned.l1 import AlignedL1
 from metrics.aligned.psnr import AlignedPSNR
 from metrics.charbonnier_loss import CharbonnierLoss
+from metrics.l1 import L1
+from metrics.l2 import L2
 from metrics.lpips import LPIPS
 from metrics.ms_ssim import MS_SSIM
+from metrics.ms_ssim_loss import MSSSIMLoss
 from metrics.mse import MSE
 from metrics.psnr import PSNR
 from metrics.ssim import SSIM
@@ -22,25 +25,24 @@ from utils.types import BayerPattern, NormalizationMode
 
 
 def make_loss_fn(loss: LossName, data_type: DataTypeName) -> Metric:
-    match loss:
-        case "L1":
-            match data_type:
-                case "synthetic":
-                    return MSE()
-                case "real":
-                    # FIXME: Reduce duplication with make_psnr_fn by using the same alignment_net
-                    from pwcnet.pwcnet import PWCNet
+    if loss == "L1":
+        if data_type == "synthetic":
+            return L1()
+        elif data_type == "real":
+            # FIXME: Reduce duplication with make_psnr_fn by using the same alignment_net
+            from pwcnet.pwcnet import PWCNet
 
-                    alignment_net = PWCNet()
-                    for param in alignment_net.parameters():
-                        param.requires_grad = False
-                    return AlignedL1(alignment_net=alignment_net, boundary_ignore=40)
-        case "MSE":
-            return MSE()
-        case "CB":
-            return CharbonnierLoss()
-        case "MSSSIM":
-            return MS_SSIM()
+            alignment_net = PWCNet()
+            for param in alignment_net.parameters():
+                param.requires_grad = False
+            return AlignedL1(alignment_net=alignment_net, boundary_ignore=40)
+
+    elif loss == "MSE":
+        return L2()
+    elif loss == "CB":
+        return CharbonnierLoss()
+    elif loss == "MSSSIM":
+        return MSSSIMLoss()
 
 
 @overload
@@ -55,25 +57,23 @@ def make_postprocess_fn(data_type: Literal["real"]) -> BurstSRPostProcess:
 
 def make_postprocess_fn(
     data_type: DataTypeName,
-) -> BurstSRPostProcess | SimplePostProcess:
-    match data_type:
-        case "synthetic":
-            return SimplePostProcess(return_np=True)
-        case "real":
-            return BurstSRPostProcess(return_np=True)
+) -> Union[BurstSRPostProcess, SimplePostProcess]:
+    if data_type == "synthetic":
+        return SimplePostProcess(return_np=True)
+    elif data_type == "real":
+        return BurstSRPostProcess(return_np=True)
 
 
 def make_psnr_fn(data_type: DataTypeName) -> Metric:
-    match data_type:
-        case "synthetic":
-            return PSNR(boundary_ignore=40)
-        case "real":
-            from pwcnet.pwcnet import PWCNet
+    if data_type == "synthetic":
+        return PSNR(boundary_ignore=40)
+    elif data_type == "real":
+        from pwcnet.pwcnet import PWCNet
 
-            alignment_net = PWCNet()
-            for param in alignment_net.parameters():
-                param.requires_grad = False
-            return AlignedPSNR(alignment_net=alignment_net, boundary_ignore=40)
+        alignment_net = PWCNet()
+        for param in alignment_net.parameters():
+            param.requires_grad = False
+        return AlignedPSNR(alignment_net=alignment_net, boundary_ignore=40)
 
 
 ######################## BayerUnifyAug ############################
