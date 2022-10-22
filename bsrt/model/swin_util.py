@@ -5,8 +5,6 @@
 # -----------------------------------------------------------------------------------
 
 import math
-import time
-from functools import lru_cache, reduce
 
 import torch
 import torch.nn as nn
@@ -249,11 +247,12 @@ class WindowAttention(nn.Module):
         return flops
 
 
-@lru_cache()
-def calculate_mask(x_size, window_size, shift_size):
+def calculate_mask(
+    x_size, window_size, shift_size, device: str | None = None, dtype=None
+):
     # calculate attention mask for SW-MSA
     H, W = x_size
-    img_mask = torch.zeros((1, H, W, 1))  # 1 H W 1
+    img_mask = torch.zeros((1, H, W, 1), device=device, dtype=dtype)  # 1 H W 1
     h_slices = (
         slice(0, -window_size),
         slice(-window_size, -shift_size),
@@ -405,8 +404,8 @@ class SwinTransformerBlock(nn.Module):
         #     else:
         #         attn_windows = self.attn(x_windows, mask=self.calculate_mask(x_size))
 
-        attn_mask = calculate_mask(x_size, self.window_size, self.shift_size).to(
-            x.device
+        attn_mask = calculate_mask(
+            x_size, self.window_size, self.shift_size, device=x.device, dtype=x.dtype
         )
         attn_windows = self.attn(x_windows, mask=attn_mask)
 

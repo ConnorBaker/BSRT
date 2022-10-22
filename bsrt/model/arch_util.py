@@ -1,4 +1,5 @@
 import torch
+from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
@@ -878,8 +879,8 @@ class PyWideActResBlock(nn.Module):
 
 
 def flow_warp(
-    x,
-    flow,
+    x: Tensor,
+    flow: Tensor,
     interp_mode="bilinear",
     padding_mode="zeros",
     align_corners=True,
@@ -905,17 +906,13 @@ def flow_warp(
     """
     # assert x.size()[-2:] == flow.size()[1:3] # temporaily turned off for image-wise shift
     n, _, h, w = x.size()
-    x = x.float()
     # create mesh grid
-    # grid_y, grid_x = torch.meshgrid(torch.arange(0, h).type_as(x), torch.arange(0, w).type_as(x), indexing='ij') # an illegal memory access on TITAN RTX + PyTorch1.9.1
     grid_y, grid_x = torch.meshgrid(
         torch.arange(0, h, dtype=x.dtype, device=x.device),
         torch.arange(0, w, dtype=x.dtype, device=x.device),
         indexing="ij",
     )
-    grid = torch.stack((grid_x, grid_y), 2).float()  # W(x), H(y), 2
-    grid.requires_grad_(False)
-    grid = grid.type_as(x)
+    grid = torch.stack((grid_x, grid_y), 2).requires_grad_(False)  # W(x), H(y), 2
     vgrid = grid + flow
 
     # if use_pad_mask: # for PWCNet

@@ -147,8 +147,7 @@ class SpyNet(nn.Module):
                 flow_out[:, 0, :, :] *= float(w // scale) / float(w_floor // scale)
                 flow_out[:, 1, :, :] *= float(h // scale) / float(h_floor // scale)
 
-                if torch.abs(flow_out).mean() > 200:
-                    flow_out.clamp(-250, 250)
+                flow_out.clamp(-250, 250)
 
                 flow_list.insert(0, flow_out)
 
