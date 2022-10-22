@@ -157,7 +157,7 @@ def demosaic(image: Tensor) -> Tensor:
     # We cannot convert a tensor on the GPU to a numpy array, so we need to move it to the CPU first.
     im_sc_np: npt.NDArray[np.uint8] = im_sc.cpu().numpy()
 
-    out: list[Tensor] = [
+    out: List[Tensor] = [
         npimage_to_torch(cv.cvtColor(im, cv.COLOR_BAYER_BG2RGB), input_bgr=False)
         for im in im_sc_np
     ]

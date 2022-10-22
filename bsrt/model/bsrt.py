@@ -1,6 +1,6 @@
 import functools
 from dataclasses import dataclass, field
-from typing import Callable, List, Union
+from typing import Callable, Dict, List, Union
 
 import model.arch_util as arch_util
 import model.swin_util as swu
@@ -479,26 +479,26 @@ class BSRT(pl.LightningModule):
 
         return flows_list
 
-    def training_step(self, batch: TrainData, batch_idx: int) -> dict[str, Tensor]:
+    def training_step(self, batch: TrainData, batch_idx: int) -> Dict[str, Tensor]:
         bursts = batch["burst"]
         gts = batch["gt"]
         srs = self(bursts)
 
         # Calculate losses
-        loss: dict[str, Tensor] = self.train_metrics(srs, gts)
+        loss: Dict[str, Tensor] = self.train_metrics(srs, gts)
         self.log_dict(self.train_metrics, on_step=True, on_epoch=False)  # type: ignore
 
         # PyTorch Lightning requires that when validation_step returns a dict, it must contain a key named loss
         loss["loss"] = loss["train/lpips"]
         return loss
 
-    def validation_step(self, batch: TrainData, batch_idx: int) -> dict[str, Tensor]:
+    def validation_step(self, batch: TrainData, batch_idx: int) -> Dict[str, Tensor]:
         bursts = batch["burst"]
         gts = batch["gt"]
         srs = self(bursts)
 
         # Calculate losses
-        loss: dict[str, Tensor] = self.valid_metrics(srs, gts)
+        loss: Dict[str, Tensor] = self.valid_metrics(srs, gts)
         self.log_dict(self.valid_metrics, on_step=False, on_epoch=True)  # type: ignore
 
         # Log the image only for the first batch
