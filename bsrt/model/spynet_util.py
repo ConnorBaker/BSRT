@@ -1,10 +1,11 @@
 import math
 
-import model.arch_util as arch_util
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from utils.bilinear_upsample_2d import bilinear_upsample_2d
+
+from ..utils.bilinear_upsample_2d import bilinear_upsample_2d
+from . import arch_util
 
 
 class BasicModule(nn.Module):

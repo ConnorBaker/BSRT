@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from utilities import prepend_to_param_names
+from ..utilities import prepend_to_param_names
 
 
 @dataclass
@@ -15,7 +15,7 @@ class BSRTParams:
 
 
 BSRT_PARAMS = prepend_to_param_names(
-    "BSRT_PARAMS",
+    "bsrt_params",
     [
         {
             "name": "attn_drop_rate",

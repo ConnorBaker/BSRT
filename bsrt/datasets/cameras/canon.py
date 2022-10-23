@@ -9,9 +9,10 @@ import cv2
 import numpy as np
 import numpy.typing as npt
 import torch
-from datasets.cameras.metadata import ImageMetadata
 from torch import Tensor
 from typing_extensions import Literal
+
+from bsrt.datasets.cameras.metadata import ImageMetadata
 
 
 @dataclass

@@ -1,9 +1,10 @@
 from dataclasses import dataclass, field
 from typing import Union
 
-from data_processing.noises import Noises
-from data_processing.rgb_gains import RgbGains
 from torch import Tensor
+
+from .noises import Noises
+from .rgb_gains import RgbGains
 
 
 @dataclass

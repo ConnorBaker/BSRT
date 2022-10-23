@@ -3,11 +3,12 @@ from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Union
 
 import torchvision
-from datasets.utilities.downloadable import Downloadable
 from torch import Tensor
 from torch.utils.data import Sampler
 from torchvision.datasets import VisionDataset
 from typing_extensions import ClassVar
+
+from .utilities.downloadable import Downloadable
 
 
 @dataclass

@@ -8,7 +8,9 @@ import numpy
 import PIL
 import PIL.Image
 import torch
-from utils.bilinear_upsample_2d import bilinear_upsample_2d
+import torch.backends.cudnn
+
+from bsrt.utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 try:
     from .correlation import correlation  # the custom cost volume layer

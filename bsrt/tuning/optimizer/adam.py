@@ -1,10 +1,10 @@
 from dataclasses import dataclass
 from typing import Tuple
 
-from utilities import prepend_to_param_names
+from ..utilities import prepend_to_param_names
 
 ADAM_PARAMS = prepend_to_param_names(
-    "ADAM_PARAMS",
+    "adam_params",
     [
         {
             "name": "lr",

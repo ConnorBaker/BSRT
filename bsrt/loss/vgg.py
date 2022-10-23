@@ -4,8 +4,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
-from model import common
 from torch import Tensor
+
+from ..model import common
 
 
 @dataclass(eq=False, init=False)

@@ -5,22 +5,23 @@ import cv2
 import numpy as np
 import numpy.typing as npt
 import torch
-from data_processing.camera_pipeline import (
+from torch import Tensor
+
+from ..utils.bilinear_upsample_2d import bilinear_upsample_2d
+from ..utils.data_format_utils import numpy_to_torch, torch_to_numpy
+from ..utils.types import InterpolationType
+from .camera_pipeline import (
     apply_ccm,
     gamma_expansion,
     invert_smoothstep,
     mosaic,
     random_ccm,
 )
-from data_processing.image_processing_params import ImageProcessingParams
-from data_processing.image_transformation_params import ImageTransformationParams
-from data_processing.meta_info import MetaInfo
-from data_processing.noises import Noises
-from data_processing.rgb_gains import RgbGains
-from torch import Tensor
-from utils.bilinear_upsample_2d import bilinear_upsample_2d
-from utils.data_format_utils import numpy_to_torch, torch_to_numpy
-from utils.types import InterpolationType
+from .image_processing_params import ImageProcessingParams
+from .image_transformation_params import ImageTransformationParams
+from .meta_info import MetaInfo
+from .noises import Noises
+from .rgb_gains import RgbGains
 
 
 def random_crop(

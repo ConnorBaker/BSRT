@@ -3,9 +3,6 @@ from typing import Dict, Tuple, Union
 
 import torch
 import torch.nn.functional as F
-from data_processing.camera_pipeline import demosaic
-from datasets.synthetic_burst.train_dataset import TrainData
-from model.bsrt import BSRT
 from pytorch_lightning import LightningModule
 from pytorch_lightning.loggers.wandb import WandbLogger
 from torch import Tensor
@@ -17,10 +14,14 @@ from torchmetrics.image.psnr import PeakSignalNoiseRatio as PSNR
 from torchmetrics.image.ssim import (
     MultiScaleStructuralSimilarityIndexMeasure as MS_SSIM,
 )
-from tuning.model.bsrt import BSRTParams
-from tuning.optimizer.adam import AdamParams
-from tuning.optimizer.sgd import SGDParams
-from tuning.optimizer.utilities import configure_optimizer
+
+from .data_processing.camera_pipeline import demosaic
+from .datasets.synthetic_burst.train_dataset import TrainData
+from .model.bsrt import BSRT
+from .tuning.model.bsrt import BSRTParams
+from .tuning.optimizer.adam import AdamParams
+from .tuning.optimizer.sgd import SGDParams
+from .tuning.optimizer.utilities import configure_optimizer
 
 
 @dataclass(eq=False)

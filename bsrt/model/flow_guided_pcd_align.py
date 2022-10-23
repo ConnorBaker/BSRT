@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
-from model.DCNv2.dcn_v2 import DCN_sep as DCN
-from model.DCNv2.dcn_v2 import FlowGuidedDCN
-from utils.bilinear_upsample_2d import bilinear_upsample_2d
+
+from ..utils.bilinear_upsample_2d import bilinear_upsample_2d
+from .DCNv2.dcn_v2 import DCN_sep as DCN
+from .DCNv2.dcn_v2 import FlowGuidedDCN
 
 
 class FlowGuidedPCDAlign(nn.Module):

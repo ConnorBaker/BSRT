@@ -1,10 +1,11 @@
 from typing import Union
 
 import torch.nn as nn
-from adam import AdamParams
 from apex.optimizers import FusedAdam, FusedSGD
-from sgd import SGDParams
 from torch.optim.optimizer import Optimizer
+
+from .adam import AdamParams
+from .sgd import SGDParams
 
 
 def configure_optimizer(

@@ -1,7 +1,8 @@
 # from lib.non_local_concatenation import NONLocalBlock2D
 # from lib.non_local_gaussian import NONLocalBlock2D
-from lib.non_local_embedded_gaussian import NONLocalBlock2D
 from torch import nn
+
+from .non_local_embedded_gaussian import NONLocalBlock2D
 
 # from lib.non_local_dot_product import NONLocalBlock2D
 

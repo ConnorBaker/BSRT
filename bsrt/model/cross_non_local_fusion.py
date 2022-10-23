@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
-from model.non_local.non_local_cross_dot_product import NONLocalBlock2D as NonLocalCross
-from model.non_local.non_local_dot_product import NONLocalBlock2D as NonLocal
+
+from .non_local.non_local_cross_dot_product import NONLocalBlock2D as NonLocalCross
+from .non_local.non_local_dot_product import NONLocalBlock2D as NonLocal
 
 
 class CrossNonLocalFusion(nn.Module):

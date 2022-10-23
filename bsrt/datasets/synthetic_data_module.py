@@ -4,12 +4,13 @@ from typing import Callable
 
 import pytorch_lightning as pl
 import torch
-from datasets.synthetic_burst.train_dataset import TrainData, TrainDataProcessor
 from torch import Tensor
 from torch.utils.data import DataLoader, Subset, random_split
 from torchvision.datasets import VisionDataset
 from torchvision.transforms import Compose, ToTensor
 from typing_extensions import Literal
+
+from .synthetic_burst.train_dataset import TrainData, TrainDataProcessor
 
 
 @dataclass(eq=False)

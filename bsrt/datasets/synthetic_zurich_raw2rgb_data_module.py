@@ -3,11 +3,12 @@ from dataclasses import dataclass, field
 
 import pytorch_lightning as pl
 import torch
-from datasets.synthetic_burst.train_dataset import TrainDataProcessor
-from datasets.zurich_raw2rgb_dataset import ZurichRaw2RgbDataset
 from torch import Tensor
 from torch.utils.data import DataLoader, Subset, random_split
 from typing_extensions import Literal
+
+from .synthetic_burst.train_dataset import TrainDataProcessor
+from .zurich_raw2rgb_dataset import ZurichRaw2RgbDataset
 
 
 @dataclass

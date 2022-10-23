@@ -5,11 +5,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import utility
-from loss.discriminator import Discriminator
 from torch import Tensor
 from utils.types import GanType
 
 from bsrt.option import Config
+
+from .discriminator import Discriminator
 
 
 @dataclass(eq=False, init=False)

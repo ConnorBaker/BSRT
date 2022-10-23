@@ -6,10 +6,11 @@ import cv2 as cv
 import numpy as np
 import numpy.typing as npt
 import torch
-from data_processing.meta_info import MetaInfo
 from torch import Tensor
 from typing_extensions import Literal
-from utils.data_format_utils import npimage_to_torch, torch_to_npimage
+
+from ..utils.data_format_utils import npimage_to_torch, torch_to_npimage
+from .meta_info import MetaInfo
 
 """ Based on http://timothybrooks.com/tech/unprocessing
 Functions for forward and inverse camera pipeline. All functions input a torch float tensor of shape (c, h, w).

@@ -5,15 +5,16 @@ from typing import Union, overload
 import numpy as np
 import numpy.typing as npt
 import torch
-from data_processing.camera_pipeline import (
+from torch import Tensor
+from typing_extensions import Literal
+
+from ..data_processing.camera_pipeline import (
     apply_ccm,
     apply_smoothstep,
     gamma_compression,
 )
-from data_processing.synthetic_burst_generation import MetaInfo
-from torch import Tensor
-from typing_extensions import Literal
-from utils.data_format_utils import torch_to_npimage
+from ..data_processing.synthetic_burst_generation import MetaInfo
+from .data_format_utils import torch_to_npimage
 
 
 @dataclass

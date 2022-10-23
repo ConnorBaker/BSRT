@@ -10,10 +10,10 @@ from typing import Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 
 # import torch.utils.checkpoint as checkpoint
-from model.checkpoint import CheckpointFunction as checkpoint
-from timm.models.layers import DropPath, to_2tuple, trunc_normal_
+from .checkpoint import CheckpointFunction as checkpoint
 
 
 class Mlp(nn.Module):

@@ -2,11 +2,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
-from model import common
-from model.utils.psconv import PSGConv2d as PSConv2d
-from model.utils.psconv import PyConv2d
 from torch import Tensor
-from utils.bilinear_upsample_2d import bilinear_upsample_2d
+
+from ..utils.bilinear_upsample_2d import bilinear_upsample_2d
+from . import common
+from .utils.psconv import PSGConv2d as PSConv2d
+from .utils.psconv import PyConv2d
 
 
 def initialize_weights(net_l, scale=1):

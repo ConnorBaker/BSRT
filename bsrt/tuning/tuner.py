@@ -6,18 +6,18 @@ import torch
 import wandb
 from ax.service.ax_client import AxClient
 from ax.service.utils.instantiation import ObjectiveProperties
-from model.bsrt import BSRT_PARAMS, BSRTParams
-from optimizer.adam import ADAM_PARAMS, AdamParams
-from optimizer.sgd import SGDParams
 from pytorch_lightning.strategies.ddp import DDPStrategy
 from pytorch_lightning.trainer import Trainer
 from typing_extensions import Literal
-from utilities import filter_and_remove_from_keys
 
 from ..datasets.synthetic_zurich_raw2rgb_data_module import (
     SyntheticZurichRaw2RgbDataModule,
 )
 from ..lighting_bsrt import LightningBSRT
+from .model.bsrt import BSRT_PARAMS, BSRTParams
+from .optimizer.adam import ADAM_PARAMS, AdamParams
+from .optimizer.sgd import SGDParams
+from .utilities import filter_and_remove_from_keys
 
 SchedulerName = Literal[
     "ExponentialLR",
@@ -81,7 +81,7 @@ def objective(params: Dict[str, Any]) -> Union[TrainingError, ObjectiveMetrics]:
         return TrainingError.OPTIMIZER_PARAMS_INVALID
 
     try:
-        bsrt_params = BSRTParams(**filter_and_remove_from_keys("model_params", params))
+        bsrt_params = BSRTParams(**filter_and_remove_from_keys("bsrt_params", params))
         model = LightningBSRT(
             bsrt_params=bsrt_params, optimizer_params=optimizer_params
         )

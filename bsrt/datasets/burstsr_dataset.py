@@ -6,12 +6,13 @@ from typing import Any, ClassVar, Dict, List, Tuple, Union, overload
 
 import torch
 import torch.nn.functional as F
-from datasets.cameras.canon import CanonImage
-from datasets.cameras.samsung import SamsungImage
-from datasets.utilities.utilities import flatten_raw_image, pack_raw_image
 from torch import Tensor
 from torch.utils.data import Dataset
 from typing_extensions import Literal
+
+from .cameras.canon import CanonImage
+from .cameras.samsung import SamsungImage
+from .utilities.utilities import flatten_raw_image, pack_raw_image
 
 
 @dataclass
