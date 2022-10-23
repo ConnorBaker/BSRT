@@ -3,4 +3,4 @@ FROM ${BASE_IMAGE}
 
 COPY . /BSRT
 WORKDIR /BSRT
-RUN pip install -e .
+RUN pip install pip==22.3 --upgrade && pip install -e .
