@@ -7,8 +7,8 @@ import torch.nn.functional as F
 import wandb
 from ax import optimize
 from ax.service.utils.instantiation import ObjectiveProperties
-from bsrt.hyperparameter_tuning.optimizer.adam import AdamParams
-from bsrt.hyperparameter_tuning.optimizer.sgd import SGDParams
+from bsrt.tuning.optimizer.adam import AdamParams
+from bsrt.tuning.optimizer.sgd import SGDParams
 from bsrt.lighting_bsrt import LightningBSRT
 from data_processing.camera_pipeline import demosaic
 from datasets.synthetic_burst.train_dataset import TrainData

@@ -1,2 +1,35 @@
+[tool.poetry]
+name = "bsrt"
+version = "0.1.0"
+description = "Multi-frame super-resolution tool"
+authors = ["Ziwei Luo <ziwei.ro@gmail.com>"]
+maintainers = [
+    "Ziwei Luo <ziwei.ro@gmail.com>",
+    "Connor Baker <connorbaker01@gmail.com>",
+]
+readme = "README.md"
+repository = "https://github.com/connorbaker/bsrt"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+pytorch-lightning = "^1.7.7"
+torchmetrics = "^0.10.0"
+timm = "^0.6.7"
+pg8000 = "^1.29.2"
+wandb = "^0.13.4"
+# Install LPIPS patched for newer version of torchvision
+lpips = { git = "https://github.com/ercanburak/PerceptualSimilarity.git", rev = "9606c353e5777fc95186a5a4c876e7c6a17651a6" }
+# Install mosaicml with support for torchmetrics 0.10.0
+mosaicml = { git = "https://github.com/mosaicml/composer.git", rev = "59f02d1c79e251ce89604024046bc7edf45cc9c2" }
+
+[tool.poetry.group.dev.dependencies]
+mypy = "^0.982"
+black = "^22.10.0"
+isort = "^5.10.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
 [tool.isort]
 profile = "black"
