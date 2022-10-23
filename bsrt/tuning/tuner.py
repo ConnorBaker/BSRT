@@ -223,14 +223,79 @@ if __name__ == "__main__":
     torch.backends.cudnn.deterministic = False
     torch.backends.cudnn.benchmark = True
 
-    ax_client_file = "ax_client.json"
+    from ax.utils.common.logger import build_stream_handler, get_logger
 
-    ax_client = AxClient(torch_device=torch.device("cuda"))
+    logger = get_logger("bsrt.tuning.tuner")
+    logger.addHandler(build_stream_handler())
+    experiment_name = "model_with_adam"
+    using_db = True
+
     try:
-        ax_client = ax_client.load_from_json_file(ax_client_file)
-        print("Loaded AxClient from file")
+        from ax.storage.sqa_store.structs import DBSettings
+
+        DB_USER = os.environ["DB_USER"]
+        assert DB_USER is not None, "DB_USER environment variable must be set"
+        DB_PASS = os.environ["DB_PASS"]
+        assert DB_PASS is not None, "DB_PASS environment variable must be set"
+        DB_HOST = os.environ["DB_HOST"]
+        assert DB_HOST is not None, "DB_HOST environment variable must be set"
+        DB_PORT = os.environ["DB_PORT"]
+        assert DB_PORT is not None, "DB_PORT environment variable must be set"
+        DB_NAME = os.environ["DB_NAME"]
+        assert DB_NAME is not None, "DB_NAME environment variable must be set"
+        DB_URI = f"mysql+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+        ax_client = AxClient(
+            torch_device=torch.device("cuda"),
+            random_seed=0,
+            db_settings=DBSettings(
+                url=DB_URI,
+            ),
+        )
+        logger.info("Connected to database")
+    except ModuleNotFoundError as e:
+        logger.error(
+            f"Failed to load experiment `{experiment_name}` from database due to missing dependencies: {e}. Falling back to local JSON storage."
+        )
+        ax_client = AxClient(
+            torch_device=torch.device("cuda"),
+            random_seed=0,
+        )
+        using_db = False
+
+    except AssertionError as e:
+        logger.error(
+            f"Failed to load experiment `{experiment_name}` from database due to missing environment variable: {e}. Falling back to local JSON storage."
+        )
+        ax_client = AxClient(
+            torch_device=torch.device("cuda"),
+            random_seed=0,
+        )
+        using_db = False
+
+    try:
+        if using_db:
+            ax_client.load_experiment_from_database(experiment_name)
+            logger.info(f"Loaded experiment `{experiment_name}` from database")
+        else:
+            ax_client.load_from_json_file(f"{experiment_name}.json")
+            logger.info(f"Loaded experiment `{experiment_name}` from JSON file")
+
     except:
-        print("Failed to load AxClient from file")
+        logger.error(
+            f"Failed to load experiment `{experiment_name}` from {'database' if using_db else 'JSON file'}. Creating new experiment."
+        )
+        if using_db:
+            from ax.storage.sqa_store.db import (
+                create_all_tables,
+                get_engine,
+                init_engine_and_session_factory,
+            )
+
+            init_engine_and_session_factory(url=ax_client.db_settings.url)
+            engine = get_engine()
+            create_all_tables(engine)
+            logger.info("Created database tables")
+
         ax_client.create_experiment(
             name="model_with_adam",
             parameters=BSRT_PARAMS + ADAM_PARAMS,
@@ -244,7 +309,12 @@ if __name__ == "__main__":
                 "ms_ssim >= 0.95",
             ],
         )
-        ax_client.save_to_json_file(ax_client_file)
+        if not using_db:
+            ax_client.save_to_json_file(f"{experiment_name}.json")
+
+        logger.info(
+            f"Created and saved experiment `{experiment_name}` to {'database' if using_db else 'JSON file'}"
+        )
 
     for _ in range(10):
         parameters, trial_index = ax_client.get_next_trial()
@@ -252,21 +322,13 @@ if __name__ == "__main__":
 
         if isinstance(result, TrainingError):
             metadata = {"errorName": result.name, "errorValue": result.value}
-            print(f"metadata: {metadata}")
+            logger.error(
+                f"Trial {trial_index} failed with error {result.name}: {result.value}"
+            )
             ax_client.log_trial_failure(trial_index=trial_index, metadata=metadata)
+
         else:
             ax_client.complete_trial(trial_index=trial_index, raw_data=result.__dict__)
 
-        ax_client.save_to_json_file(ax_client_file)
-
-    # DB_USER = os.environ["DB_USER"]
-    # assert DB_USER is not None, "DB_USER environment variable must be set"
-    # DB_PASS = os.environ["DB_PASS"]
-    # assert DB_PASS is not None, "DB_PASS environment variable must be set"
-    # DB_HOST = os.environ["DB_HOST"]
-    # assert DB_HOST is not None, "DB_HOST environment variable must be set"
-    # DB_PORT = os.environ["DB_PORT"]
-    # assert DB_PORT is not None, "DB_PORT environment variable must be set"
-    # DB_NAME = os.environ["DB_NAME"]
-    # assert DB_NAME is not None, "DB_NAME environment variable must be set"
-    # DB_URI = f"postgresql+pg8000://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+        if not using_db:
+            ax_client.save_to_json_file(f"{experiment_name}.json")
