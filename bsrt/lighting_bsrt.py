@@ -1,0 +1,106 @@
+from dataclasses import dataclass, field
+from typing import Dict, Tuple, Union
+
+import torch
+import torch.nn.functional as F
+from hyperparameter_tuning.model.bsrt import BSRTParams
+from data_processing.camera_pipeline import demosaic
+from datasets.synthetic_burst.train_dataset import TrainData
+from model.bsrt import BSRT
+from pytorch_lightning import LightningModule
+from pytorch_lightning.loggers.wandb import WandbLogger
+from torch import Tensor
+from torchmetrics import MetricCollection
+from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity as LPIPS
+from torchmetrics.image.psnr import PeakSignalNoiseRatio as PSNR
+from torchmetrics.image.ssim import (
+    MultiScaleStructuralSimilarityIndexMeasure as MS_SSIM,
+)
+from hyperparameter_tuning.optimizer.adam import AdamParams
+from hyperparameter_tuning.optimizer.sgd import SGDParams
+from hyperparameter_tuning.utilities import configure_optimizer
+from torch.optim.optimizer import Optimizer
+from torch.optim.lr_scheduler import _LRScheduler
+
+
+@dataclass(eq=False)
+class LightningBSRT(LightningModule):
+    bsrt_params: BSRTParams
+    optimizer_params: Union[AdamParams, SGDParams]
+
+    # lr_scheduler: Optional[torch.optim.lr_scheduler._LRScheduler]
+    model: BSRT = field(init=False)
+    train_metrics: MetricCollection = field(init=False)
+    valid_metrics: MetricCollection = field(init=False)
+
+    def __post_init__(self):
+        super().__init__()
+
+        # Initialize model
+        self.model = BSRT(**self.bsrt_params.__dict__)
+
+        # Initialize loss functions
+        metrics = MetricCollection(
+            {
+                "psnr": PSNR(data_range=1.0),
+                "ms_ssim": MS_SSIM(data_range=1.0),
+                "lpips": LPIPS(net_type="alex", normalize=True).requires_grad_(False),
+            }
+        )
+        self.train_metrics = metrics.clone(prefix="train/")
+        self.valid_metrics = metrics.clone(prefix="val/")
+
+    def forward(self, bursts: Tensor) -> Tensor:
+        return self.model(bursts)
+
+    def training_step(self, batch: TrainData, batch_idx: int) -> Dict[str, Tensor]:
+        bursts = batch["burst"]
+        gts = batch["gt"]
+        srs = self(bursts)
+
+        # Calculate losses
+        loss: Dict[str, Tensor] = self.train_metrics(srs, gts)
+        self.log_dict(self.train_metrics, on_step=True, on_epoch=False)  # type: ignore
+
+        # PyTorch Lightning requires that when validation_step returns a dict, it must contain a key named loss
+        loss["loss"] = loss["train/lpips"]
+        return loss
+
+    def validation_step(self, batch: TrainData, batch_idx: int) -> Dict[str, Tensor]:
+        bursts = batch["burst"]
+        gts = batch["gt"]
+        srs = self(bursts)
+
+        # Calculate losses
+        loss: Dict[str, Tensor] = self.valid_metrics(srs, gts)
+        self.log_dict(self.valid_metrics, on_step=False, on_epoch=True)  # type: ignore
+
+        # Log the image only for the first batch
+        # TODO: We could log different images with different names
+        if batch_idx == 0 and isinstance(self.logger, WandbLogger):
+            # Gross hack to work around "RuntimeError: "upsample_nearest2d_out_frame" not implemented for 'BFloat16'"
+            nn_busrts: Tensor = F.interpolate(
+                demosaic(
+                    bursts[:, 0, :, :].to(
+                        torch.float32
+                        if bursts.dtype == torch.bfloat16
+                        else bursts.dtype
+                    )
+                ),
+                scale_factor=4,
+                mode="nearest-exact",
+            ).to(bursts.dtype)
+
+            for i, (nn_burst, sr, gt) in enumerate(zip(nn_busrts, srs, gts)):
+                self.logger.log_image(
+                    key=f"val/sample_{i}",
+                    images=[nn_burst, sr, gt],
+                    caption=["LR", "SR", "GT"],
+                )
+
+        # PyTorch Lightning requires that when validation_step returns a dict, it must contain a key named loss
+        loss["loss"] = loss["val/lpips"]
+        return loss
+
+    def configure_optimizers(self) -> Optimizer:
+        return configure_optimizer(self.model, self.optimizer_params)

@@ -2,38 +2,31 @@
 
 set -eou pipefail
 
-CONDA_ENV_FILE="${CONDA_ENV_FILE:-conda/environment-nightly.yml}"
-MICROMAMBA_VERSION="${MICROMAMBA_VERSION:-0.27.0}"
-OS_NAME="${OS_NAME:-jammy}"
-WITH_CUDA="${WITH_CUDA:-true}"
-CUDA_VERSION="${CUDA_VERSION:-11.7.1}"
-
-if [[ "${WITH_CUDA}" == "true" ]]; then
-    BASE_IMAGE="mambaorg/micromamba:${MICROMAMBA_VERSION}-${OS_NAME}-cuda-${CUDA_VERSION}"
-    TAG="connorbaker01/bsrt-${OS_NAME}-cuda-${CUDA_VERSION}"
-else
-    BASE_IMAGE="mambaorg/micromamba:${MICROMAMBA_VERSION}-${OS_NAME}"
-    TAG="connorbaker01/bsrt-${OS_NAME}"
-fi
+RELEASE="${RELEASE:-22.09}"
+BASE_IMAGE="nvcr.io/nvidia/pytorch:${RELEASE}-py3"
+TAG="connorbaker01/bsrt:${RELEASE}"
 
 echo "---------------------------------------------"
 echo "Build Arguments:"
-echo "CONDA_ENV_FILE: ${CONDA_ENV_FILE}"
-echo "MICROMAMBA_VERSION: ${MICROMAMBA_VERSION}"
-echo "OS_NAME: ${OS_NAME}"
-echo "WITH_CUDA: ${WITH_CUDA}"
-if [[ "${WITH_CUDA}" == "true" ]]; then
-    echo "CUDA_VERSION: ${CUDA_VERSION}"
-fi
+echo "RELEASE: ${RELEASE}"
 echo "BASE_IMAGE: ${BASE_IMAGE}"
 echo "TAG: ${TAG}"
 echo "---------------------------------------------"
 
 BASE_IMAGE="${BASE_IMAGE}" \
-CONDA_ENV_FILE="${CONDA_ENV_FILE}" \
-docker buildx build --platform linux/amd64 \
+docker buildx build \
+    --progress=plain \
+    --platform linux/amd64 \
     -t "${TAG}" \
     --build-arg "BASE_IMAGE=${BASE_IMAGE}" \
-    --build-arg "CONDA_ENV_FILE=${CONDA_ENV_FILE}" \
-    --file ./Dockerfile \
-    --push .
+    --file ./Dockerfile .
+
+echo "Build Complete"
+echo "Testing Image..."
+
+docker run --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 -it --rm "${TAG}" python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
+
+echo "Test Complete"
+echo "Pushing Image..."
+
+docker push "${TAG}"

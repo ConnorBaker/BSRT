@@ -4,31 +4,21 @@ from typing import Callable, Dict, List, Union
 
 import model.arch_util as arch_util
 import model.swin_util as swu
-import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from data_processing.camera_pipeline import demosaic
-from datasets.synthetic_burst.train_dataset import TrainData
 from model.cross_non_local_fusion import CrossNonLocalFusion
 from model.flow_guided_pcd_align import FlowGuidedPCDAlign
 from model.spynet_util import SpyNet
 from option import DataTypeName, LossName
-from pytorch_lightning.loggers.wandb import WandbLogger
 from torch import Tensor
 from torch.nn.parameter import Parameter
-from torchmetrics import MetricCollection
-from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity as LPIPS
-from torchmetrics.image.psnr import PeakSignalNoiseRatio as PSNR
-from torchmetrics.image.ssim import (
-    MultiScaleStructuralSimilarityIndexMeasure as MS_SSIM,
-)
 from typing_extensions import Literal
 from utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 
 @dataclass(eq=False)
-class BSRT(pl.LightningModule):
+class BSRT(nn.Module):
     """BurstSR model
 
     Args:
@@ -96,9 +86,6 @@ class BSRT(pl.LightningModule):
     patch_unembed: swu.PatchUnEmbed = field(init=False)
     spynet: SpyNet = field(init=False)
 
-    train_metrics: MetricCollection = field(init=False)
-    valid_metrics: MetricCollection = field(init=False)
-
     def __post_init__(self):
         super().__init__()
 
@@ -116,17 +103,6 @@ class BSRT(pl.LightningModule):
         self.img_size = self.patch_size * 2
         # TODO: We set patch_size to one here manually to duplicate that behavior.
         self.patch_size = 1
-
-        # Initialize loss functions
-        metrics = MetricCollection(
-            {
-                "psnr": PSNR(data_range=1.0),
-                "ms_ssim": MS_SSIM(data_range=1.0),
-                "lpips": LPIPS(net_type="alex", normalize=True).requires_grad_(False),
-            }
-        )
-        self.train_metrics = metrics.clone(prefix="train/")
-        self.valid_metrics = metrics.clone(prefix="val/")
 
         self.num_layers = len(self.depths)
         self.spynet = SpyNet([3, 4, 5]).eval().requires_grad_(False)
@@ -478,52 +454,3 @@ class BSRT(pl.LightningModule):
         ]
 
         return flows_list
-
-    def training_step(self, batch: TrainData, batch_idx: int) -> Dict[str, Tensor]:
-        bursts = batch["burst"]
-        gts = batch["gt"]
-        srs = self(bursts)
-
-        # Calculate losses
-        loss: Dict[str, Tensor] = self.train_metrics(srs, gts)
-        self.log_dict(self.train_metrics, on_step=True, on_epoch=False)  # type: ignore
-
-        # PyTorch Lightning requires that when validation_step returns a dict, it must contain a key named loss
-        loss["loss"] = loss["train/lpips"]
-        return loss
-
-    def validation_step(self, batch: TrainData, batch_idx: int) -> Dict[str, Tensor]:
-        bursts = batch["burst"]
-        gts = batch["gt"]
-        srs = self(bursts)
-
-        # Calculate losses
-        loss: Dict[str, Tensor] = self.valid_metrics(srs, gts)
-        self.log_dict(self.valid_metrics, on_step=False, on_epoch=True)  # type: ignore
-
-        # Log the image only for the first batch
-        # TODO: We could log different images with different names
-        if batch_idx == 0 and isinstance(self.logger, WandbLogger):
-            # Gross hack to work around "RuntimeError: "upsample_nearest2d_out_frame" not implemented for 'BFloat16'"
-            nn_busrts: Tensor = F.interpolate(
-                demosaic(
-                    bursts[:, 0, :, :].to(
-                        torch.float32
-                        if bursts.dtype == torch.bfloat16
-                        else bursts.dtype
-                    )
-                ),
-                scale_factor=4,
-                mode="nearest-exact",
-            ).to(bursts.dtype)
-
-            for i, (nn_burst, sr, gt) in enumerate(zip(nn_busrts, srs, gts)):
-                self.logger.log_image(
-                    key=f"val/sample_{i}",
-                    images=[nn_burst, sr, gt],
-                    caption=["LR", "SR", "GT"],
-                )
-
-        # PyTorch Lightning requires that when validation_step returns a dict, it must contain a key named loss
-        loss["loss"] = loss["val/lpips"]
-        return loss
