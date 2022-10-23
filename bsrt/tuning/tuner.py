@@ -236,14 +236,12 @@ if __name__ == "__main__":
             parameters=BSRT_PARAMS + ADAM_PARAMS,
             parameter_constraints=ADAM_PARAM_CONSTRAINTS,
             objectives={
-                "psnr": ObjectiveProperties(minimize=False, threshold=19.0),
-                "ms_ssim": ObjectiveProperties(minimize=False, threshold=0.9),
-                "lpips": ObjectiveProperties(minimize=True, threshold=0.1),
+                "lpips": ObjectiveProperties(minimize=True),
             },
+            tracking_metric_names=["psnr", "ms_ssim"],
             outcome_constraints=[
-                "psnr>=20.0",
-                "ms_ssim>=0.95",
-                "lpips<=0.05",
+                "psnr >= 20.0",
+                "ms_ssim >= 0.95",
             ],
         )
         ax_client.save_to_json_file(ax_client_file)

@@ -14,14 +14,12 @@ ADAM_PARAMS = [
         "type": "range",
         "bounds": [1e-5, 1.0],
         "value_type": "float",
-        "log_scale": True,
     },
     {
         "name": "adam_params.beta_square",
         "type": "range",
         "bounds": [1e-5, 1.0],
         "value_type": "float",
-        "log_scale": True,
     },
     {
         "name": "adam_params.eps",
@@ -39,7 +37,7 @@ ADAM_PARAMS = [
 ]
 
 ADAM_PARAM_CONSTRAINTS = [
-    "adam_params.beta_gradient<=adam_params.beta_square",
+    "adam_params.beta_gradient <= adam_params.beta_square",
 ]
 
 
