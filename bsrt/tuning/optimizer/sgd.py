@@ -1,6 +1,6 @@
 from dataclasses import dataclass
-from utilities import prepend_to_param_names
 
+from utilities import prepend_to_param_names
 
 SGD_PARAMS = prepend_to_param_names(
     "SGD_PARAMS",

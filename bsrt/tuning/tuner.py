@@ -1,38 +1,23 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, TypeVar, Union, cast
+from typing import Any, Dict, Union
 
 import torch
-import torch.nn.functional as F
 import wandb
-from ax import optimize
+from ax.service.ax_client import AxClient
 from ax.service.utils.instantiation import ObjectiveProperties
-from bsrt.tuning.optimizer.adam import AdamParams
-from bsrt.tuning.optimizer.sgd import SGDParams
-from bsrt.lighting_bsrt import LightningBSRT
-from data_processing.camera_pipeline import demosaic
-from datasets.synthetic_burst.train_dataset import TrainData
-from datasets.synthetic_zurich_raw2rgb_data_module import (
-    SyntheticZurichRaw2RgbDataModule,
-)
-from bsrt.model.bsrt import BSRT
-from pytorch_lightning import LightningModule
-from pytorch_lightning.cli import LightningCLI
-from pytorch_lightning.loggers.wandb import WandbLogger
+from model.bsrt import BSRT_PARAMS, BSRTParams
+from optimizer.adam import ADAM_PARAMS, AdamParams
+from optimizer.sgd import SGDParams
 from pytorch_lightning.strategies.ddp import DDPStrategy
 from pytorch_lightning.trainer import Trainer
-from torch import Tensor
-from torchmetrics import MetricCollection
-from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity as LPIPS
-from torchmetrics.image.psnr import PeakSignalNoiseRatio as PSNR
-from torchmetrics.image.ssim import (
-    MultiScaleStructuralSimilarityIndexMeasure as MS_SSIM,
-)
-from typing_extensions import Literal, TypedDict
-import apex.optimizers as apex_optimizers
-from ax.service.ax_client import AxClient
-from hyperparameter_tuning.model.bsrt import BSRTParams
+from typing_extensions import Literal
 from utilities import filter_and_remove_from_keys
+
+from ..datasets.synthetic_zurich_raw2rgb_data_module import (
+    SyntheticZurichRaw2RgbDataModule,
+)
+from ..lighting_bsrt import LightningBSRT
 
 SchedulerName = Literal[
     "ExponentialLR",
@@ -236,7 +221,7 @@ if __name__ == "__main__":
     ax_client = AxClient()
     ax_client.create_experiment(
         name="model_with_adam",
-        parameters=model_params + adam_params,  # type: ignore
+        parameters=BSRT_PARAMS + ADAM_PARAMS,  # type: ignore
         objectives={
             "psnr": ObjectiveProperties(minimize=False, threshold=19.0),
             "ms_ssim": ObjectiveProperties(minimize=False, threshold=0.9),
