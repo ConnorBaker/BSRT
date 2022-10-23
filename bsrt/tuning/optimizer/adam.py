@@ -1,47 +1,46 @@
 from dataclasses import dataclass
 from typing import Tuple
 
-from ..utilities import prepend_to_param_names
+ADAM_PARAMS = [
+    {
+        "name": "adam_params.lr",
+        "type": "range",
+        "bounds": [1e-6, 1.0],
+        "value_type": "float",
+        "log_scale": True,
+    },
+    {
+        "name": "adam_params.beta_gradient",
+        "type": "range",
+        "bounds": [1e-5, 1.0],
+        "value_type": "float",
+        "log_scale": True,
+    },
+    {
+        "name": "adam_params.beta_square",
+        "type": "range",
+        "bounds": [1e-5, 1.0],
+        "value_type": "float",
+        "log_scale": True,
+    },
+    {
+        "name": "adam_params.eps",
+        "type": "range",
+        "bounds": [1e-9, 1.0],
+        "value_type": "float",
+        "log_scale": True,
+    },
+    {
+        "name": "adam_params.weight_decay",
+        "type": "range",
+        "bounds": [0.0, 1.0],
+        "value_type": "float",
+    },
+]
 
-ADAM_PARAMS = prepend_to_param_names(
-    "adam_params",
-    [
-        {
-            "name": "lr",
-            "type": "range",
-            "bounds": [1e-6, 1.0],
-            "value_type": "float",
-            "log_scale": True,
-        },
-        {
-            "name": "beta_gradient",
-            "type": "range",
-            "bounds": [1e-5, 1.0],
-            "value_type": "float",
-            "log_scale": True,
-        },
-        {
-            "name": "beta_square",
-            "type": "range",
-            "bounds": [1e-4, 1.0],
-            "value_type": "float",
-            "log_scale": True,
-        },
-        {
-            "name": "eps",
-            "type": "range",
-            "bounds": [1e-9, 1.0],
-            "value_type": "float",
-            "log_scale": True,
-        },
-        {
-            "name": "weight_decay",
-            "type": "choice",
-            "values": [0.0, 1.0],
-            "value_type": "float",
-        },
-    ],
-)
+ADAM_PARAM_CONSTRAINTS = [
+    "adam_params.beta_gradient<=adam_params.beta_square",
+]
 
 
 @dataclass

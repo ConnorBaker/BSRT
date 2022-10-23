@@ -15,7 +15,7 @@ from ..datasets.synthetic_zurich_raw2rgb_data_module import (
 )
 from ..lighting_bsrt import LightningBSRT
 from .model.bsrt import BSRT_PARAMS, BSRTParams
-from .optimizer.adam import ADAM_PARAMS, AdamParams
+from .optimizer.adam import ADAM_PARAM_CONSTRAINTS, ADAM_PARAMS, AdamParams
 from .optimizer.sgd import SGDParams
 from .utilities import filter_and_remove_from_keys
 
@@ -166,15 +166,20 @@ def objective(params: Dict[str, Any]) -> Union[TrainingError, ObjectiveMetrics]:
     trainer = Trainer(
         accelerator="auto",
         devices="auto",
-        precision=16,
+        precision=32,
         enable_checkpointing=False,
         strategy=DDPStrategy(find_unused_parameters=False),
-        limit_train_batches=100,
-        limit_val_batches=10,
-        max_epochs=2,
+        limit_train_batches=10,
+        limit_val_batches=1,
+        max_epochs=5,
+        detect_anomaly=False,
+        enable_model_summary=False,
+        enable_progress_bar=False,
+        logger=False,
+        replace_sampler_ddp=False,
     )
     dm = SyntheticZurichRaw2RgbDataModule(
-        precision=16,
+        precision=32,
         crop_size=256,
         data_dir="/home/connorbaker/ramdisk/datasets",
         burst_size=14,
@@ -218,16 +223,30 @@ if __name__ == "__main__":
     torch.backends.cudnn.deterministic = False
     torch.backends.cudnn.benchmark = True
 
-    ax_client = AxClient()
-    ax_client.create_experiment(
-        name="model_with_adam",
-        parameters=BSRT_PARAMS + ADAM_PARAMS,  # type: ignore
-        objectives={
-            "psnr": ObjectiveProperties(minimize=False, threshold=19.0),
-            "ms_ssim": ObjectiveProperties(minimize=False, threshold=0.9),
-            "lpips": ObjectiveProperties(minimize=True, threshold=0.1),
-        },
-    )
+    ax_client_file = "ax_client.json"
+
+    ax_client = AxClient(torch_device=torch.device("cuda"))
+    try:
+        ax_client = ax_client.load_from_json_file(ax_client_file)
+        print("Loaded AxClient from file")
+    except:
+        print("Failed to load AxClient from file")
+        ax_client.create_experiment(
+            name="model_with_adam",
+            parameters=BSRT_PARAMS + ADAM_PARAMS,
+            parameter_constraints=ADAM_PARAM_CONSTRAINTS,
+            objectives={
+                "psnr": ObjectiveProperties(minimize=False, threshold=19.0),
+                "ms_ssim": ObjectiveProperties(minimize=False, threshold=0.9),
+                "lpips": ObjectiveProperties(minimize=True, threshold=0.1),
+            },
+            outcome_constraints=[
+                "psnr>=20.0",
+                "ms_ssim>=0.95",
+                "lpips<=0.05",
+            ],
+        )
+        ax_client.save_to_json_file(ax_client_file)
 
     for _ in range(10):
         parameters, trial_index = ax_client.get_next_trial()
@@ -240,10 +259,7 @@ if __name__ == "__main__":
         else:
             ax_client.complete_trial(trial_index=trial_index, raw_data=result.__dict__)
 
-        print(f"Trial {trial_index}: {parameters}")
-
-    pareto_frontier = ax_client.get_pareto_optimal_parameters()
-    print(f"pareto_frontier: {pareto_frontier}")
+        ax_client.save_to_json_file(ax_client_file)
 
     # DB_USER = os.environ["DB_USER"]
     # assert DB_USER is not None, "DB_USER environment variable must be set"
@@ -256,13 +272,3 @@ if __name__ == "__main__":
     # DB_NAME = os.environ["DB_NAME"]
     # assert DB_NAME is not None, "DB_NAME environment variable must be set"
     # DB_URI = f"postgresql+pg8000://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-
-    # study = optuna.create_study(
-    #     study_name=wandb_kwargs["group"],
-    #     storage=RDBStorage(url=DB_URI, heartbeat_interval=60, grace_period=120),
-    #     directions=[
-    #         metric_direction for (_, metric_direction) in metric_names_and_directions
-    #     ],
-    #     pruner=SuccessiveHalvingPruner(),
-    #     load_if_exists=True,
-    # )

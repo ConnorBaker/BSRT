@@ -3,4 +3,4 @@ FROM ${BASE_IMAGE}
 
 COPY . /BSRT
 WORKDIR /BSRT
-RUN pip install -v -r requirements.txt
+RUN pip install -e .
