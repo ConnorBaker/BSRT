@@ -9,7 +9,7 @@ OptimizerName = Literal["DecoupledAdamW", "DecoupledSGDW"]
 SchedulerName = Literal[
     "CosineAnnealingWarmRestarts", "ExponentialLR", "ReduceLROnPlateau"
 ]
-PrecisionName = Literal["bf16", 16, 32]
+PrecisionName = Literal["bf16", "16", "32"]
 
 
 @dataclass

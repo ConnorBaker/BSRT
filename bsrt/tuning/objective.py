@@ -1,19 +1,20 @@
+import sys
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Union
 
 import wandb
+from ax.utils.common.logger import build_stream_handler, get_logger
 from lightning_lite.utilities.seed import seed_everything
+from pytorch_lightning import LightningDataModule, LightningModule
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.strategies.bagua import BaguaStrategy
 from pytorch_lightning.trainer import Trainer
+from typing_extensions import Literal
 
 from bsrt.tuning.cli_parser import TunerConfig
 
-from ..datasets.synthetic_zurich_raw2rgb_data_module import (
-    SyntheticZurichRaw2RgbDataModule,
-)
 from ..lighting_bsrt import LightningBSRT
 from .lr_scheduler.cosine_annealing_warm_restarts import (
     CosineAnnealingWarmRestartsParams,
@@ -25,6 +26,9 @@ from .optimizer.decoupled_adamw import DecoupledAdamWParams
 from .optimizer.decoupled_sgdw import DecoupledSGDWParams
 from .utilities import filter_and_remove_from_keys
 
+logger = get_logger("bsrt.tuning.objective")
+logger.addHandler(build_stream_handler())
+
 
 # Create a type to model the different training errors we can recieve
 class TrainingError(Enum):
@@ -35,7 +39,6 @@ class TrainingError(Enum):
     SCHEDULER_PARAMS_INVALID = "Scheduler parameters are invalid"
     UNKNOWN_OPTIMIZER = "Unknown optimizer"
     UNKNOWN_SCHEDULER = "Unknown scheduler"
-    UNKNOWN_ERROR = "Unknown error"
 
 
 @dataclass
@@ -45,13 +48,74 @@ class ObjectiveMetrics:
     lpips: float
 
 
+PSNR_DIVERGENCE_THRESHOLD: float = 16.0
+MS_SSIM_DIVERGENCE_THRESHOLD: float = 0.8
+LPIPS_DIVERGENCE_THRESHOLD: float = 0.2
+
+
+class MinEpochsEarlyStopping(EarlyStopping):
+    """
+    A custom early stopping callback that doesn't stop training if the minimum number of epochs hasn't been reached yet. This is useful for when we want to train for a longer time to see if the model can recover from a bad initialization.
+
+    Patience is incremented by 1 if the minimum number of epochs hasn't been reached yet, ensuring that we don't stop training prematurely. It is reset to the original value once the minimum number of epochs has been reached. In this way, patience does not start until we have reached the minimum number of epochs.
+
+    When the minimum number of epochs has been reached, in addition to patience being reset to its original value, the divergence threshold is added to the callback and the wait counter is reset to zero.
+    """
+
+    def __init__(
+        self,
+        monitor: str,
+        min_delta: float,
+        patience: int,
+        min_epochs: int,
+        mode: Literal["min", "max"],
+        divergence_threshold: float,
+        verbose: bool = False,
+    ):
+        """
+        Args:
+            divergence_threshold (float): The divergence threshold for the metric to be monitored.
+            monitor (str): The metric to be monitored.
+            patience (int): The number of epochs to wait for the metric to be monitored to improve.
+            min_epochs (int): The minimum number of epochs to train for.
+            min_delta (float): The minimum change in the monitored metric to qualify as an improvement.
+            mode (Literal["min", "max"]): Whether the monitored metric should be increasing or decreasing.
+            verbose (bool, optional): Whether to print messages. Defaults to False.
+        """
+        super().__init__(
+            monitor=monitor,
+            min_delta=min_delta,
+            patience=patience,
+            mode=mode,
+            verbose=verbose,
+        )
+        self.min_epochs = min_epochs
+        self._divergence_threshold = divergence_threshold
+
+    def on_validation_end(self, trainer: Trainer, pl_module: LightningModule) -> None:
+        return
+
+    def on_validation_epoch_end(
+        self, trainer: Trainer, pl_module: LightningModule
+    ) -> None:
+        if trainer.current_epoch < self.min_epochs:
+            # Reset the wait counter to 0
+            self.wait_count = 0
+        elif trainer.current_epoch == self.min_epochs:
+            # Reset the wait counter to 0
+            self.wait_count = 0
+            # Add the divergence threshold attribute now that we've reached the minimum number of epochs
+            self.divergence_threshold = self._divergence_threshold
+
+        self._run_early_stopping_check(trainer)
+
+
 def objective(
     params: Dict[str, Any],
-    wandb_kwargs: Dict[str, Union[str, bool]],
     config: TunerConfig,
+    datamodule: LightningDataModule,
 ) -> Union[TrainingError, ObjectiveMetrics]:
     seed_everything(42)
-
     try:
         if any(k.startswith("decoupled_adamw_params") for k in params):
             params["decoupled_adamw_params.betas"] = (
@@ -66,8 +130,10 @@ def objective(
                 **filter_and_remove_from_keys("decoupled_sgdw_params", params)
             )
         else:
+            logger.error(f"Unknown optimizer: {params}")
             return TrainingError.UNKNOWN_OPTIMIZER
     except TypeError:
+        logger.error(f"Optimizer parameters are invalid: {params}")
         return TrainingError.OPTIMIZER_PARAMS_INVALID
 
     try:
@@ -86,9 +152,11 @@ def objective(
                 **filter_and_remove_from_keys("reduce_lr_on_plateau_params", params)
             )
         else:
+            logger.error(f"Unknown scheduler: {params}")
             return TrainingError.UNKNOWN_SCHEDULER
 
     except TypeError:
+        logger.error(f"Scheduler parameters are invalid: {params}")
         return TrainingError.SCHEDULER_PARAMS_INVALID
 
     try:
@@ -101,41 +169,34 @@ def objective(
             use_quality_opts=True,
         )
     except TypeError:
+        logger.error(f"Model parameters are invalid: {params}")
         return TrainingError.MODEL_PARAMS_INVALID
 
-    # swa_lrs = trial.suggest_float("swa_lr", 1e-5, 1e-1, log=True)
-    # hyperparameters["swa_lr"] = swa_lrs
-
-    ### Setup the trainer ###
-    # if cli.config_init.trainer.callbacks is None:
-    #     cli.config_init.trainer.callbacks = []
-
-    # cli.config_init.trainer.callbacks.append(swa)
-    # cli.config_init.trainer.callbacks.extend(
-    #     PyTorchLightningPruningCallback(trial, monitor=metric_name)
-    #     for (metric_name, _) in metric_names_and_directions
-    # )
-
+    wandb_kwargs = {
+        "entity": "connorbaker",
+        "project": "bsrt",
+        # "group": Provided by the experiment name passed in from the command line
+        "reinit": True,
+        "settings": wandb.Settings(start_method="fork"),
+    }
+    wandb.login(key=config.wandb_api_key)
+    wandb_kwargs["group"] = config.experiment_name
     wandb_logger = WandbLogger(**wandb_kwargs)
-    wandb_logger.log_hyperparams(params)
-    wandb_logger.watch(model, log="all", log_graph=True)
 
-    datamodule = SyntheticZurichRaw2RgbDataModule(
-        precision=config.precision,
-        crop_size=256,
-        data_dir="/home/connorbaker/ramdisk/datasets",
-        burst_size=14,
-        batch_size=16,
-        num_workers=-1,
-        pin_memory=True,
-        persistent_workers=True,
-        cache_in_gb=40,
-    )
+    if config.precision == "bf16":
+        precision = "bf16"
+    elif config.precision == "16":
+        precision = 16
+    elif config.precision == "32":
+        precision = 32
+    else:
+        logger.error(f"Unknown precision: {config.precision}")
+        raise ValueError(f"Unknown precision {config.precision}")
 
     trainer = Trainer(
         accelerator="auto",
         devices="auto",
-        precision=config.precision,
+        precision=precision,
         enable_checkpointing=False,
         strategy=BaguaStrategy(algorithm="gradient_allreduce"),
         limit_train_batches=config.limit_train_batches,
@@ -147,25 +208,62 @@ def objective(
         logger=wandb_logger,
         replace_sampler_ddp=False,
         callbacks=[
-            EarlyStopping("train/psnr", min_delta=1.0, patience=10, mode="max"),
-            EarlyStopping("train/ms_ssim", min_delta=0.1, patience=10, mode="max"),
-            EarlyStopping("train/lpips", min_delta=0.1, patience=10, mode="min"),
+            MinEpochsEarlyStopping(
+                monitor="val/psnr",
+                min_delta=0.5,
+                patience=5,
+                mode="max",
+                divergence_threshold=PSNR_DIVERGENCE_THRESHOLD,
+                min_epochs=10,
+                verbose=True,
+            ),
+            MinEpochsEarlyStopping(
+                monitor="val/ms_ssim",
+                min_delta=0.05,
+                patience=5,
+                mode="max",
+                divergence_threshold=MS_SSIM_DIVERGENCE_THRESHOLD,
+                min_epochs=10,
+                verbose=True,
+            ),
+            MinEpochsEarlyStopping(
+                monitor="val/lpips",
+                min_delta=0.05,
+                patience=5,
+                mode="min",
+                divergence_threshold=LPIPS_DIVERGENCE_THRESHOLD,
+                min_epochs=10,
+                verbose=True,
+            ),
         ],
     )
 
+    for _logger in trainer.loggers:
+        _logger.log_hyperparams(params)
+
+        if isinstance(_logger, WandbLogger):
+            _logger.watch(model, log="all", log_graph=True)
+
     try:
         trainer.fit(model=model, datamodule=datamodule)
-        wandb.finish()
-        return ObjectiveMetrics(
-            psnr=trainer.callback_metrics["train/psnr"].item(),
-            ms_ssim=trainer.callback_metrics["train/ms_ssim"].item(),
-            lpips=trainer.callback_metrics["train/lpips"].item(),
+        objective_metrics = ObjectiveMetrics(
+            psnr=trainer.callback_metrics["val/psnr"].item(),
+            ms_ssim=trainer.callback_metrics["val/ms_ssim"].item(),
+            lpips=trainer.callback_metrics["val/lpips"].item(),
         )
-    except Exception as e:  # Out of memory
-        wandb.finish(1)
+        logger.info(f"Finished with objective metrics: {objective_metrics}")
+        wandb.finish()
+        return objective_metrics
+    except Exception as e:
         if isinstance(e, RuntimeError) and "CUDA out of memory" in str(e):
+            logger.error(f"CUDA out of memory error: {e}")
+            wandb.finish(1)
             return TrainingError.CUDA_OOM
         elif isinstance(e, ValueError):
+            logger.error(f"Value error: {e}")
+            wandb.finish(1)
             return TrainingError.FORWARD_RETURNED_NAN
         else:
-            return TrainingError.UNKNOWN_ERROR
+            logger.error(f"Unknown error: {e}")
+            wandb.finish(1)
+            raise e

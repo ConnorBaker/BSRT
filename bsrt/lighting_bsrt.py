@@ -1,12 +1,12 @@
 from dataclasses import dataclass, field
-from typing import Dict, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 import torch
 import torch.nn.functional as F
 from pytorch_lightning import LightningModule
 from pytorch_lightning.loggers.wandb import WandbLogger
 from torch import Tensor, nn
-from torch.optim.lr_scheduler import _LRScheduler
+from torch.optim.lr_scheduler import ReduceLROnPlateau, _LRScheduler
 from torch.optim.optimizer import Optimizer
 from torchmetrics import MetricCollection
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity as LPIPS
@@ -86,7 +86,12 @@ class LightningBSRT(LightningModule):
     def training_step(self, batch: TrainData, batch_idx: int) -> Dict[str, Tensor]:
         bursts = batch["burst"]
         gts = batch["gt"]
-        srs = self(bursts)
+        srs: Tensor = self(bursts)
+
+        # Some metrics don't work with bfloat16, so we cast to float32
+        if bursts.dtype == torch.bfloat16:
+            gts = gts.to(torch.float32)
+            srs = srs.to(torch.float32)
 
         # Calculate losses
         loss: Dict[str, Tensor] = self.train_metrics(srs, gts)
@@ -99,7 +104,12 @@ class LightningBSRT(LightningModule):
     def validation_step(self, batch: TrainData, batch_idx: int) -> Dict[str, Tensor]:
         bursts = batch["burst"]
         gts = batch["gt"]
-        srs = self(bursts)
+        srs: Tensor = self(bursts)
+
+        # Some metrics don't work with bfloat16, so we cast to float32
+        if bursts.dtype == torch.bfloat16:
+            gts = gts.to(torch.float32)
+            srs = srs.to(torch.float32)
 
         # Calculate losses
         loss: Dict[str, Tensor] = self.valid_metrics(srs, gts)
@@ -123,7 +133,7 @@ class LightningBSRT(LightningModule):
 
             for i, (nn_burst, sr, gt) in enumerate(zip(nn_busrts, srs, gts)):
                 self.logger.log_image(
-                    key=f"val/sample_{i}",
+                    key=f"val/sample/{i}",
                     images=[nn_burst, sr, gt],
                     caption=["LR", "SR", "GT"],
                 )
@@ -132,7 +142,7 @@ class LightningBSRT(LightningModule):
         loss["loss"] = loss["val/lpips"]
         return loss
 
-    def configure_optimizers(self) -> Tuple[Optimizer, _LRScheduler]:
+    def configure_optimizers(self) -> Dict[str, Union[Optimizer, _LRScheduler, str]]:
         opt = configure_optimizer(self.model, self.optimizer_params)
         if self.use_speed_opts:
             import composer.functional as cf
@@ -141,4 +151,15 @@ class LightningBSRT(LightningModule):
 
         scheduler = configure_scheduler(opt, self.scheduler_params)
 
-        return opt, scheduler
+        ret = {
+            "optimizer": opt,
+            "lr_scheduler": scheduler,
+        }
+        if isinstance(scheduler, ReduceLROnPlateau):
+            ret["monitor"] = "val/lpips"
+
+        return ret
+
+    # Set gradients to `None` instead of zero to improve performance.
+    def optimizer_zero_grad(self, epoch, batch_idx, optimizer, optimizer_idx):
+        optimizer.zero_grad(set_to_none=True)

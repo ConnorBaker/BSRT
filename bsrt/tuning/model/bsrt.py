@@ -1,4 +1,7 @@
 from dataclasses import dataclass
+from typing import List
+
+from ax import ChoiceParameter, Parameter, ParameterType, RangeParameter
 
 
 @dataclass
@@ -12,51 +15,51 @@ class BSRTParams:
     qkv_bias: bool
 
 
-BSRT_PARAMS = [
-    {
-        "name": "bsrt_params.attn_drop_rate",
-        "type": "range",
-        "bounds": [0.0, 1.0],
-        "value_type": "float",
-    },
-    {
-        "name": "bsrt_params.drop_path_rate",
-        "type": "range",
-        "bounds": [1e-2, 1.0],
-        "value_type": "float",
-        "log_scale": True,
-    },
-    {
-        "name": "bsrt_params.drop_rate",
-        "type": "range",
-        "bounds": [0.0, 1.0],
-        "value_type": "float",
-    },
-    {
-        "name": "bsrt_params.mlp_ratio",
-        "type": "choice",
-        "values": [2.0**n for n in range(1, 5)],
-        "value_type": "float",
-        "is_ordered": True,
-    },
-    {
-        "name": "bsrt_params.num_features",
-        "type": "choice",
-        "values": [2**n for n in range(4, 10)],
-        "value_type": "int",
-        "is_ordered": True,
-    },
-    {
-        "name": "bsrt_params.qk_scale",
-        "type": "range",
-        "bounds": [0.0, 1.0],
-        "value_type": "float",
-    },
-    {
-        "name": "bsrt_params.qkv_bias",
-        "type": "choice",
-        "values": [True, False],
-        "value_type": "bool",
-        "is_ordered": True,
-    },
+BSRT_PARAMS: List[Parameter] = [
+    RangeParameter(
+        name="bsrt_params.attn_drop_rate",
+        parameter_type=ParameterType.FLOAT,
+        lower=0.0,
+        upper=1.0,
+    ),
+    RangeParameter(
+        name="bsrt_params.drop_path_rate",
+        parameter_type=ParameterType.FLOAT,
+        lower=1e-2,
+        upper=1.0,
+        log_scale=True,
+    ),
+    RangeParameter(
+        name="bsrt_params.drop_rate",
+        parameter_type=ParameterType.FLOAT,
+        lower=0.0,
+        upper=1.0,
+    ),
+    ChoiceParameter(
+        name="bsrt_params.mlp_ratio",
+        parameter_type=ParameterType.FLOAT,
+        values=[2.0**n for n in range(1, 5)],
+        is_ordered=True,
+        sort_values=False,
+    ),
+    ChoiceParameter(
+        name="bsrt_params.num_features",
+        parameter_type=ParameterType.INT,
+        values=[2**n for n in range(4, 8)],
+        is_ordered=True,
+        sort_values=False,
+    ),
+    RangeParameter(
+        name="bsrt_params.qk_scale",
+        parameter_type=ParameterType.FLOAT,
+        lower=0.0,
+        upper=1.0,
+    ),
+    ChoiceParameter(
+        name="bsrt_params.qkv_bias",
+        parameter_type=ParameterType.BOOL,
+        values=[True, False],
+        is_ordered=True,
+        sort_values=False,
+    ),
 ]

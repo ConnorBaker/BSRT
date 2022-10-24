@@ -1,5 +1,7 @@
 from dataclasses import dataclass
-from typing import Tuple
+from typing import List, Tuple
+
+from ax import Parameter, ParameterType, RangeParameter
 
 
 @dataclass
@@ -10,40 +12,40 @@ class DecoupledAdamWParams:
     weight_decay: float
 
 
-DECOUPLED_ADAMW_PARAMS = [
-    {
-        "name": "decoupled_adamw_params.lr",
-        "type": "range",
-        "bounds": [1e-6, 1.0],
-        "value_type": "float",
-        "log_scale": True,
-    },
-    {
-        "name": "decoupled_adamw_params.beta_gradient",
-        "type": "range",
-        "bounds": [1e-3, 1.0],
-        "value_type": "float",
-        "log_scale": True,
-    },
-    {
-        "name": "decoupled_adamw_params.beta_square",
-        "type": "range",
-        "bounds": [1e-3, 1.0],
-        "value_type": "float",
-        "log_scale": True,
-    },
-    {
-        "name": "decoupled_adamw_params.eps",
-        "type": "range",
-        "bounds": [1e-9, 1e-7],
-        "value_type": "float",
-        "log_scale": True,
-    },
-    {
-        "name": "decoupled_adamw_params.weight_decay",
-        "type": "range",
-        "bounds": [1e-9, 1.0],
-        "value_type": "float",
-        "log_scale": True,
-    },
+DECOUPLED_ADAMW_PARAMS: List[Parameter] = [
+    RangeParameter(
+        name="decoupled_adamw_params.lr",
+        parameter_type=ParameterType.FLOAT,
+        lower=1e-6,
+        upper=1.0,
+        log_scale=True,
+    ),
+    RangeParameter(
+        name="decoupled_adamw_params.beta_gradient",
+        parameter_type=ParameterType.FLOAT,
+        lower=1e-3,
+        upper=1.0,
+        log_scale=True,
+    ),
+    RangeParameter(
+        name="decoupled_adamw_params.beta_square",
+        parameter_type=ParameterType.FLOAT,
+        lower=1e-3,
+        upper=1.0,
+        log_scale=True,
+    ),
+    RangeParameter(
+        name="decoupled_adamw_params.eps",
+        parameter_type=ParameterType.FLOAT,
+        lower=1e-9,
+        upper=1e-7,
+        log_scale=True,
+    ),
+    RangeParameter(
+        name="decoupled_adamw_params.weight_decay",
+        parameter_type=ParameterType.FLOAT,
+        lower=1e-9,
+        upper=1e-3,
+        log_scale=True,
+    ),
 ]

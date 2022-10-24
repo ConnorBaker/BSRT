@@ -73,29 +73,20 @@ class SyntheticZurichRaw2RgbDataModule(pl.LightningDataModule):
             transform=TrainDataProcessor(burst_size=self.burst_size, crop_sz=self.crop_size, dtype=dtype),  # type: ignore
         )
 
+        if self.cache_in_gb is not None:
+            from bagua.torch_api.contrib import CachedDataset
+
+            # TODO: Requires bagua to have been initialized
+            dataset = CachedDataset(
+                dataset,
+                dataset_name="SyntheticZurichRaw2RgbDataset",
+                capacity_per_node=self.cache_in_gb * 1024 * 1024 * 1024,
+            )
+
         # Split the dataset into train and validation
         self.train_dataset, self.val_dataset = random_split(
             dataset, [self.split_ratio, 1 - self.split_ratio]
         )
-
-        if self.cache_in_gb is not None:
-            from bagua.torch_api.contrib import CachedDataset
-
-            self.train_dataset = CachedDataset(
-                self.train_dataset.dataset,
-                backend="redis",
-                dataset_name="train_dataset",
-                cluster_mode=False,
-                capacity_per_node=self.cache_in_gb * 1024 * 1024 * 1024,
-            )
-
-            self.val_dataset = CachedDataset(
-                self.val_dataset.dataset,
-                backend="redis",
-                dataset_name="val_dataset",
-                cluster_mode=False,
-                capacity_per_node=self.cache_in_gb * 1024 * 1024 * 1024,
-            )
 
     def train_dataloader(self) -> DataLoader[Tensor]:
         return DataLoader(
