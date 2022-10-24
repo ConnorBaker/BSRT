@@ -333,6 +333,7 @@ if __name__ == "__main__":
     for _ in range(10):
         parameters, trial_index = ax_client.get_next_trial()
         result = objective(parameters)
+        wandb.finish()
 
         if isinstance(result, TrainingError):
             metadata = {"errorName": result.name, "errorValue": result.value}
