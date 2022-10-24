@@ -1,11 +1,12 @@
 from dataclasses import dataclass, field
-from typing import Dict, Union
+from typing import Dict, Tuple, Union
 
 import torch
 import torch.nn.functional as F
 from pytorch_lightning import LightningModule
 from pytorch_lightning.loggers.wandb import WandbLogger
 from torch import Tensor, nn
+from torch.optim.lr_scheduler import _LRScheduler
 from torch.optim.optimizer import Optimizer
 from torchmetrics import MetricCollection
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity as LPIPS
@@ -17,16 +18,25 @@ from torchmetrics.image.ssim import (
 from .data_processing.camera_pipeline import demosaic
 from .datasets.synthetic_burst.train_dataset import TrainData
 from .model.bsrt import BSRT
+from .tuning.lr_scheduler.cosine_annealing_warm_restarts import (
+    CosineAnnealingWarmRestartsParams,
+)
+from .tuning.lr_scheduler.exponential_lr import ExponentialLRParams
+from .tuning.lr_scheduler.reduce_lr_on_plateau import ReduceLROnPlateauParams
+from .tuning.lr_scheduler.utilities import configure_scheduler
 from .tuning.model.bsrt import BSRTParams
-from .tuning.optimizer.adam import AdamParams
-from .tuning.optimizer.sgd import SGDParams
+from .tuning.optimizer.decoupled_adamw import DecoupledAdamWParams
+from .tuning.optimizer.decoupled_sgdw import DecoupledSGDWParams
 from .tuning.optimizer.utilities import configure_optimizer
 
 
 @dataclass(eq=False)
 class LightningBSRT(LightningModule):
     bsrt_params: BSRTParams
-    optimizer_params: Union[AdamParams, SGDParams]
+    optimizer_params: Union[DecoupledAdamWParams, DecoupledSGDWParams]
+    scheduler_params: Union[
+        CosineAnnealingWarmRestartsParams, ExponentialLRParams, ReduceLROnPlateauParams
+    ]
     # If use_opts is true, we need composer
     use_speed_opts: bool = False
     use_quality_opts: bool = False
@@ -122,11 +132,13 @@ class LightningBSRT(LightningModule):
         loss["loss"] = loss["val/lpips"]
         return loss
 
-    def configure_optimizers(self) -> Optimizer:
+    def configure_optimizers(self) -> Tuple[Optimizer, _LRScheduler]:
         opt = configure_optimizer(self.model, self.optimizer_params)
         if self.use_speed_opts:
             import composer.functional as cf
 
             cf.apply_fused_layernorm(self.model, optimizers=opt)
 
-        return opt
+        scheduler = configure_scheduler(opt, self.scheduler_params)
+
+        return opt, scheduler

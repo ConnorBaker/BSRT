@@ -24,7 +24,7 @@ docker buildx build \
 echo "Build Complete"
 echo "Testing Image..."
 
-docker run --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 -it --rm "${TAG}" python -c "import torch; print(f'torch.__version__: {torch.__version__}'); print(f'torch.cuda.is_available(): {torch.cuda.is_available()}')"
+docker run --platform linux/amd64 --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 -it --rm "${TAG}" python -c "import torch; print(f'torch.__version__: {torch.__version__}'); print(f'torch.cuda.is_available(): {torch.cuda.is_available()}')"
 
 echo "Test Complete"
 

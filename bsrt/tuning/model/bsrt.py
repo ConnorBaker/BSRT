@@ -22,8 +22,9 @@ BSRT_PARAMS = [
     {
         "name": "bsrt_params.drop_path_rate",
         "type": "range",
-        "bounds": [0.0, 1.0],
+        "bounds": [1e-2, 1.0],
         "value_type": "float",
+        "log_scale": True,
     },
     {
         "name": "bsrt_params.drop_rate",
@@ -48,7 +49,7 @@ BSRT_PARAMS = [
     {
         "name": "bsrt_params.qk_scale",
         "type": "range",
-        "bounds": [1e-8, 1.0],
+        "bounds": [0.0, 1.0],
         "value_type": "float",
     },
     {
