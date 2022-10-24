@@ -6,7 +6,9 @@ import torch
 import wandb
 from ax.service.ax_client import AxClient
 from ax.service.utils.instantiation import ObjectiveProperties
-from pytorch_lightning.strategies.ddp import DDPStrategy
+from lightning_lite.utilities.seed import seed_everything
+from pytorch_lightning.loggers.wandb import WandbLogger
+from pytorch_lightning.strategies.bagua import BaguaStrategy
 from pytorch_lightning.trainer import Trainer
 from typing_extensions import Literal
 
@@ -33,11 +35,6 @@ wandb_kwargs = {
     "reinit": True,
     "settings": wandb.Settings(start_method="fork"),
 }
-# wandbc = WeightsAndBiasesCallback(
-#     metric_name="final train loss",
-#     wandb_kwargs=wandb_kwargs,
-#     as_multirun=True,
-# )
 
 # Create a type to model the different training errors we can recieve
 class TrainingError(Enum):
@@ -61,6 +58,7 @@ def objective(params: Dict[str, Any]) -> Union[TrainingError, ObjectiveMetrics]:
     # cli.config. For classes like the logger or callbacks, use cli.
     # config_init because we are passing in a new, initialized instances of
     # the class, not the class path and arguments.
+    seed_everything(42)
 
     try:
         if any(k.startswith("adam_params") for k in params):
@@ -163,22 +161,11 @@ def objective(params: Dict[str, Any]) -> Union[TrainingError, ObjectiveMetrics]:
     #     for (metric_name, _) in metric_names_and_directions
     # )
 
-    trainer = Trainer(
-        accelerator="auto",
-        devices="auto",
-        precision=32,
-        enable_checkpointing=False,
-        strategy=DDPStrategy(find_unused_parameters=False),
-        limit_train_batches=10,
-        limit_val_batches=1,
-        max_epochs=5,
-        detect_anomaly=False,
-        enable_model_summary=False,
-        enable_progress_bar=False,
-        logger=False,
-        replace_sampler_ddp=False,
-    )
-    dm = SyntheticZurichRaw2RgbDataModule(
+    wandb_logger = WandbLogger(**wandb_kwargs)
+    wandb_logger.log_hyperparams(params)
+    wandb_logger.watch(model, log="all", log_graph=True)
+
+    datamodule = SyntheticZurichRaw2RgbDataModule(
         precision=32,
         crop_size=256,
         data_dir="/home/connorbaker/ramdisk/datasets",
@@ -187,13 +174,27 @@ def objective(params: Dict[str, Any]) -> Union[TrainingError, ObjectiveMetrics]:
         num_workers=-1,
         pin_memory=True,
         persistent_workers=True,
+        cache_in_gb=40,
     )
-    # logger = WandbLogger(**wandb_kwargs)
-    # logger.log_hyperparams(params)
-    # logger.watch(model, log="all", log_graph=True)
+
+    trainer = Trainer(
+        accelerator="auto",
+        devices="auto",
+        precision=32,
+        enable_checkpointing=False,
+        strategy=BaguaStrategy(algorithm="gradient_allreduce"),
+        limit_train_batches=10,
+        limit_val_batches=1,
+        max_epochs=5,
+        detect_anomaly=False,
+        enable_model_summary=True,
+        enable_progress_bar=False,
+        logger=wandb_logger,
+        replace_sampler_ddp=False,
+    )
 
     try:
-        trainer.fit(model, datamodule=dm)
+        trainer.fit(model=model, datamodule=datamodule)
         return ObjectiveMetrics(
             psnr=trainer.callback_metrics["train/psnr"].item(),
             ms_ssim=trainer.callback_metrics["train/ms_ssim"].item(),
@@ -227,21 +228,27 @@ if __name__ == "__main__":
 
     logger = get_logger("bsrt.tuning.tuner")
     logger.addHandler(build_stream_handler())
-    experiment_name = "model_with_adam"
+
+    EXPERIMENT_NAME = os.environ.get("EXPERIMENT_NAME")
+    assert EXPERIMENT_NAME is not None, "EXPERIMENT_NAME must be set"
     using_db = True
+
+    WANDB_API_KEY = os.environ.get("WANDB_API_KEY")
+    assert WANDB_API_KEY is not None, "WANDB_API_KEY must be set"
+    wandb.login(key=WANDB_API_KEY)
 
     try:
         from ax.storage.sqa_store.structs import DBSettings
 
-        DB_USER = os.environ["DB_USER"]
+        DB_USER = os.environ.get("DB_USER")
         assert DB_USER is not None, "DB_USER environment variable must be set"
-        DB_PASS = os.environ["DB_PASS"]
+        DB_PASS = os.environ.get("DB_PASS")
         assert DB_PASS is not None, "DB_PASS environment variable must be set"
-        DB_HOST = os.environ["DB_HOST"]
+        DB_HOST = os.environ.get("DB_HOST")
         assert DB_HOST is not None, "DB_HOST environment variable must be set"
-        DB_PORT = os.environ["DB_PORT"]
+        DB_PORT = os.environ.get("DB_PORT")
         assert DB_PORT is not None, "DB_PORT environment variable must be set"
-        DB_NAME = os.environ["DB_NAME"]
+        DB_NAME = os.environ.get("DB_NAME")
         assert DB_NAME is not None, "DB_NAME environment variable must be set"
         DB_URI = f"mysql+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
         ax_client = AxClient(
@@ -254,7 +261,7 @@ if __name__ == "__main__":
         logger.info("Connected to database")
     except ModuleNotFoundError as e:
         logger.error(
-            f"Failed to load experiment `{experiment_name}` from database due to missing dependencies: {e}. Falling back to local JSON storage."
+            f"Failed to load experiment `{EXPERIMENT_NAME}` from database due to missing dependencies: {e}. Falling back to local JSON storage."
         )
         ax_client = AxClient(
             torch_device=torch.device("cuda"),
@@ -264,7 +271,7 @@ if __name__ == "__main__":
 
     except AssertionError as e:
         logger.error(
-            f"Failed to load experiment `{experiment_name}` from database due to missing environment variable: {e}. Falling back to local JSON storage."
+            f"Failed to load experiment `{EXPERIMENT_NAME}` from database due to missing environment variable: {e}. Falling back to local JSON storage."
         )
         ax_client = AxClient(
             torch_device=torch.device("cuda"),
@@ -274,15 +281,15 @@ if __name__ == "__main__":
 
     try:
         if using_db:
-            ax_client.load_experiment_from_database(experiment_name)
-            logger.info(f"Loaded experiment `{experiment_name}` from database")
+            ax_client.load_experiment_from_database(EXPERIMENT_NAME)
+            logger.info(f"Loaded experiment `{EXPERIMENT_NAME}` from database")
         else:
-            ax_client.load_from_json_file(f"{experiment_name}.json")
-            logger.info(f"Loaded experiment `{experiment_name}` from JSON file")
+            ax_client.load_from_json_file(f"{EXPERIMENT_NAME}.json")
+            logger.info(f"Loaded experiment `{EXPERIMENT_NAME}` from JSON file")
 
     except:
         logger.error(
-            f"Failed to load experiment `{experiment_name}` from {'database' if using_db else 'JSON file'}. Creating new experiment."
+            f"Failed to load experiment `{EXPERIMENT_NAME}` from {'database' if using_db else 'JSON file'}. Creating new experiment."
         )
         if using_db:
             from ax.storage.sqa_store.db import (
@@ -297,7 +304,7 @@ if __name__ == "__main__":
             logger.info("Created database tables")
 
         ax_client.create_experiment(
-            name="model_with_adam",
+            name=EXPERIMENT_NAME,
             parameters=BSRT_PARAMS + ADAM_PARAMS,
             parameter_constraints=ADAM_PARAM_CONSTRAINTS,
             objectives={
@@ -310,13 +317,13 @@ if __name__ == "__main__":
             ],
         )
         if not using_db:
-            ax_client.save_to_json_file(f"{experiment_name}.json")
+            ax_client.save_to_json_file(f"{EXPERIMENT_NAME}.json")
 
         logger.info(
-            f"Created and saved experiment `{experiment_name}` to {'database' if using_db else 'JSON file'}"
+            f"Created and saved experiment `{EXPERIMENT_NAME}` to {'database' if using_db else 'JSON file'}"
         )
 
-    for _ in range(10):
+    for _ in range(1):
         parameters, trial_index = ax_client.get_next_trial()
         result = objective(parameters)
 
@@ -331,4 +338,4 @@ if __name__ == "__main__":
             ax_client.complete_trial(trial_index=trial_index, raw_data=result.__dict__)
 
         if not using_db:
-            ax_client.save_to_json_file(f"{experiment_name}.json")
+            ax_client.save_to_json_file(f"{EXPERIMENT_NAME}.json")

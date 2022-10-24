@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from pytorch_lightning import LightningModule
 from pytorch_lightning.loggers.wandb import WandbLogger
-from torch import Tensor
+from torch import Tensor, nn
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.optim.optimizer import Optimizer
 from torchmetrics import MetricCollection
@@ -28,9 +28,12 @@ from .tuning.optimizer.utilities import configure_optimizer
 class LightningBSRT(LightningModule):
     bsrt_params: BSRTParams
     optimizer_params: Union[AdamParams, SGDParams]
+    # If use_opts is true, we need composer
+    use_speed_opts: bool = False
+    use_quality_opts: bool = False
 
     # lr_scheduler: Optional[torch.optim.lr_scheduler._LRScheduler]
-    model: BSRT = field(init=False)
+    model: nn.Module = field(init=False)
     train_metrics: MetricCollection = field(init=False)
     valid_metrics: MetricCollection = field(init=False)
 
@@ -39,6 +42,20 @@ class LightningBSRT(LightningModule):
 
         # Initialize model
         self.model = BSRT(**self.bsrt_params.__dict__)
+        if self.use_quality_opts:
+            import composer.functional as cf
+
+            self.model = cf.apply_blurpool(
+                self.model,
+                replace_convs=True,
+                replace_maxpools=True,
+                blur_first=True,
+                min_channels=16,
+            )
+            self.model = cf.apply_squeeze_excite(
+                self.model, min_channels=128, latent_channels=64
+            )
+            cf.apply_channels_last(self.model)
 
         # Initialize loss functions
         metrics = MetricCollection(
@@ -104,4 +121,9 @@ class LightningBSRT(LightningModule):
         return loss
 
     def configure_optimizers(self) -> Optimizer:
-        return configure_optimizer(self.model, self.optimizer_params)
+        opt = configure_optimizer(self.model, self.optimizer_params)
+        if self.use_speed_opts:
+            import composer.functional as cf
+
+            cf.apply_fused_layernorm(self.model, optimizers=opt)
+        return opt

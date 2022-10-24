@@ -1,10 +1,12 @@
 import os
 from dataclasses import dataclass, field
+from typing import Union
 
 import pytorch_lightning as pl
 import torch
 from torch import Tensor
-from torch.utils.data import DataLoader, Subset, random_split
+from torch.utils.data import DataLoader, random_split
+from torch.utils.data.dataset import Dataset
 from typing_extensions import Literal
 
 from .synthetic_burst.train_dataset import TrainDataProcessor
@@ -29,6 +31,7 @@ class SyntheticZurichRaw2RgbDataModule(pl.LightningDataModule):
         timeout (float): If positive, the timeout value for collecting a batch from workers.
             Should always be non-negative.
         prefetch_factor (int): Number of samples loaded in advance by each worker.
+        cache_in_gb (int): The size of the cache in GB. If ``None``, no caching is used. Requires ``redis`` and ``bagua`` to be installed.
     """
 
     burst_size: int
@@ -43,8 +46,9 @@ class SyntheticZurichRaw2RgbDataModule(pl.LightningDataModule):
     drop_last: bool = False
     timeout: float = 0.0
     prefetch_factor: int = 2
-    train_dataset: Subset[Tensor] = field(init=False)
-    val_dataset: Subset[Tensor] = field(init=False)
+    cache_in_gb: Union[int, None] = None
+    train_dataset: Dataset[Tensor] = field(init=False)
+    val_dataset: Dataset[Tensor] = field(init=False)
 
     def __post_init__(
         self,
@@ -73,6 +77,25 @@ class SyntheticZurichRaw2RgbDataModule(pl.LightningDataModule):
         self.train_dataset, self.val_dataset = random_split(
             dataset, [self.split_ratio, 1 - self.split_ratio]
         )
+
+        if self.cache_in_gb is not None:
+            from bagua.torch_api.contrib import CachedDataset
+
+            self.train_dataset = CachedDataset(
+                self.train_dataset.dataset,
+                backend="redis",
+                dataset_name="train_dataset",
+                cluster_mode=False,
+                capacity_per_node=self.cache_in_gb * 1024 * 1024 * 1024,
+            )
+
+            self.val_dataset = CachedDataset(
+                self.val_dataset.dataset,
+                backend="redis",
+                dataset_name="val_dataset",
+                cluster_mode=False,
+                capacity_per_node=self.cache_in_gb * 1024 * 1024 * 1024,
+            )
 
     def train_dataloader(self) -> DataLoader[Tensor]:
         return DataLoader(
