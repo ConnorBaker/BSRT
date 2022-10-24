@@ -78,7 +78,10 @@ def objective(params: Dict[str, Any]) -> Union[TrainingError, ObjectiveMetrics]:
     try:
         bsrt_params = BSRTParams(**filter_and_remove_from_keys("bsrt_params", params))
         model = LightningBSRT(
-            bsrt_params=bsrt_params, optimizer_params=optimizer_params
+            bsrt_params=bsrt_params,
+            optimizer_params=optimizer_params,
+            use_speed_opts=True,
+            use_quality_opts=True,
         )
     except TypeError:
         return TrainingError.MODEL_PARAMS_INVALID
@@ -179,7 +182,7 @@ def objective(params: Dict[str, Any]) -> Union[TrainingError, ObjectiveMetrics]:
         precision=32,
         enable_checkpointing=False,
         strategy=BaguaStrategy(algorithm="gradient_allreduce"),
-        limit_train_batches=20,
+        limit_train_batches=40,
         limit_val_batches=1,
         max_epochs=20,
         detect_anomaly=False,
@@ -188,9 +191,9 @@ def objective(params: Dict[str, Any]) -> Union[TrainingError, ObjectiveMetrics]:
         logger=wandb_logger,
         replace_sampler_ddp=False,
         callbacks=[
-            EarlyStopping("train/psnr", min_delta=0.5, patience=3, mode="max"),
-            EarlyStopping("train/ms_ssim", min_delta=0.05, patience=3, mode="max"),
-            EarlyStopping("train/lpips", min_delta=0.05, patience=3, mode="min"),
+            EarlyStopping("train/psnr", min_delta=0.5, patience=10, mode="max"),
+            EarlyStopping("train/ms_ssim", min_delta=0.05, patience=10, mode="max"),
+            EarlyStopping("train/lpips", min_delta=0.05, patience=10, mode="min"),
         ],
     )
 
@@ -316,12 +319,9 @@ if __name__ == "__main__":
             parameter_constraints=ADAM_PARAM_CONSTRAINTS,
             objectives={
                 "lpips": ObjectiveProperties(minimize=True),
+                "psnr": ObjectiveProperties(minimize=False),
+                "ms_ssim": ObjectiveProperties(minimize=False),
             },
-            tracking_metric_names=["psnr", "ms_ssim"],
-            outcome_constraints=[
-                "psnr >= 20.0",
-                "ms_ssim >= 0.95",
-            ],
         )
         if not using_db:
             ax_client.save_to_json_file(f"{namespace.experiment_name}.json")

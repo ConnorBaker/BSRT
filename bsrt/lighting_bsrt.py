@@ -1,12 +1,11 @@
 from dataclasses import dataclass, field
-from typing import Dict, Tuple, Union
+from typing import Dict, Union
 
 import torch
 import torch.nn.functional as F
 from pytorch_lightning import LightningModule
 from pytorch_lightning.loggers.wandb import WandbLogger
 from torch import Tensor, nn
-from torch.optim.lr_scheduler import _LRScheduler
 from torch.optim.optimizer import Optimizer
 from torchmetrics import MetricCollection
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity as LPIPS
@@ -55,6 +54,9 @@ class LightningBSRT(LightningModule):
             self.model = cf.apply_squeeze_excite(
                 self.model, min_channels=128, latent_channels=64
             )
+        if self.use_speed_opts:
+            import composer.functional as cf
+
             cf.apply_channels_last(self.model)
 
         # Initialize loss functions
@@ -126,4 +128,5 @@ class LightningBSRT(LightningModule):
             import composer.functional as cf
 
             cf.apply_fused_layernorm(self.model, optimizers=opt)
+
         return opt
