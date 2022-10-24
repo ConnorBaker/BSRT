@@ -8,7 +8,7 @@ import wandb
 from ax.service.ax_client import AxClient
 from ax.service.utils.instantiation import ObjectiveProperties
 from lightning_lite.utilities.seed import seed_everything
-from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAveraging
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.strategies.bagua import BaguaStrategy
 from pytorch_lightning.trainer import Trainer
@@ -187,6 +187,11 @@ def objective(params: Dict[str, Any]) -> Union[TrainingError, ObjectiveMetrics]:
         enable_progress_bar=False,
         logger=wandb_logger,
         replace_sampler_ddp=False,
+        callbacks=[
+            EarlyStopping("train/psnr", min_delta=0.5, patience=3, mode="max"),
+            EarlyStopping("train/ms_ssim", min_delta=0.05, patience=3, mode="max"),
+            EarlyStopping("train/lpips", min_delta=0.05, patience=3, mode="min"),
+        ],
     )
 
     try:
