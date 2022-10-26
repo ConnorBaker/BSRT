@@ -1,52 +1,39 @@
 import sys
-from dataclasses import dataclass
-from enum import Enum
-from typing import Any, Dict, Union
+from logging import StreamHandler
+from typing import NewType, Tuple
 
 import wandb
-from ax.utils.common.logger import build_stream_handler, get_logger
-from lightning_lite.utilities.seed import seed_everything
+from optuna import Trial
+from optuna.exceptions import TrialPruned
+from optuna.integration.pytorch_lightning import PyTorchLightningPruningCallback
+from optuna.logging import get_logger
 from pytorch_lightning import LightningDataModule, LightningModule
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.strategies.bagua import BaguaStrategy
 from pytorch_lightning.trainer import Trainer
+from pytorch_lightning.utilities.seed import seed_everything
 from typing_extensions import Literal
 
-from bsrt.tuning.cli_parser import TunerConfig
-
 from ..lighting_bsrt import LightningBSRT
+from .cli_parser import TunerConfig
 from .lr_scheduler.cosine_annealing_warm_restarts import (
     CosineAnnealingWarmRestartsParams,
 )
 from .lr_scheduler.exponential_lr import ExponentialLRParams
 from .lr_scheduler.reduce_lr_on_plateau import ReduceLROnPlateauParams
 from .model.bsrt import BSRTParams
-from .optimizer.decoupled_adamw import DecoupledAdamWParams
-from .optimizer.decoupled_sgdw import DecoupledSGDWParams
-from .utilities import filter_and_remove_from_keys
+from .optimizer.adamw import AdamWParams
+from .optimizer.sgd import SGDParams
 
 logger = get_logger("bsrt.tuning.objective")
-logger.addHandler(build_stream_handler())
-
+logger.addHandler(StreamHandler(sys.stdout))
 
 # Create a type to model the different training errors we can recieve
-class TrainingError(Enum):
-    CUDA_OOM = "CUDA out of memory"
-    FORWARD_RETURNED_NAN = "Forward pass returned NaN"
-    MODEL_PARAMS_INVALID = "Model parameters are invalid"
-    OPTIMIZER_PARAMS_INVALID = "Optimizer parameters are invalid"
-    SCHEDULER_PARAMS_INVALID = "Scheduler parameters are invalid"
-    UNKNOWN_OPTIMIZER = "Unknown optimizer"
-    UNKNOWN_SCHEDULER = "Unknown scheduler"
 
-
-@dataclass
-class ObjectiveMetrics:
-    psnr: float
-    ms_ssim: float
-    lpips: float
-
+PSNR = NewType("PSNR", float)
+MS_SSIM = NewType("MS_SSIM", float)
+LPIPS = NewType("LPIPS", float)
 
 PSNR_DIVERGENCE_THRESHOLD: float = 16.0
 MS_SSIM_DIVERGENCE_THRESHOLD: float = 0.8
@@ -111,66 +98,45 @@ class MinEpochsEarlyStopping(EarlyStopping):
 
 
 def objective(
-    params: Dict[str, Any],
     config: TunerConfig,
     datamodule: LightningDataModule,
-) -> Union[TrainingError, ObjectiveMetrics]:
+    trial: Trial,
+) -> Tuple[PSNR, MS_SSIM, LPIPS]:
     seed_everything(42)
-    try:
-        if any(k.startswith("decoupled_adamw_params") for k in params):
-            params["decoupled_adamw_params.betas"] = (
-                params.pop("decoupled_adamw_params.beta_gradient"),
-                params.pop("decoupled_adamw_params.beta_square"),
-            )
-            optimizer_params = DecoupledAdamWParams(
-                **filter_and_remove_from_keys("decoupled_adamw_params", params)
-            )
-        elif any(k.startswith("decoupled_sgdw_params") for k in params):
-            optimizer_params = DecoupledSGDWParams(
-                **filter_and_remove_from_keys("decoupled_sgdw_params", params)
-            )
-        else:
-            logger.error(f"Unknown optimizer: {params}")
-            return TrainingError.UNKNOWN_OPTIMIZER
-    except TypeError:
-        logger.error(f"Optimizer parameters are invalid: {params}")
-        return TrainingError.OPTIMIZER_PARAMS_INVALID
 
-    try:
-        if any(k.startswith("cosine_annealing_warm_restarts_params") for k in params):
-            scheduler_params = CosineAnnealingWarmRestartsParams(
-                **filter_and_remove_from_keys(
-                    "cosine_annealing_warm_restarts_params", params
-                )
-            )
-        elif any(k.startswith("exponential_lr_params") for k in params):
-            scheduler_params = ExponentialLRParams(
-                **filter_and_remove_from_keys("exponential_lr_params", params)
-            )
-        elif any(k.startswith("reduce_lr_on_plateau_params") for k in params):
-            scheduler_params = ReduceLROnPlateauParams(
-                **filter_and_remove_from_keys("reduce_lr_on_plateau_params", params)
-            )
-        else:
-            logger.error(f"Unknown scheduler: {params}")
-            return TrainingError.UNKNOWN_SCHEDULER
+    if config.optimizer == "AdamW":
+        optimizer_params = AdamWParams.suggest(trial)
+    elif config.optimizer == "SGD":
+        optimizer_params = SGDParams.suggest(trial)
+    else:
+        error_msg = f"Optimizer {config.optimizer} not supported."
+        logger.error(error_msg)
+        raise ValueError(error_msg)
 
-    except TypeError:
-        logger.error(f"Scheduler parameters are invalid: {params}")
-        return TrainingError.SCHEDULER_PARAMS_INVALID
+    if config.scheduler == "ReduceLROnPlateau":
+        scheduler_params = ReduceLROnPlateauParams.suggest(trial)
+    elif config.scheduler == "CosineAnnealingWarmRestarts":
+        scheduler_params = CosineAnnealingWarmRestartsParams.suggest(trial)
+    elif config.scheduler == "ExponentialLR":
+        scheduler_params = ExponentialLRParams.suggest(trial)
+    else:
+        error_msg = f"Scheduler {config.scheduler} not supported."
+        logger.error(error_msg)
+        raise ValueError(error_msg)
 
-    try:
-        bsrt_params = BSRTParams(**filter_and_remove_from_keys("bsrt_params", params))
-        model = LightningBSRT(
-            bsrt_params=bsrt_params,
-            optimizer_params=optimizer_params,
-            scheduler_params=scheduler_params,
-            use_speed_opts=True,
-            use_quality_opts=True,
-        )
-    except TypeError:
-        logger.error(f"Model parameters are invalid: {params}")
-        return TrainingError.MODEL_PARAMS_INVALID
+    bsrt_params = BSRTParams.suggest(trial)
+
+    model = LightningBSRT(
+        bsrt_params=bsrt_params,
+        optimizer_params=optimizer_params,
+        scheduler_params=scheduler_params,
+    )
+
+    hyperparams = {
+        f"{params.__class__.__name__}/{k}": v
+        for params in (optimizer_params, scheduler_params, bsrt_params)
+        for k, v in params.__dict__.items()
+    }
 
     wandb_kwargs = {
         "entity": "connorbaker",
@@ -179,7 +145,7 @@ def objective(
         "reinit": True,
         "settings": wandb.Settings(start_method="fork"),
     }
-    wandb.login(key=config.wandb_api_key)
+
     wandb_kwargs["group"] = config.experiment_name
     wandb_logger = WandbLogger(**wandb_kwargs)
 
@@ -208,9 +174,12 @@ def objective(
         logger=wandb_logger,
         replace_sampler_ddp=False,
         callbacks=[
+            PyTorchLightningPruningCallback(trial, monitor="val/psnr"),
+            PyTorchLightningPruningCallback(trial, monitor="val/ms_ssim"),
+            PyTorchLightningPruningCallback(trial, monitor="val/lpips"),
             MinEpochsEarlyStopping(
                 monitor="val/psnr",
-                min_delta=0.5,
+                min_delta=1.0,
                 patience=5,
                 mode="max",
                 divergence_threshold=PSNR_DIVERGENCE_THRESHOLD,
@@ -219,7 +188,7 @@ def objective(
             ),
             MinEpochsEarlyStopping(
                 monitor="val/ms_ssim",
-                min_delta=0.05,
+                min_delta=0.1,
                 patience=5,
                 mode="max",
                 divergence_threshold=MS_SSIM_DIVERGENCE_THRESHOLD,
@@ -228,7 +197,7 @@ def objective(
             ),
             MinEpochsEarlyStopping(
                 monitor="val/lpips",
-                min_delta=0.05,
+                min_delta=0.1,
                 patience=5,
                 mode="min",
                 divergence_threshold=LPIPS_DIVERGENCE_THRESHOLD,
@@ -239,30 +208,32 @@ def objective(
     )
 
     for _logger in trainer.loggers:
-        _logger.log_hyperparams(params)
+        _logger.log_hyperparams(hyperparams)
 
         if isinstance(_logger, WandbLogger):
             _logger.watch(model, log="all", log_graph=True)
 
     try:
         trainer.fit(model=model, datamodule=datamodule)
-        objective_metrics = ObjectiveMetrics(
-            psnr=trainer.callback_metrics["val/psnr"].item(),
-            ms_ssim=trainer.callback_metrics["val/ms_ssim"].item(),
-            lpips=trainer.callback_metrics["val/lpips"].item(),
+
+        psnr = PSNR(trainer.callback_metrics["val/psnr"].item())
+        ms_ssim = MS_SSIM(trainer.callback_metrics["val/ms_ssim"].item())
+        lpips = LPIPS(trainer.callback_metrics["val/lpips"].item())
+
+        logger.info(
+            f"Finihsed training with PSNR: {psnr}, MS-SSIM: {ms_ssim}, LPIPS: {lpips}"
         )
-        logger.info(f"Finished with objective metrics: {objective_metrics}")
         wandb.finish()
-        return objective_metrics
+        return psnr, ms_ssim, lpips
     except Exception as e:
         if isinstance(e, RuntimeError) and "CUDA out of memory" in str(e):
             logger.error(f"CUDA out of memory error: {e}")
             wandb.finish(1)
-            return TrainingError.CUDA_OOM
+            raise TrialPruned()
         elif isinstance(e, ValueError):
             logger.error(f"Value error: {e}")
             wandb.finish(1)
-            return TrainingError.FORWARD_RETURNED_NAN
+            raise TrialPruned()
         else:
             logger.error(f"Unknown error: {e}")
             wandb.finish(1)

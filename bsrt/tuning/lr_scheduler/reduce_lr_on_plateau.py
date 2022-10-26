@@ -1,20 +1,16 @@
-from dataclasses import dataclass
-from typing import List
+from __future__ import annotations
 
-from ax import Parameter, ParameterType, RangeParameter
+from dataclasses import dataclass
+
+from optuna.trial import Trial
 
 
 @dataclass
 class ReduceLROnPlateauParams:
     factor: float
 
-
-REDUCE_LR_ON_PLATEAU_PARAMS: List[Parameter] = [
-    RangeParameter(
-        name="reduce_lr_on_plateau_params.factor",
-        parameter_type=ParameterType.FLOAT,
-        lower=1e-4,
-        upper=1.0,
-        log_scale=True,
-    )
-]
+    @classmethod
+    def suggest(cls, trial: Trial) -> ReduceLROnPlateauParams:
+        return cls(
+            factor=trial.suggest_float("factor", low=1e-4, high=1.0, log=True),
+        )

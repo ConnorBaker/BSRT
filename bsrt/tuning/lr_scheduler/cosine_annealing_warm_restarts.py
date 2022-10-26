@@ -1,7 +1,8 @@
-from dataclasses import dataclass
-from typing import List
+from __future__ import annotations
 
-from ax import Parameter, ParameterType, RangeParameter
+from dataclasses import dataclass
+
+from optuna.trial import Trial
 
 
 @dataclass
@@ -10,25 +11,10 @@ class CosineAnnealingWarmRestartsParams:
     T_mult: int
     eta_min: float
 
-
-COSINE_ANNEALING_WARM_RESTARTS_PARAMS: List[Parameter] = [
-    RangeParameter(
-        name="cosine_annealing_warm_restarts_params.T_0",
-        parameter_type=ParameterType.INT,
-        lower=1,
-        upper=1000,
-    ),
-    RangeParameter(
-        name="cosine_annealing_warm_restarts_params.T_mult",
-        parameter_type=ParameterType.INT,
-        lower=1,
-        upper=10,
-    ),
-    RangeParameter(
-        name="cosine_annealing_warm_restarts_params.eta_min",
-        parameter_type=ParameterType.FLOAT,
-        lower=1e-9,
-        upper=1e-3,
-        log_scale=True,
-    ),
-]
+    @classmethod
+    def suggest(cls, trial: Trial) -> CosineAnnealingWarmRestartsParams:
+        return cls(
+            T_0=trial.suggest_int("T_0", low=1, high=100),
+            T_mult=trial.suggest_int("T_mult", low=1, high=10),
+            eta_min=trial.suggest_float("eta_mn", low=1e-5, high=1e-1, log=True),
+        )

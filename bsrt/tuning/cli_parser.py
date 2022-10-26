@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from typing_extensions import Literal, get_args
 
-OptimizerName = Literal["DecoupledAdamW", "DecoupledSGDW"]
+OptimizerName = Literal["AdamW", "SGD"]
 SchedulerName = Literal[
     "CosineAnnealingWarmRestarts", "ExponentialLR", "ReduceLROnPlateau"
 ]
@@ -14,11 +14,7 @@ PrecisionName = Literal["bf16", "16", "32"]
 
 @dataclass
 class TunerConfig:
-    db_user: str
-    db_pass: str
-    db_host: str
-    db_port: int
-    db_name: str
+    db_uri: str
 
     wandb_api_key: str
 
@@ -36,11 +32,7 @@ class TunerConfig:
     @staticmethod
     def from_args(args: argparse.Namespace) -> TunerConfig:
         return TunerConfig(
-            db_user=args.db_user,
-            db_pass=args.db_pass,
-            db_host=args.db_host,
-            db_port=args.db_port,
-            db_name=args.db_name,
+            db_uri=args.db_uri,
             wandb_api_key=args.wandb_api_key,
             experiment_name=args.experiment_name,
             optimizer=args.optimizer,
@@ -56,11 +48,9 @@ class TunerConfig:
 
 CLI_PARSER = argparse.ArgumentParser()
 CLI_PARSER.add_argument_group("Database")
-CLI_PARSER.add_argument("--db_user", type=str, required=True, help="Database user")
-CLI_PARSER.add_argument("--db_pass", type=str, required=True, help="Database password")
-CLI_PARSER.add_argument("--db_host", type=str, required=True, help="Database host")
-CLI_PARSER.add_argument("--db_port", type=int, required=True, help="Database port")
-CLI_PARSER.add_argument("--db_name", type=str, required=True, help="Database name")
+CLI_PARSER.add_argument(
+    "--db_uri", type=str, required=True, help="Database URI connection string"
+)
 
 
 CLI_PARSER.add_argument_group("WandB")

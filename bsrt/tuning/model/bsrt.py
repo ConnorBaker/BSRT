@@ -1,7 +1,8 @@
-from dataclasses import dataclass
-from typing import List
+from __future__ import annotations
 
-from ax import ChoiceParameter, Parameter, ParameterType, RangeParameter
+from dataclasses import dataclass
+
+from optuna.trial import Trial
 
 
 @dataclass
@@ -14,52 +15,16 @@ class BSRTParams:
     qk_scale: float
     qkv_bias: bool
 
-
-BSRT_PARAMS: List[Parameter] = [
-    RangeParameter(
-        name="bsrt_params.attn_drop_rate",
-        parameter_type=ParameterType.FLOAT,
-        lower=0.0,
-        upper=1.0,
-    ),
-    RangeParameter(
-        name="bsrt_params.drop_path_rate",
-        parameter_type=ParameterType.FLOAT,
-        lower=1e-2,
-        upper=1.0,
-        log_scale=True,
-    ),
-    RangeParameter(
-        name="bsrt_params.drop_rate",
-        parameter_type=ParameterType.FLOAT,
-        lower=0.0,
-        upper=1.0,
-    ),
-    ChoiceParameter(
-        name="bsrt_params.mlp_ratio",
-        parameter_type=ParameterType.FLOAT,
-        values=[2.0**n for n in range(1, 5)],
-        is_ordered=True,
-        sort_values=False,
-    ),
-    ChoiceParameter(
-        name="bsrt_params.num_features",
-        parameter_type=ParameterType.INT,
-        values=[2**n for n in range(4, 8)],
-        is_ordered=True,
-        sort_values=False,
-    ),
-    RangeParameter(
-        name="bsrt_params.qk_scale",
-        parameter_type=ParameterType.FLOAT,
-        lower=0.0,
-        upper=1.0,
-    ),
-    ChoiceParameter(
-        name="bsrt_params.qkv_bias",
-        parameter_type=ParameterType.BOOL,
-        values=[True, False],
-        is_ordered=True,
-        sort_values=False,
-    ),
-]
+    @classmethod
+    def suggest(cls, trial: Trial) -> BSRTParams:
+        return cls(
+            attn_drop_rate=trial.suggest_float("attn_drop_rate", low=0.0, high=1.0),
+            drop_path_rate=trial.suggest_float(
+                "drop_path_rate", low=1e-2, high=1.0, log=True
+            ),
+            drop_rate=trial.suggest_float("drop_rate", low=0.0, high=1.0),
+            mlp_ratio=trial.suggest_float("mlp_ratio", low=2.0, high=32.0, log=True),
+            num_features=trial.suggest_int("num_features", low=16, high=256, log=True),
+            qk_scale=trial.suggest_float("qk_scale", low=0.0, high=1.0),
+            qkv_bias=trial.suggest_categorical("qkv_bias", [True, False]),  # type: ignore
+        )

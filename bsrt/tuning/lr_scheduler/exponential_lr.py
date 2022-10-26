@@ -1,20 +1,16 @@
-from dataclasses import dataclass
-from typing import List
+from __future__ import annotations
 
-from ax import Parameter, ParameterType, RangeParameter
+from dataclasses import dataclass
+
+from optuna.trial import Trial
 
 
 @dataclass
 class ExponentialLRParams:
     gamma: float
 
-
-EXPONENTIAL_LR_PARAMS: List[Parameter] = [
-    RangeParameter(
-        name="exponential_lr_params.gamma",
-        parameter_type=ParameterType.FLOAT,
-        lower=1e-4,
-        upper=1.0,
-        log_scale=True,
-    )
-]
+    @classmethod
+    def suggest(cls, trial: Trial) -> ExponentialLRParams:
+        return cls(
+            gamma=trial.suggest_float("gamma", low=1e-4, high=1.0, log=True),
+        )

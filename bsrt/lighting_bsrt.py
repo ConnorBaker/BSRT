@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Tuple, Union
+from typing import Dict, Union
 
 import torch
 import torch.nn.functional as F
@@ -25,21 +25,18 @@ from .tuning.lr_scheduler.exponential_lr import ExponentialLRParams
 from .tuning.lr_scheduler.reduce_lr_on_plateau import ReduceLROnPlateauParams
 from .tuning.lr_scheduler.utilities import configure_scheduler
 from .tuning.model.bsrt import BSRTParams
-from .tuning.optimizer.decoupled_adamw import DecoupledAdamWParams
-from .tuning.optimizer.decoupled_sgdw import DecoupledSGDWParams
+from .tuning.optimizer.adamw import AdamWParams
+from .tuning.optimizer.sgd import SGDParams
 from .tuning.optimizer.utilities import configure_optimizer
 
 
 @dataclass(eq=False)
 class LightningBSRT(LightningModule):
     bsrt_params: BSRTParams
-    optimizer_params: Union[DecoupledAdamWParams, DecoupledSGDWParams]
+    optimizer_params: Union[AdamWParams, SGDParams]
     scheduler_params: Union[
         CosineAnnealingWarmRestartsParams, ExponentialLRParams, ReduceLROnPlateauParams
     ]
-    # If use_opts is true, we need composer
-    use_speed_opts: bool = False
-    use_quality_opts: bool = False
 
     # lr_scheduler: Optional[torch.optim.lr_scheduler._LRScheduler]
     model: nn.Module = field(init=False)
@@ -51,23 +48,6 @@ class LightningBSRT(LightningModule):
 
         # Initialize model
         self.model = BSRT(**self.bsrt_params.__dict__)
-        if self.use_quality_opts:
-            import composer.functional as cf
-
-            self.model = cf.apply_blurpool(
-                self.model,
-                replace_convs=True,
-                replace_maxpools=True,
-                blur_first=True,
-                min_channels=16,
-            )
-            self.model = cf.apply_squeeze_excite(
-                self.model, min_channels=128, latent_channels=64
-            )
-        if self.use_speed_opts:
-            import composer.functional as cf
-
-            cf.apply_channels_last(self.model)
 
         # Initialize loss functions
         metrics = MetricCollection(
@@ -144,11 +124,6 @@ class LightningBSRT(LightningModule):
 
     def configure_optimizers(self) -> Dict[str, Union[Optimizer, _LRScheduler, str]]:
         opt = configure_optimizer(self.model, self.optimizer_params)
-        if self.use_speed_opts:
-            import composer.functional as cf
-
-            cf.apply_fused_layernorm(self.model, optimizers=opt)
-
         scheduler = configure_scheduler(opt, self.scheduler_params)
 
         ret = {
