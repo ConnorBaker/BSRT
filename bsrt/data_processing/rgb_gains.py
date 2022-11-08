@@ -32,13 +32,9 @@ class RgbGains:
         channels = image.shape[0]
 
         if channels == 3:
-            gains: Tensor = (
-                torch.tensor([self.red_gain, 1.0, self.blue_gain]) * self.rgb_gain
-            )
+            gains: Tensor = torch.tensor([self.red_gain, 1.0, self.blue_gain]) * self.rgb_gain
         elif channels == 4:
-            gains: Tensor = (
-                torch.tensor([self.red_gain, 1.0, 1.0, self.blue_gain]) * self.rgb_gain
-            )
+            gains: Tensor = torch.tensor([self.red_gain, 1.0, 1.0, self.blue_gain]) * self.rgb_gain
         else:
             assert False, "Invalid number of channels"
 
@@ -52,10 +48,7 @@ class RgbGains:
         assert image.dim() == 3
         assert image.shape[0] == 3
 
-        gains = (
-            torch.tensor([1.0 / self.red_gain, 1.0, 1.0 / self.blue_gain])
-            / self.rgb_gain
-        )
+        gains = torch.tensor([1.0 / self.red_gain, 1.0, 1.0 / self.blue_gain]) / self.rgb_gain
         gains = gains.view(-1, 1, 1)
 
         # Prevents dimming of saturated pixels by smoothly masking gains near white.

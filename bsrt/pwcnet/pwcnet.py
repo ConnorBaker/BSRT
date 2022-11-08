@@ -558,8 +558,6 @@ class PWCNet(torch.nn.Module):
 
         scale_factor_x = float(int_width) / float(int_preprocessed_width)
         scale_factor_y = float(int_height) / float(int_preprocessed_height)
-        flow = torch.stack(
-            (flow[:, 0] * scale_factor_x, flow[:, 1] * scale_factor_y), dim=1
-        )
+        flow = torch.stack((flow[:, 0] * scale_factor_x, flow[:, 1] * scale_factor_y), dim=1)
 
         return flow

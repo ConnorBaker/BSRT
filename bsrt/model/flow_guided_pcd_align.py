@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 
-from ..utils.bilinear_upsample_2d import bilinear_upsample_2d
-from .DCNv2.dcn_v2 import DCN_sep as DCN
-from .DCNv2.dcn_v2 import FlowGuidedDCN
+from bsrt.model.deform_sep_conv_net import DeformSepConvNet
+from bsrt.model.flow_guided_deform_sep_conv_net import FlowGuidedDeformSepConvNet
+from bsrt.utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 
 class FlowGuidedPCDAlign(nn.Module):
@@ -14,46 +14,34 @@ class FlowGuidedPCDAlign(nn.Module):
     def __init__(self, nf=64, groups=8):
         super(FlowGuidedPCDAlign, self).__init__()
         # L3: level 3, 1/4 spatial size
-        self.L3_offset_conv1 = nn.Conv2d(
-            nf * 2 + 2, nf, 3, 1, 1, bias=True
-        )  # concat for diff
+        self.L3_offset_conv1 = nn.Conv2d(nf * 2 + 2, nf, 3, 1, 1, bias=True)  # concat for diff
         self.L3_offset_conv2 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-        self.L3_dcnpack = FlowGuidedDCN(
+        self.L3_dcnpack = FlowGuidedDeformSepConvNet(
             nf, nf, 3, stride=1, padding=1, dilation=1, groups=groups
         )
 
         # L2: level 2, 1/2 spatial size
-        self.L2_offset_conv1 = nn.Conv2d(
-            nf * 2 + 2, nf, 3, 1, 1, bias=True
-        )  # concat for diff
-        self.L2_offset_conv2 = nn.Conv2d(
-            nf * 2, nf, 3, 1, 1, bias=True
-        )  # concat for offset
+        self.L2_offset_conv1 = nn.Conv2d(nf * 2 + 2, nf, 3, 1, 1, bias=True)  # concat for diff
+        self.L2_offset_conv2 = nn.Conv2d(nf * 2, nf, 3, 1, 1, bias=True)  # concat for offset
         self.L2_offset_conv3 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-        self.L2_dcnpack = FlowGuidedDCN(
+        self.L2_dcnpack = FlowGuidedDeformSepConvNet(
             nf, nf, 3, stride=1, padding=1, dilation=1, groups=groups
         )
         self.L2_fea_conv = nn.Conv2d(nf * 2, nf, 3, 1, 1, bias=True)  # concat for fea
 
         # L1: level 1, original spatial size
-        self.L1_offset_conv1 = nn.Conv2d(
-            nf * 2 + 2, nf, 3, 1, 1, bias=True
-        )  # concat for diff
-        self.L1_offset_conv2 = nn.Conv2d(
-            nf * 2, nf, 3, 1, 1, bias=True
-        )  # concat for offset
+        self.L1_offset_conv1 = nn.Conv2d(nf * 2 + 2, nf, 3, 1, 1, bias=True)  # concat for diff
+        self.L1_offset_conv2 = nn.Conv2d(nf * 2, nf, 3, 1, 1, bias=True)  # concat for offset
         self.L1_offset_conv3 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-        self.L1_dcnpack = FlowGuidedDCN(
+        self.L1_dcnpack = FlowGuidedDeformSepConvNet(
             nf, nf, 3, stride=1, padding=1, dilation=1, groups=groups
         )
         self.L1_fea_conv = nn.Conv2d(nf * 2, nf, 3, 1, 1, bias=True)  # concat for fea
 
         # Cascading DCN
-        self.cas_offset_conv1 = nn.Conv2d(
-            nf * 2, nf, 3, 1, 1, bias=True
-        )  # concat for diff
+        self.cas_offset_conv1 = nn.Conv2d(nf * 2, nf, 3, 1, 1, bias=True)  # concat for diff
         self.cas_offset_conv2 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-        self.cas_dcnpack = DCN(
+        self.cas_dcnpack = DeformSepConvNet(
             nf, nf, 3, stride=1, padding=1, dilation=1, groups=groups
         )
 
@@ -72,9 +60,7 @@ class FlowGuidedPCDAlign(nn.Module):
         L3_offset = bilinear_upsample_2d(L3_offset, scale_factor=2)
         L2_offset = torch.cat([nbr_fea_warped_l[1], ref_fea_l[1], flows_l[1]], dim=1)
         L2_offset = self.lrelu(self.L2_offset_conv1(L2_offset))
-        L2_offset = self.lrelu(
-            self.L2_offset_conv2(torch.cat([L2_offset, L3_offset * 2], dim=1))
-        )
+        L2_offset = self.lrelu(self.L2_offset_conv2(torch.cat([L2_offset, L3_offset * 2], dim=1)))
         L2_offset = self.lrelu(self.L2_offset_conv3(L2_offset))
         L2_fea = self.L2_dcnpack(nbr_fea_l[1], L2_offset, flows_l[1])
         L3_fea = bilinear_upsample_2d(
@@ -89,9 +75,7 @@ class FlowGuidedPCDAlign(nn.Module):
         )
         L1_offset = torch.cat([nbr_fea_warped_l[0], ref_fea_l[0], flows_l[0]], dim=1)
         L1_offset = self.lrelu(self.L1_offset_conv1(L1_offset))
-        L1_offset = self.lrelu(
-            self.L1_offset_conv2(torch.cat([L1_offset, L2_offset * 2], dim=1))
-        )
+        L1_offset = self.lrelu(self.L1_offset_conv2(torch.cat([L1_offset, L2_offset * 2], dim=1)))
         L1_offset = self.lrelu(self.L1_offset_conv3(L1_offset))
         L1_fea = self.L1_dcnpack(nbr_fea_l[0], L1_offset, flows_l[0])
         L2_fea = bilinear_upsample_2d(L2_fea, scale_factor=2)

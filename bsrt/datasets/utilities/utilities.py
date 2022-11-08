@@ -5,13 +5,9 @@ import torch
 
 def pack_raw_image(im_raw):
     if isinstance(im_raw, np.ndarray):
-        im_out = np.zeros_like(
-            im_raw, shape=(4, im_raw.shape[0] // 2, im_raw.shape[1] // 2)
-        )
+        im_out = np.zeros_like(im_raw, shape=(4, im_raw.shape[0] // 2, im_raw.shape[1] // 2))
     elif isinstance(im_raw, torch.Tensor):
-        im_out = torch.zeros(
-            (4, im_raw.shape[0] // 2, im_raw.shape[1] // 2), dtype=im_raw.dtype
-        )
+        im_out = torch.zeros((4, im_raw.shape[0] // 2, im_raw.shape[1] // 2), dtype=im_raw.dtype)
     else:
         raise Exception
 

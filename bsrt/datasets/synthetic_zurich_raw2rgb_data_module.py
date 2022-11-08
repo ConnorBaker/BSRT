@@ -9,8 +9,8 @@ from torch.utils.data import DataLoader, random_split
 from torch.utils.data.dataset import Dataset
 from typing_extensions import Literal
 
-from .synthetic_burst.train_dataset import TrainDataProcessor
-from .zurich_raw2rgb_dataset import ZurichRaw2RgbDataset
+from bsrt.datasets.synthetic_burst.train_dataset import TrainDataProcessor
+from bsrt.datasets.zurich_raw2rgb_dataset import ZurichRaw2RgbDataset
 
 
 @dataclass
@@ -31,7 +31,6 @@ class SyntheticZurichRaw2RgbDataModule(pl.LightningDataModule):
         timeout (float): If positive, the timeout value for collecting a batch from workers.
             Should always be non-negative.
         prefetch_factor (int): Number of samples loaded in advance by each worker.
-        cache_in_gb (int): The size of the cache in GB. If ``None``, no caching is used. Requires ``redis`` and ``bagua`` to be installed.
     """
 
     burst_size: int
@@ -46,7 +45,6 @@ class SyntheticZurichRaw2RgbDataModule(pl.LightningDataModule):
     drop_last: bool = False
     timeout: float = 0.0
     prefetch_factor: int = 2
-    cache_in_gb: Union[int, None] = None
     train_dataset: Dataset[Tensor] = field(init=False)
     val_dataset: Dataset[Tensor] = field(init=False)
 
@@ -72,16 +70,6 @@ class SyntheticZurichRaw2RgbDataModule(pl.LightningDataModule):
             data_dir=self.data_dir,
             transform=TrainDataProcessor(burst_size=self.burst_size, crop_sz=self.crop_size, dtype=dtype),  # type: ignore
         )
-
-        if self.cache_in_gb is not None:
-            from bagua.torch_api.contrib import CachedDataset
-
-            # TODO: Requires bagua to have been initialized
-            dataset = CachedDataset(
-                dataset,
-                dataset_name="SyntheticZurichRaw2RgbDataset",
-                capacity_per_node=self.cache_in_gb * 1024 * 1024 * 1024,
-            )
 
         # Split the dataset into train and validation
         self.train_dataset, self.val_dataset = random_split(

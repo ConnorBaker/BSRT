@@ -2,7 +2,6 @@ from functools import partial
 from logging import StreamHandler
 from sys import stdout
 
-import bagua.torch_api as bagua
 import optuna
 import torch
 import torch.cuda
@@ -13,11 +12,9 @@ from optuna.samplers import TPESampler
 from optuna.storages import RDBStorage, RetryFailedTrialCallback
 from pytorch_lightning.utilities.seed import seed_everything
 
-from ..datasets.synthetic_zurich_raw2rgb_data_module import (
-    SyntheticZurichRaw2RgbDataModule,
-)
-from .cli_parser import CLI_PARSER, TunerConfig
-from .objective import objective
+from bsrt.datasets.synthetic_zurich_raw2rgb_data_module import SyntheticZurichRaw2RgbDataModule
+from bsrt.tuning.cli_parser import CLI_PARSER, TunerConfig
+from bsrt.tuning.objective import objective
 
 # Add stream handler of stdout to show the messages
 logger = get_logger("optuna").addHandler(StreamHandler(stdout))
@@ -43,11 +40,6 @@ if __name__ == "__main__":
     config = TunerConfig.from_args(args)
     wandb.login(key=config.wandb_api_key)
 
-    # We need to initialize the bagua backend before we can use the cached dataset
-    torch.cuda.set_device(bagua.get_local_rank())
-    if not bagua.communication.is_initialized():
-        bagua.init_process_group()
-
     if config.precision == "bf16":
         precision = "bf16"
     elif config.precision == "16":
@@ -66,7 +58,6 @@ if __name__ == "__main__":
         num_workers=-1,
         pin_memory=True,
         persistent_workers=True,
-        cache_in_gb=40,
     )
 
     study_name = config.experiment_name

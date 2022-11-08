@@ -2,7 +2,7 @@ import torch
 import torch.nn
 import torch.nn.functional
 
-from .bilinear_upsample_2d import bilinear_upsample_2d
+from bsrt.utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 
 class Debayer3x3(torch.nn.Module):

@@ -1,10 +1,8 @@
 from pytorch_lightning.cli import LightningCLI
 from pytorch_lightning.loggers.wandb import WandbLogger
 
-from .datasets.synthetic_zurich_raw2rgb_data_module import (
-    SyntheticZurichRaw2RgbDataModule,
-)
-from .model.bsrt import BSRT
+from bsrt.datasets.synthetic_zurich_raw2rgb_data_module import SyntheticZurichRaw2RgbDataModule
+from bsrt.model.bsrt import BSRT
 
 if __name__ == "__main__":
     import os

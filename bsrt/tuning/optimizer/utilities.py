@@ -4,8 +4,8 @@ import torch.nn as nn
 from torch.optim import SGD, AdamW
 from torch.optim.optimizer import Optimizer
 
-from .adamw import AdamWParams
-from .sgd import SGDParams
+from bsrt.tuning.optimizer.adamw import AdamWParams
+from bsrt.tuning.optimizer.sgd import SGDParams
 
 
 def configure_optimizer(

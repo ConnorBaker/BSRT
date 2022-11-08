@@ -46,19 +46,13 @@ class ValDataset(VisionDataset, Downloadable):
             / f"im_raw_{image_id:02d}.png"
         )
         im = cv2.imread(im_path.as_posix(), cv2.IMREAD_UNCHANGED)
-        im_t = (
-            torch.from_numpy(im.astype(np.float32)).permute(2, 0, 1).float() / 2**14
-        )
+        im_t = torch.from_numpy(im.astype(np.float32)).permute(2, 0, 1).float() / 2**14
         return im_t
 
     def _read_gt_image(self, index: int) -> Tensor:
-        gt_path = (
-            Path(self.data_dir) / self.dirname / "gt" / f"{index:04d}" / "im_rgb.png"
-        )
+        gt_path = Path(self.data_dir) / self.dirname / "gt" / f"{index:04d}" / "im_rgb.png"
         gt = cv2.imread(gt_path.as_posix(), cv2.IMREAD_UNCHANGED)
-        gt_t = (
-            torch.from_numpy(gt.astype(np.float32)).permute(2, 0, 1).float() / 2**14
-        )
+        gt_t = torch.from_numpy(gt.astype(np.float32)).permute(2, 0, 1).float() / 2**14
         return gt_t
 
     # def _read_meta_info(self, index: int) -> dict[str, Any]:

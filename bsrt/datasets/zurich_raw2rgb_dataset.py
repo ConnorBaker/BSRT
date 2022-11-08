@@ -8,7 +8,7 @@ from torch.utils.data import Sampler
 from torchvision.datasets import VisionDataset
 from typing_extensions import ClassVar
 
-from .utilities.downloadable import Downloadable
+from bsrt.datasets.utilities.downloadable import Downloadable
 
 
 @dataclass
@@ -26,14 +26,10 @@ class ZurichRaw2RgbDataset(VisionDataset, Downloadable):
     ]
 
     data_dir: str
-    transform: Callable[[Tensor], Union[Tensor, Dict[str, Tensor]]] = field(
-        default=lambda x: x
-    )
+    transform: Callable[[Tensor], Union[Tensor, Dict[str, Tensor]]] = field(default=lambda x: x)
 
     def __getitem__(self, index: int) -> Union[Tensor, Dict[str, Tensor]]:
-        image_path = (
-            Path(self.data_dir) / self.dirname / "train" / "canon" / f"{index}.jpg"
-        )
+        image_path = Path(self.data_dir) / self.dirname / "train" / "canon" / f"{index}.jpg"
         image_file = torchvision.io.read_file(image_path.as_posix())
         image_jpg = torchvision.io.decode_jpeg(image_file)
         transformed = self.transform(image_jpg)

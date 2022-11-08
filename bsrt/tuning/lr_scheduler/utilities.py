@@ -8,9 +8,11 @@ from torch.optim.lr_scheduler import (
 )
 from torch.optim.optimizer import Optimizer
 
-from .cosine_annealing_warm_restarts import CosineAnnealingWarmRestartsParams
-from .exponential_lr import ExponentialLRParams
-from .reduce_lr_on_plateau import ReduceLROnPlateauParams
+from bsrt.tuning.lr_scheduler.cosine_annealing_warm_restarts import (
+    CosineAnnealingWarmRestartsParams,
+)
+from bsrt.tuning.lr_scheduler.exponential_lr import ExponentialLRParams
+from bsrt.tuning.lr_scheduler.reduce_lr_on_plateau import ReduceLROnPlateauParams
 
 
 def configure_scheduler(

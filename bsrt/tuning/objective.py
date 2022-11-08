@@ -10,21 +10,20 @@ from optuna.logging import get_logger
 from pytorch_lightning import LightningDataModule, LightningModule
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers.wandb import WandbLogger
-from pytorch_lightning.strategies.bagua import BaguaStrategy
 from pytorch_lightning.trainer import Trainer
 from pytorch_lightning.utilities.seed import seed_everything
 from typing_extensions import Literal
 
-from ..lighting_bsrt import LightningBSRT
-from .cli_parser import TunerConfig
-from .lr_scheduler.cosine_annealing_warm_restarts import (
+from bsrt.lighting_bsrt import LightningBSRT
+from bsrt.tuning.cli_parser import TunerConfig
+from bsrt.tuning.lr_scheduler.cosine_annealing_warm_restarts import (
     CosineAnnealingWarmRestartsParams,
 )
-from .lr_scheduler.exponential_lr import ExponentialLRParams
-from .lr_scheduler.reduce_lr_on_plateau import ReduceLROnPlateauParams
-from .model.bsrt import BSRTParams
-from .optimizer.adamw import AdamWParams
-from .optimizer.sgd import SGDParams
+from bsrt.tuning.lr_scheduler.exponential_lr import ExponentialLRParams
+from bsrt.tuning.lr_scheduler.reduce_lr_on_plateau import ReduceLROnPlateauParams
+from bsrt.tuning.model.bsrt import BSRTParams
+from bsrt.tuning.optimizer.adamw import AdamWParams
+from bsrt.tuning.optimizer.sgd import SGDParams
 
 logger = get_logger("bsrt.tuning.objective")
 logger.addHandler(StreamHandler(sys.stdout))
@@ -82,9 +81,7 @@ class MinEpochsEarlyStopping(EarlyStopping):
     def on_validation_end(self, trainer: Trainer, pl_module: LightningModule) -> None:
         return
 
-    def on_validation_epoch_end(
-        self, trainer: Trainer, pl_module: LightningModule
-    ) -> None:
+    def on_validation_epoch_end(self, trainer: Trainer, pl_module: LightningModule) -> None:
         if trainer.current_epoch < self.min_epochs:
             # Reset the wait counter to 0
             self.wait_count = 0
@@ -164,7 +161,6 @@ def objective(
         devices="auto",
         precision=precision,
         enable_checkpointing=False,
-        strategy=BaguaStrategy(algorithm="gradient_allreduce"),
         limit_train_batches=config.limit_train_batches,
         limit_val_batches=config.limit_val_batches,
         max_epochs=config.max_epochs,
@@ -220,9 +216,7 @@ def objective(
         ms_ssim = MS_SSIM(trainer.callback_metrics["val/ms_ssim"].item())
         lpips = LPIPS(trainer.callback_metrics["val/lpips"].item())
 
-        logger.info(
-            f"Finihsed training with PSNR: {psnr}, MS-SSIM: {ms_ssim}, LPIPS: {lpips}"
-        )
+        logger.info(f"Finihsed training with PSNR: {psnr}, MS-SSIM: {ms_ssim}, LPIPS: {lpips}")
         wandb.finish()
         return psnr, ms_ssim, lpips
     except Exception as e:

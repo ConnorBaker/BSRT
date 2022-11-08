@@ -33,19 +33,13 @@ class CanonImage:
 
     def __post_init__(self) -> None:
         super().__init__()
-        if (
-            self.metadata.black_level is not None
-            and len(self.metadata.black_level) == 4
-        ):
+        if self.metadata.black_level is not None and len(self.metadata.black_level) == 4:
             self.metadata.black_level.pop(2)
 
         if self.metadata.cam_wb is not None and len(self.metadata.cam_wb) == 4:
             self.metadata.cam_wb.pop(2)
 
-        if (
-            self.metadata.daylight_wb is not None
-            and len(self.metadata.daylight_wb) == 4
-        ):
+        if self.metadata.daylight_wb is not None and len(self.metadata.daylight_wb) == 4:
             self.metadata.daylight_wb.pop(2)
 
         self.metadata.xyz_srgb_matrix = torch.tensor(
@@ -115,15 +109,13 @@ class CanonImage:
     def postprocess(self, return_np: Literal[True]) -> npt.NDArray[np.uint8]:
         ...
 
-    def postprocess(
-        self, return_np: bool = True
-    ) -> Union[Tensor, npt.NDArray[np.uint8]]:
+    def postprocess(self, return_np: bool = True) -> Union[Tensor, npt.NDArray[np.uint8]]:
         # Convert to rgb
         im = self.im_raw
 
-        im = (
-            im - torch.tensor(self.metadata.black_level).view(3, 1, 1)
-        ).float() * torch.tensor(self.metadata.cam_wb).view(3, 1, 1)
+        im = (im - torch.tensor(self.metadata.black_level).view(3, 1, 1)).float() * torch.tensor(
+            self.metadata.cam_wb
+        ).view(3, 1, 1)
 
         im_out = im / im.max()
         im_out = im_out.clamp(0.0, 1.0)

@@ -24,9 +24,7 @@ def torch_to_npimage(a: Tensor, unnormalize: bool = True) -> npt.NDArray[np.uint
     return cv.cvtColor(a_np, cv.COLOR_RGB2BGR)
 
 
-def npimage_to_torch(
-    a: npt.NDArray, normalize: bool = True, input_bgr: bool = True
-) -> Tensor:
+def npimage_to_torch(a: npt.NDArray, normalize: bool = True, input_bgr: bool = True) -> Tensor:
     if input_bgr:
         a = cv.cvtColor(a, cv.COLOR_BGR2RGB)
     a_t = numpy_to_torch(a)

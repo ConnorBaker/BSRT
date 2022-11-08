@@ -4,10 +4,10 @@ import torch.nn.functional as F
 import torch.nn.init as init
 from torch import Tensor
 
-from ..utils.bilinear_upsample_2d import bilinear_upsample_2d
-from . import common
-from .utils.psconv import PSGConv2d as PSConv2d
-from .utils.psconv import PyConv2d
+from bsrt.model import common
+from bsrt.model.utils.psconv import PSGConv2d as PSConv2d
+from bsrt.model.utils.psconv import PyConv2d
+from bsrt.utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 
 def initialize_weights(net_l, scale=1):
@@ -41,9 +41,7 @@ def make_layer(block, n_layers):
 
 
 def conv_layer(in_channels, out_channels, kernel_size, stride=1, padding=0):
-    return nn.Conv2d(
-        in_channels, out_channels, kernel_size, stride, padding=padding, bias=True
-    )
+    return nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding=padding, bias=True)
 
 
 class ESA(nn.Module):
@@ -185,9 +183,7 @@ class _PositionAttentionModule(nn.Module):
 class SALayer(nn.Module):
     def __init__(self, wn=None):
         super(SALayer, self).__init__()
-        self.body = nn.Sequential(
-            wn(nn.Conv2d(2, 1, 7, 1, 3, bias=False)), nn.Sigmoid()
-        )
+        self.body = nn.Sequential(wn(nn.Conv2d(2, 1, 7, 1, 3, bias=False)), nn.Sigmoid())
 
     def forward(self, x):
         avg_f = torch.mean(x, dim=1, keepdim=True)
@@ -278,9 +274,7 @@ class RCAB(nn.Module):
         # for i in range(2):
         modules_body.append(wn(nn.Conv2d(n_feat, n_feat * expand, 1, bias=bias)))
         modules_body.append(act)
-        modules_body.append(
-            wn(nn.Conv2d(n_feat * expand, int(n_feat * linear), 1, bias=bias))
-        )
+        modules_body.append(wn(nn.Conv2d(n_feat * expand, int(n_feat * linear), 1, bias=bias)))
         modules_body.append(conv(int(n_feat * linear), n_feat, kernel_size, bias=bias))
         if da:
             modules_body.append(DALayer(n_feat, reduction, wn))
@@ -367,19 +361,13 @@ class LRSCRCAB(nn.Module):
         linear = 0.75
 
         modules_body = (
-            [wn(nn.Conv2d(n_feat * (idx + 1), n_feat, 1, 1, 0, bias=True))]
-            if idx > 0
-            else []
+            [wn(nn.Conv2d(n_feat * (idx + 1), n_feat, 1, 1, 0, bias=True))] if idx > 0 else []
         )
         # for i in range(2):
         modules_body.append(wn(nn.Conv2d(n_feat, n_feat * expand, 1, bias=bias)))
         modules_body.append(act)
-        modules_body.append(
-            wn(nn.Conv2d(n_feat * expand, int(n_feat * linear), 1, bias=bias))
-        )
-        modules_body.append(
-            wn(conv(int(n_feat * linear), n_feat, kernel_size, bias=bias))
-        )
+        modules_body.append(wn(nn.Conv2d(n_feat * expand, int(n_feat * linear), 1, bias=bias)))
+        modules_body.append(wn(conv(int(n_feat * linear), n_feat, kernel_size, bias=bias)))
         if da:
             modules_body.append(DALayer(n_feat, reduction, wn))
         else:
@@ -416,16 +404,12 @@ class LRSCPYRCAB(nn.Module):
         linear = 0.75
 
         modules_body = (
-            [wn(nn.Conv2d(n_feat * (idx + 1), n_feat, 1, 1, 0, bias=True))]
-            if idx > 0
-            else []
+            [wn(nn.Conv2d(n_feat * (idx + 1), n_feat, 1, 1, 0, bias=True))] if idx > 0 else []
         )
         # for i in range(2):
         modules_body.append(wn(nn.Conv2d(n_feat, n_feat * expand, 1, bias=bias)))
         modules_body.append(act)
-        modules_body.append(
-            wn(nn.Conv2d(n_feat * expand, int(n_feat * linear), 1, bias=bias))
-        )
+        modules_body.append(wn(nn.Conv2d(n_feat * expand, int(n_feat * linear), 1, bias=bias)))
         modules_body.append(
             PyConv2d(
                 in_channels=int(n_feat * linear),
@@ -459,9 +443,7 @@ class LRSCResidualGroup(nn.Module):
         conv = common.default_conv
         wn = lambda x: torch.nn.utils.weight_norm(x)
 
-        modules_head = (
-            [wn(conv(n_feat * (idx + 1), n_feat, 1, bias=True))] if idx > 0 else []
-        )
+        modules_head = [wn(conv(n_feat * (idx + 1), n_feat, 1, bias=True))] if idx > 0 else []
         modules_body = [
             LRSCRCAB(
                 conv,
@@ -501,9 +483,7 @@ class LRSCPSResidualGroup(nn.Module):
         wn = lambda x: torch.nn.utils.weight_norm(x)
 
         modules_head = (
-            [wn(nn.Conv2d(n_feat * (idx + 1), n_feat, 1, 1, 0, bias=True))]
-            if idx > 0
-            else []
+            [wn(nn.Conv2d(n_feat * (idx + 1), n_feat, 1, 1, 0, bias=True))] if idx > 0 else []
         )
         modules_body = [
             LRSCRCAB(
@@ -546,9 +526,7 @@ class LRSCPyResidualGroup(nn.Module):
         wn = lambda x: torch.nn.utils.weight_norm(x)
 
         modules_head = (
-            [wn(nn.Conv2d(n_feat * (idx + 1), n_feat, 1, 1, 0, bias=True))]
-            if idx > 0
-            else []
+            [wn(nn.Conv2d(n_feat * (idx + 1), n_feat, 1, 1, 0, bias=True))] if idx > 0 else []
         )
         modules_body = [
             LRSCPYRCAB(
@@ -595,9 +573,7 @@ class LRSCWideActResBlock(nn.Module):
         body.append(wn(nn.Conv2d(nf, nf * expand, 1, padding=1 // 2)))
         body.append(act)
         body.append(wn(nn.Conv2d(nf * expand, int(nf * linear), 1, padding=1 // 2)))
-        body.append(
-            wn(nn.Conv2d(int(nf * linear), nf, kernel_size, padding=kernel_size // 2))
-        )
+        body.append(wn(nn.Conv2d(int(nf * linear), nf, kernel_size, padding=kernel_size // 2)))
 
         self.head = nn.Sequential(*head)
         self.body = nn.Sequential(*body)
@@ -653,9 +629,7 @@ class LRSCPyWideActResGroup(nn.Module):
         conv = PyConv2d
         wn = lambda x: torch.nn.utils.weight_norm(x)
 
-        modules_head = (
-            [wn(nn.Conv2d(nf * (idx + 1), nf, 1, 1, 0, bias=True))] if idx > 0 else []
-        )
+        modules_head = [wn(nn.Conv2d(nf * (idx + 1), nf, 1, 1, 0, bias=True))] if idx > 0 else []
         modules_body = [LRSCPyWideActResBlock(nf=nf, idx=i) for i in range(n_resblocks)]
         modules_tail = [wn(nn.Conv2d(nf * (n_resblocks + 1), nf, 1))]
         self.head = nn.Sequential(*modules_head)
@@ -679,9 +653,7 @@ class LRSCWideActResGroup(nn.Module):
         conv = PyConv2d
         wn = lambda x: torch.nn.utils.weight_norm(x)
 
-        modules_head = (
-            [wn(nn.Conv2d(nf * (idx + 1), nf, 1, 1, 0, bias=True))] if idx > 0 else []
-        )
+        modules_head = [wn(nn.Conv2d(nf * (idx + 1), nf, 1, 1, 0, bias=True))] if idx > 0 else []
         modules_body = [LRSCWideActResBlock(nf=nf, idx=i) for i in range(n_resblocks)]
         modules_tail = [wn(nn.Conv2d(nf * (n_resblocks + 1), nf, 1))]
         self.head = nn.Sequential(*modules_head)
@@ -724,9 +696,7 @@ class PYRCAB(nn.Module):
         # for i in range(2):
         modules_body.append(wn(nn.Conv2d(n_feat, n_feat * expand, 1, bias=bias)))
         modules_body.append(act)
-        modules_body.append(
-            wn(nn.Conv2d(n_feat * expand, int(n_feat * linear), 1, bias=bias))
-        )
+        modules_body.append(wn(nn.Conv2d(n_feat * expand, int(n_feat * linear), 1, bias=bias)))
         # modules_body.append(conv(, n_feat, kernel_size, bias=bias))
         modules_body.append(
             PyConv2d(
@@ -808,9 +778,7 @@ class WideActResBlock(nn.Module):
         body.append(wn(nn.Conv2d(nf, nf * expand, 1, padding=1 // 2)))
         body.append(act)
         body.append(wn(nn.Conv2d(nf * expand, int(nf * linear), 1, padding=1 // 2)))
-        body.append(
-            wn(nn.Conv2d(int(nf * linear), nf, kernel_size, padding=kernel_size // 2))
-        )
+        body.append(wn(nn.Conv2d(int(nf * linear), nf, kernel_size, padding=kernel_size // 2)))
 
         self.body = nn.Sequential(*body)
 
@@ -834,9 +802,7 @@ class PSWideActResBlock(nn.Module):
         body.append(wn(nn.Conv2d(nf, nf * expand, 1, padding=1 // 2)))
         body.append(act)
         body.append(wn(nn.Conv2d(nf * expand, int(nf * linear), 1, padding=1 // 2)))
-        body.append(
-            wn(PSConv2d(int(nf * linear), nf, kernel_size, padding=kernel_size // 2))
-        )
+        body.append(wn(PSConv2d(int(nf * linear), nf, kernel_size, padding=kernel_size // 2)))
 
         self.body = nn.Sequential(*body)
 

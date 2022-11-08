@@ -19,9 +19,7 @@ class BSRTParams:
     def suggest(cls, trial: Trial) -> BSRTParams:
         return cls(
             attn_drop_rate=trial.suggest_float("attn_drop_rate", low=0.0, high=1.0),
-            drop_path_rate=trial.suggest_float(
-                "drop_path_rate", low=1e-2, high=1.0, log=True
-            ),
+            drop_path_rate=trial.suggest_float("drop_path_rate", low=1e-2, high=1.0, log=True),
             drop_rate=trial.suggest_float("drop_rate", low=0.0, high=1.0),
             mlp_ratio=trial.suggest_float("mlp_ratio", low=2.0, high=32.0, log=True),
             num_features=trial.suggest_int("num_features", low=16, high=256, log=True),

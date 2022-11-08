@@ -8,13 +8,9 @@ import torch
 from torch import Tensor
 from typing_extensions import Literal
 
-from ..data_processing.camera_pipeline import (
-    apply_ccm,
-    apply_smoothstep,
-    gamma_compression,
-)
-from ..data_processing.synthetic_burst_generation import MetaInfo
-from .data_format_utils import torch_to_npimage
+from bsrt.data_processing.camera_pipeline import apply_ccm, apply_smoothstep, gamma_compression
+from bsrt.data_processing.synthetic_burst_generation import MetaInfo
+from bsrt.utils.data_format_utils import torch_to_npimage
 
 
 @dataclass

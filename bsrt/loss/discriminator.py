@@ -23,13 +23,9 @@ class Discriminator(nn.Module):
     ):
         super().__init__()
 
-        def _block(
-            _in_channels: int, _out_channels: int, stride: int = 1
-        ) -> nn.Sequential:
+        def _block(_in_channels: int, _out_channels: int, stride: int = 1) -> nn.Sequential:
 
-            Conv = nn.Conv2d(
-                _in_channels, _out_channels, 3, padding=1, stride=stride, bias=False
-            )
+            Conv = nn.Conv2d(_in_channels, _out_channels, 3, padding=1, stride=stride, bias=False)
 
             if gan_type == "SNGAN":
                 return nn.Sequential(

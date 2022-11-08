@@ -138,9 +138,7 @@ class _NonLocalBlockND(nn.Module):
 
 
 class NONLocalBlock1D(_NonLocalBlockND):
-    def __init__(
-        self, in_channels, inter_channels=None, sub_sample=True, bn_layer=True
-    ):
+    def __init__(self, in_channels, inter_channels=None, sub_sample=True, bn_layer=True):
         super(NONLocalBlock1D, self).__init__(
             in_channels,
             inter_channels=inter_channels,
@@ -151,9 +149,7 @@ class NONLocalBlock1D(_NonLocalBlockND):
 
 
 class NONLocalBlock2D(_NonLocalBlockND):
-    def __init__(
-        self, in_channels, inter_channels=None, sub_sample=True, bn_layer=True
-    ):
+    def __init__(self, in_channels, inter_channels=None, sub_sample=True, bn_layer=True):
         super(NONLocalBlock2D, self).__init__(
             in_channels,
             inter_channels=inter_channels,

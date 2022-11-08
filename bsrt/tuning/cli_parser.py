@@ -6,9 +6,7 @@ from dataclasses import dataclass
 from typing_extensions import Literal, get_args
 
 OptimizerName = Literal["AdamW", "SGD"]
-SchedulerName = Literal[
-    "CosineAnnealingWarmRestarts", "ExponentialLR", "ReduceLROnPlateau"
-]
+SchedulerName = Literal["CosineAnnealingWarmRestarts", "ExponentialLR", "ReduceLROnPlateau"]
 PrecisionName = Literal["bf16", "16", "32"]
 
 
@@ -48,15 +46,11 @@ class TunerConfig:
 
 CLI_PARSER = argparse.ArgumentParser()
 CLI_PARSER.add_argument_group("Database")
-CLI_PARSER.add_argument(
-    "--db_uri", type=str, required=True, help="Database URI connection string"
-)
+CLI_PARSER.add_argument("--db_uri", type=str, required=True, help="Database URI connection string")
 
 
 CLI_PARSER.add_argument_group("WandB")
-CLI_PARSER.add_argument(
-    "--wandb_api_key", type=str, required=True, help="Wandb API key"
-)
+CLI_PARSER.add_argument("--wandb_api_key", type=str, required=True, help="Wandb API key")
 
 
 CLI_PARSER.add_argument_group("Experiment")
@@ -84,16 +78,10 @@ CLI_PARSER.add_argument(
 
 
 CLI_PARSER.add_argument_group("DataLoader")
-CLI_PARSER.add_argument(
-    "--num_trials", type=int, required=True, help="Number of trials"
-)
-CLI_PARSER.add_argument(
-    "--max_epochs", type=int, required=True, help="Max number of epochs"
-)
+CLI_PARSER.add_argument("--num_trials", type=int, required=True, help="Number of trials")
+CLI_PARSER.add_argument("--max_epochs", type=int, required=True, help="Max number of epochs")
 CLI_PARSER.add_argument("--batch_size", type=int, required=True, help="Batch size")
 CLI_PARSER.add_argument(
     "--limit_train_batches", type=float, required=True, help="Limit train batches"
 )
-CLI_PARSER.add_argument(
-    "--limit_val_batches", type=float, required=True, help="Limit val batches"
-)
+CLI_PARSER.add_argument("--limit_val_batches", type=float, required=True, help="Limit val batches")

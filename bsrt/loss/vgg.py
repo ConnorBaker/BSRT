@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import torchvision.models as models
 from torch import Tensor
 
-from ..model import common
+from bsrt.model import common
 
 
 @dataclass(eq=False, init=False)

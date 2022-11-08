@@ -3,8 +3,8 @@ from typing import Union
 
 from torch import Tensor
 
-from .noises import Noises
-from .rgb_gains import RgbGains
+from bsrt.data_processing.noises import Noises
+from bsrt.data_processing.rgb_gains import RgbGains
 
 
 @dataclass

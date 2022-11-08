@@ -12,7 +12,7 @@ import torch
 from torch import Tensor
 from typing_extensions import Literal
 
-from .metadata import ImageMetadata
+from bsrt.datasets.cameras.metadata import ImageMetadata
 
 
 @dataclass
@@ -94,9 +94,9 @@ class SamsungImage:
         # Convert to rgb
         im = self.im_raw
 
-        im = (
-            im - torch.tensor(self.metadata.black_level).view(4, 1, 1)
-        ) * torch.tensor(self.metadata.cam_wb).view(4, 1, 1)
+        im = (im - torch.tensor(self.metadata.black_level).view(4, 1, 1)) * torch.tensor(
+            self.metadata.cam_wb
+        ).view(4, 1, 1)
 
         if norm_factor is None:
             im /= im.max()

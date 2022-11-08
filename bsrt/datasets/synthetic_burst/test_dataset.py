@@ -35,9 +35,7 @@ class TestData:
 
 
 @dataclass
-class TestDataset(
-    Downloadable, ProvidesDatasource, ProvidesDataset, ProvidesDatasetPipeline
-):
+class TestDataset(Downloadable, ProvidesDatasource, ProvidesDataset, ProvidesDatasetPipeline):
     """Synthetic burst test set. The test burst have been generated using the same synthetic pipeline as
     employed in SyntheticBurst dataset.
     """
@@ -60,9 +58,7 @@ class TestDataset(
     @staticmethod
     def _accumulate_block(acc: TestData, x: pd.DataFrame) -> TestData:
         np_frames = map(lambda image: image.astype(np.float32), x["image"].to_numpy())
-        torch_frames = map(
-            lambda np_frame: torch.from_numpy(np_frame).permute(2, 0, 1), np_frames
-        )
+        torch_frames = map(lambda np_frame: torch.from_numpy(np_frame).permute(2, 0, 1), np_frames)
         normalized_torch_frames = map(
             lambda torch_frame: torch_frame.float() / (2**14), torch_frames
         )
@@ -83,9 +79,7 @@ class TestDataset(
         assert isinstance(df, pd.DataFrame)
         return pd.DataFrame(df["test_data"].tolist())
 
-    def provide_dataset_pipeline(
-        self, blocks_per_window: int = 100
-    ) -> DatasetPipeline[TestData]:
+    def provide_dataset_pipeline(self, blocks_per_window: int = 100) -> DatasetPipeline[TestData]:
         return self.provide_dataset().window(blocks_per_window=blocks_per_window)
 
     def provide_dataset(self) -> Dataset[TestData]:

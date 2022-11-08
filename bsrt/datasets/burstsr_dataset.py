@@ -10,9 +10,9 @@ from torch import Tensor
 from torch.utils.data import Dataset
 from typing_extensions import Literal
 
-from .cameras.canon import CanonImage
-from .cameras.samsung import SamsungImage
-from .utilities.utilities import flatten_raw_image, pack_raw_image
+from bsrt.datasets.cameras.canon import CanonImage
+from bsrt.datasets.cameras.samsung import SamsungImage
+from bsrt.datasets.utilities.utilities import flatten_raw_image, pack_raw_image
 
 
 @dataclass
@@ -55,9 +55,7 @@ class BurstSRDataset(Dataset):
         return BurstSRInfo(size=self.burst_size, path=self.burst_list[burst_id])
 
     def _get_raw_image(self, burst_id: int, im_id: int) -> SamsungImage:
-        raw_image = SamsungImage.load(
-            self.burst_list[burst_id] / f"samsung_{im_id:02d}"
-        )
+        raw_image = SamsungImage.load(self.burst_list[burst_id] / f"samsung_{im_id:02d}")
         return raw_image
 
     def _get_gt_image(self, burst_id: int) -> CanonImage:
@@ -213,8 +211,7 @@ class BurstSRDataset(Dataset):
 
             burst_image_data = [pack_raw_image(im) for im in burst_image_data]
             burst_image_data = [
-                F.pad(im.unsqueeze(0), pad, mode="replicate").squeeze(0)
-                for im in burst_image_data
+                F.pad(im.unsqueeze(0), pad, mode="replicate").squeeze(0) for im in burst_image_data
             ]
 
             if self.split != "test":

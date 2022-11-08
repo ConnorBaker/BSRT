@@ -7,26 +7,24 @@ import numpy.typing as npt
 import torch
 from torch import Tensor
 
-from ..utils.bilinear_upsample_2d import bilinear_upsample_2d
-from ..utils.data_format_utils import numpy_to_torch, torch_to_numpy
-from ..utils.types import InterpolationType
-from .camera_pipeline import (
+from bsrt.data_processing.camera_pipeline import (
     apply_ccm,
     gamma_expansion,
     invert_smoothstep,
     mosaic,
     random_ccm,
 )
-from .image_processing_params import ImageProcessingParams
-from .image_transformation_params import ImageTransformationParams
-from .meta_info import MetaInfo
-from .noises import Noises
-from .rgb_gains import RgbGains
+from bsrt.data_processing.image_processing_params import ImageProcessingParams
+from bsrt.data_processing.image_transformation_params import ImageTransformationParams
+from bsrt.data_processing.meta_info import MetaInfo
+from bsrt.data_processing.noises import Noises
+from bsrt.data_processing.rgb_gains import RgbGains
+from bsrt.utils.bilinear_upsample_2d import bilinear_upsample_2d
+from bsrt.utils.data_format_utils import numpy_to_torch, torch_to_numpy
+from bsrt.utils.types import InterpolationType
 
 
-def random_crop(
-    frames: Tensor, crop_sz: Union[float, List[float], Tuple[float, ...]]
-) -> Tensor:
+def random_crop(frames: Tensor, crop_sz: Union[float, List[float], Tuple[float, ...]]) -> Tensor:
     """Extract a random crop of size crop_sz from the input frames. If the crop_sz is larger than the input image size,
     then the largest possible crop of same aspect ratio as crop_sz will be extracted from frames, and upsampled to
     crop_sz.
@@ -297,9 +295,7 @@ def single2lrburst(
             border_crop = transformation_params.border_crop
 
             image_t = image_t[border_crop:-border_crop, border_crop:-border_crop, :]
-            sample_pos_inv = sample_pos_inv[
-                border_crop:-border_crop, border_crop:-border_crop, :
-            ]
+            sample_pos_inv = sample_pos_inv[border_crop:-border_crop, border_crop:-border_crop, :]
 
         # Downsample the image
         image_t = cv2.resize(

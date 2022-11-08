@@ -4,11 +4,10 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
+from bsrt.metrics.utils.ignore_boundry import ignore_boundary
 from bsrt.utils.bilinear_upsample_2d import bilinear_upsample_2d
 from bsrt.utils.spatial_color_alignment import match_colors
 from bsrt.utils.warp import warp
-
-from .ignore_boundry import ignore_boundary
 
 
 def prepare_aligned(

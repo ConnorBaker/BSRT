@@ -4,8 +4,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..utils.bilinear_upsample_2d import bilinear_upsample_2d
-from . import arch_util
+from bsrt.model import arch_util
+from bsrt.utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 
 class BasicModule(nn.Module):
@@ -15,25 +15,15 @@ class BasicModule(nn.Module):
         super(BasicModule, self).__init__()
 
         self.basic_module = nn.Sequential(
-            nn.Conv2d(
-                in_channels=8, out_channels=32, kernel_size=7, stride=1, padding=3
-            ),
+            nn.Conv2d(in_channels=8, out_channels=32, kernel_size=7, stride=1, padding=3),
             nn.ReLU(inplace=False),
-            nn.Conv2d(
-                in_channels=32, out_channels=64, kernel_size=7, stride=1, padding=3
-            ),
+            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=7, stride=1, padding=3),
             nn.ReLU(inplace=False),
-            nn.Conv2d(
-                in_channels=64, out_channels=32, kernel_size=7, stride=1, padding=3
-            ),
+            nn.Conv2d(in_channels=64, out_channels=32, kernel_size=7, stride=1, padding=3),
             nn.ReLU(inplace=False),
-            nn.Conv2d(
-                in_channels=32, out_channels=16, kernel_size=7, stride=1, padding=3
-            ),
+            nn.Conv2d(in_channels=32, out_channels=16, kernel_size=7, stride=1, padding=3),
             nn.ReLU(inplace=False),
-            nn.Conv2d(
-                in_channels=16, out_channels=2, kernel_size=7, stride=1, padding=3
-            ),
+            nn.Conv2d(in_channels=16, out_channels=2, kernel_size=7, stride=1, padding=3),
         )
 
     def forward(self, tensor_input):
@@ -58,12 +48,8 @@ class SpyNet(nn.Module):
         )
         self.load_state_dict(weights_dict["params"])
 
-        self.register_buffer(
-            "mean", torch.Tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
-        )
-        self.register_buffer(
-            "std", torch.Tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
-        )
+        self.register_buffer("mean", torch.Tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
+        self.register_buffer("std", torch.Tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
 
     def preprocess(self, tensor_input):
         tensor_output = (tensor_input - self.mean) / self.std
@@ -82,15 +68,11 @@ class SpyNet(nn.Module):
         for level in range(5):
             ref.insert(
                 0,
-                F.avg_pool2d(
-                    input=ref[0], kernel_size=2, stride=2, count_include_pad=False
-                ),
+                F.avg_pool2d(input=ref[0], kernel_size=2, stride=2, count_include_pad=False),
             )
             supp.insert(
                 0,
-                F.avg_pool2d(
-                    input=supp[0], kernel_size=2, stride=2, count_include_pad=False
-                ),
+                F.avg_pool2d(input=supp[0], kernel_size=2, stride=2, count_include_pad=False),
             )
 
         flow = ref[0].new_zeros(
@@ -105,18 +87,12 @@ class SpyNet(nn.Module):
 
         for level in range(len(ref)):
             # FIXME: Continued: we cannot upsample a tensor with width or height zero.
-            upsampled_flow = (
-                bilinear_upsample_2d(flow, scale_factor=2, align_corners=True) * 2.0
-            )
+            upsampled_flow = bilinear_upsample_2d(flow, scale_factor=2, align_corners=True) * 2.0
 
             if upsampled_flow.size(2) != ref[level].size(2):
-                upsampled_flow = F.pad(
-                    input=upsampled_flow, pad=[0, 0, 0, 1], mode="replicate"
-                )
+                upsampled_flow = F.pad(input=upsampled_flow, pad=[0, 0, 0, 1], mode="replicate")
             if upsampled_flow.size(3) != ref[level].size(3):
-                upsampled_flow = F.pad(
-                    input=upsampled_flow, pad=[0, 1, 0, 0], mode="replicate"
-                )
+                upsampled_flow = F.pad(input=upsampled_flow, pad=[0, 1, 0, 0], mode="replicate")
 
             flow = (
                 self.basic_module[level](

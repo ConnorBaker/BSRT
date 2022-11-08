@@ -78,9 +78,7 @@ class TrainDataProcessor:
     interpolation_type: InterpolationType = "bilinear"
 
     def __post_init__(self):
-        self.final_crop_sz = (
-            self.crop_sz + 2 * self.burst_transformation_params.border_crop
-        )
+        self.final_crop_sz = self.crop_sz + 2 * self.burst_transformation_params.border_crop
 
     def __call__(self, frame: Tensor) -> TrainData:
         # Extract a random crop from the image

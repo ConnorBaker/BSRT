@@ -10,7 +10,7 @@ from torchvision.datasets import VisionDataset
 from torchvision.transforms import Compose, ToTensor
 from typing_extensions import Literal
 
-from .synthetic_burst.train_dataset import TrainData, TrainDataProcessor
+from bsrt.datasets.synthetic_burst.train_dataset import TrainData, TrainDataProcessor
 
 
 @dataclass(eq=False)
@@ -70,9 +70,7 @@ class SyntheticDataModule(pl.LightningDataModule):
             self.dataset.transform = Compose([])
 
         self.dataset.transform.transforms.append(
-            TrainDataProcessor(
-                burst_size=self.burst_size, crop_sz=self.crop_size, dtype=dtype
-            )
+            TrainDataProcessor(burst_size=self.burst_size, crop_sz=self.crop_size, dtype=dtype)
         )
 
         train_dataset_len = int(len(self.dataset) * self.split_ratio)

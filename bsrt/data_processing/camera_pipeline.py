@@ -9,8 +9,8 @@ import torch
 from torch import Tensor
 from typing_extensions import Literal
 
-from ..utils.data_format_utils import npimage_to_torch, torch_to_npimage
-from .meta_info import MetaInfo
+from bsrt.data_processing.meta_info import MetaInfo
+from bsrt.utils.data_format_utils import npimage_to_torch, torch_to_npimage
 
 """ Based on http://timothybrooks.com/tech/unprocessing
 Functions for forward and inverse camera pipeline. All functions input a torch float tensor of shape (c, h, w).

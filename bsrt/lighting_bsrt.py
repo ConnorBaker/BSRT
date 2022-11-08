@@ -11,23 +11,21 @@ from torch.optim.optimizer import Optimizer
 from torchmetrics import MetricCollection
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity as LPIPS
 from torchmetrics.image.psnr import PeakSignalNoiseRatio as PSNR
-from torchmetrics.image.ssim import (
-    MultiScaleStructuralSimilarityIndexMeasure as MS_SSIM,
-)
+from torchmetrics.image.ssim import MultiScaleStructuralSimilarityIndexMeasure as MS_SSIM
 
-from .data_processing.camera_pipeline import demosaic
-from .datasets.synthetic_burst.train_dataset import TrainData
-from .model.bsrt import BSRT
-from .tuning.lr_scheduler.cosine_annealing_warm_restarts import (
+from bsrt.data_processing.camera_pipeline import demosaic
+from bsrt.datasets.synthetic_burst.train_dataset import TrainData
+from bsrt.model.bsrt import BSRT
+from bsrt.tuning.lr_scheduler.cosine_annealing_warm_restarts import (
     CosineAnnealingWarmRestartsParams,
 )
-from .tuning.lr_scheduler.exponential_lr import ExponentialLRParams
-from .tuning.lr_scheduler.reduce_lr_on_plateau import ReduceLROnPlateauParams
-from .tuning.lr_scheduler.utilities import configure_scheduler
-from .tuning.model.bsrt import BSRTParams
-from .tuning.optimizer.adamw import AdamWParams
-from .tuning.optimizer.sgd import SGDParams
-from .tuning.optimizer.utilities import configure_optimizer
+from bsrt.tuning.lr_scheduler.exponential_lr import ExponentialLRParams
+from bsrt.tuning.lr_scheduler.reduce_lr_on_plateau import ReduceLROnPlateauParams
+from bsrt.tuning.lr_scheduler.utilities import configure_scheduler
+from bsrt.tuning.model.bsrt import BSRTParams
+from bsrt.tuning.optimizer.adamw import AdamWParams
+from bsrt.tuning.optimizer.sgd import SGDParams
+from bsrt.tuning.optimizer.utilities import configure_optimizer
 
 
 @dataclass(eq=False)
@@ -102,9 +100,7 @@ class LightningBSRT(LightningModule):
             nn_busrts: Tensor = F.interpolate(
                 demosaic(
                     bursts[:, 0, :, :].to(
-                        torch.float32
-                        if bursts.dtype == torch.bfloat16
-                        else bursts.dtype
+                        torch.float32 if bursts.dtype == torch.bfloat16 else bursts.dtype
                     )
                 ),
                 scale_factor=4,

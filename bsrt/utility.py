@@ -9,11 +9,11 @@ from torch import Tensor, nn
 from torchmetrics.metric import Metric
 from typing_extensions import Literal, get_args, overload
 
-from .metrics.aligned.l1 import AlignedL1
-from .metrics.aligned.psnr import AlignedPSNR
-from .option import DataTypeName, LossName
-from .utils.postprocessing_functions import BurstSRPostProcess, SimplePostProcess
-from .utils.types import BayerPattern, NormalizationMode
+from bsrt.metrics.aligned.l1 import AlignedL1
+from bsrt.metrics.aligned.psnr import AlignedPSNR
+from bsrt.option import DataTypeName, LossName
+from bsrt.utils.postprocessing_functions import BurstSRPostProcess, SimplePostProcess
+from bsrt.utils.types import BayerPattern, NormalizationMode
 
 
 def make_loss_fn(loss: LossName, data_type: DataTypeName) -> Metric:
@@ -91,9 +91,7 @@ def bayer_unify(
     elif input_pattern[0:2] == target_pattern[2:4]:
         # Channels are rotated
         h_offset, w_offset = 1, 0
-    elif (
-        input_pattern[0] == target_pattern[1] and input_pattern[2] == target_pattern[3]
-    ):
+    elif input_pattern[0] == target_pattern[1] and input_pattern[2] == target_pattern[3]:
         # Channels are flipped
         h_offset, w_offset = 0, 1
     elif input_pattern[0:2] == target_pattern[3:1:-1]:

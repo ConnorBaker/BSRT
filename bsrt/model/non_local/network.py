@@ -2,7 +2,7 @@
 # from lib.non_local_gaussian import NONLocalBlock2D
 from torch import nn
 
-from .non_local_embedded_gaussian import NONLocalBlock2D
+from bsrt.model.non_local.non_local_embedded_gaussian import NONLocalBlock2D
 
 # from lib.non_local_dot_product import NONLocalBlock2D
 
@@ -12,9 +12,7 @@ class Network(nn.Module):
         super(Network, self).__init__()
 
         self.conv_1 = nn.Sequential(
-            nn.Conv2d(
-                in_channels=1, out_channels=32, kernel_size=3, stride=1, padding=1
-            ),
+            nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.MaxPool2d(2),
@@ -22,9 +20,7 @@ class Network(nn.Module):
 
         self.nl_1 = NONLocalBlock2D(in_channels=32)
         self.conv_2 = nn.Sequential(
-            nn.Conv2d(
-                in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1
-            ),
+            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(64),
             nn.ReLU(),
             nn.MaxPool2d(2),
@@ -32,9 +28,7 @@ class Network(nn.Module):
 
         self.nl_2 = NONLocalBlock2D(in_channels=64)
         self.conv_3 = nn.Sequential(
-            nn.Conv2d(
-                in_channels=64, out_channels=128, kernel_size=3, stride=1, padding=1
-            ),
+            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(128),
             nn.ReLU(),
             nn.MaxPool2d(2),

@@ -25,13 +25,9 @@ assert (
     int(str("").join(torch.__version__.split(".")[0:2])) >= 13
 )  # requires at least pytorch version 1.3.0
 
-torch.set_grad_enabled(
-    False
-)  # make sure to not compute gradients for computational performance
+torch.set_grad_enabled(False)  # make sure to not compute gradients for computational performance
 
-torch.backends.cudnn.enabled = (
-    True  # make sure to use cudnn for computational performance
-)
+torch.backends.cudnn.enabled = True  # make sure to use cudnn for computational performance
 
 ##########################################################
 
@@ -560,9 +556,7 @@ class Network(torch.nn.Module):
             {
                 strKey.replace("module", "net"): tenWeight
                 for strKey, tenWeight in torch.load(
-                    __file__.replace(
-                        "run.py", "network-" + arguments_strModel + ".pytorch"
-                    )
+                    __file__.replace("run.py", "network-" + arguments_strModel + ".pytorch")
                 ).items()
             }
         )

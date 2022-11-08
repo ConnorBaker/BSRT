@@ -7,9 +7,7 @@ import torch
 import utils.spatial_color_alignment as sca_utils
 from metrics.utils.prepare_aligned import prepare_aligned
 from torch import Tensor
-from torchmetrics.functional.image.ssim import (
-    structural_similarity_index_measure as compute_ssim,
-)
+from torchmetrics.functional.image.ssim import structural_similarity_index_measure as compute_ssim
 from torchmetrics.metric import Metric
 
 

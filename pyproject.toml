@@ -14,16 +14,16 @@ readme = "README.md"
 urls = { homepage = "https://github.com/connorbaker/bsrt" }
 requires-python = ">=3.8"
 dependencies = [
-    "pytorch_lightning @ https://github.com/Lightning-AI/lightning/releases/download/1.8.0rc0/pytorch_lightning-1.8.0rc0-py3-none-any.whl",
-    "torchmetrics @ https://github.com/Lightning-AI/metrics/releases/download/v0.10.1/torchmetrics-0.10.1-py3-none-any.whl",
-    "timm==0.6.11",
     # Optuna 3.1.0dev patched for recent versions of PyTorch Lightning
     # See: https://github.com/optuna/optuna/pull/4038
     "optuna @ git+https://github.com/optuna/optuna.git@6ffc603da98c09c37af88e21435e9cf91c86a519",
+    # We are stuck on 1.7.7 until Optuna's PyTorch Lightning integration is updated to remove the on_init_start hook
+    "pytorch_lightning==1.7.7",
+    "torchmetrics @ https://github.com/Lightning-AI/metrics/releases/download/v0.10.1/torchmetrics-0.10.1-py3-none-any.whl",
+    "timm==0.6.11",
     "SQLAlchemy==1.4.42",
     "PyMySQL==1.0.2",
     "wandb==0.13.4",
-    "bagua-cuda116==0.9.1",
     "redis==4.3.4",
     # Install LPIPS patched for newer version of torchvision
     "lpips @ git+https://github.com/ercanburak/PerceptualSimilarity.git@9606c353e5777fc95186a5a4c876e7c6a17651a6",
@@ -32,8 +32,13 @@ dependencies = [
 [project.optional-dependencies]
 lint = ["black==22.10.0", "flake8==4.0.1", "isort==5.10.1", "mypy==0.982"]
 
+[tool.black]
+line-length = 99
+target-version = ['py38']
+
 [tool.isort]
 profile = "black"
+line_length = 99
 
 [tool.setuptools]
 packages = ["bsrt"]

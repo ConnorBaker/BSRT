@@ -22,9 +22,7 @@ class RealWorldBurstTest(Dataset):
             "{}/{:04d}/im_raw_{:02d}.png".format(self.root, index, image_id),
             cv2.IMREAD_UNCHANGED,
         )
-        im_t = torch.from_numpy(im.astype(np.float32)).permute(2, 0, 1).float() / (
-            2**14
-        )
+        im_t = torch.from_numpy(im.astype(np.float32)).permute(2, 0, 1).float() / (2**14)
         return im_t
 
     def __getitem__(self, index):

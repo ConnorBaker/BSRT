@@ -9,14 +9,13 @@ from torch import Tensor
 from torch.nn.parameter import Parameter
 from typing_extensions import Literal
 
+from bsrt.model import arch_util
+from bsrt.model import swin_util as swu
+from bsrt.model.cross_non_local_fusion import CrossNonLocalFusion
+from bsrt.model.flow_guided_pcd_align import FlowGuidedPCDAlign
+from bsrt.model.spynet_util import SpyNet
 from bsrt.option import DataTypeName, LossName
-
-from ..utils.bilinear_upsample_2d import bilinear_upsample_2d
-from . import arch_util
-from . import swin_util as swu
-from .cross_non_local_fusion import CrossNonLocalFusion
-from .flow_guided_pcd_align import FlowGuidedPCDAlign
-from .spynet_util import SpyNet
+from bsrt.utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 
 @dataclass(eq=False)
@@ -172,9 +171,7 @@ class BSRT(nn.Module):
         )
         self.mid_ps = nn.PixelShuffle(2)
 
-        self.fea_L2_conv1 = nn.Conv2d(
-            self.num_features, self.num_features * 2, 3, 2, 1, bias=True
-        )
+        self.fea_L2_conv1 = nn.Conv2d(self.num_features, self.num_features * 2, 3, 2, 1, bias=True)
         self.fea_L3_conv1 = nn.Conv2d(
             self.num_features * 2, self.num_features * 4, 3, 2, 1, bias=True
         )
@@ -201,9 +198,7 @@ class BSRT(nn.Module):
             self.num_features * 1, self.num_features, kernel_size=1, stride=1, padding=0
         )
 
-        self.align = FlowGuidedPCDAlign(
-            nf=self.num_features, groups=self.flow_alignment_groups
-        )
+        self.align = FlowGuidedPCDAlign(nf=self.num_features, groups=self.flow_alignment_groups)
         #####################################################################################################
         ################################### 3, Multi-frame Feature Fusion  ##################################
 
@@ -267,9 +262,7 @@ class BSRT(nn.Module):
         #####################################################################################################
         ################################ 5, high quality image reconstruction ################################
 
-        self.upconv1 = nn.Conv2d(
-            self.embed_dim, self.num_features * 4, 3, 1, 1, bias=True
-        )
+        self.upconv1 = nn.Conv2d(self.embed_dim, self.num_features * 4, 3, 1, 1, bias=True)
         self.upconv2 = nn.Conv2d(self.num_features, 64 * 4, 3, 1, 1, bias=True)
         self.pixel_shuffle = nn.PixelShuffle(2)
         self.HRconv = nn.Conv2d(64, 64, 3, 1, 1, bias=True)
@@ -277,12 +270,8 @@ class BSRT(nn.Module):
 
         #### skip #############
         self.skip_pixel_shuffle = nn.PixelShuffle(2)
-        self.skipup1 = nn.Conv2d(
-            self.in_chans // 4, self.num_features * 4, 3, 1, 1, bias=True
-        )
-        self.skipup2 = nn.Conv2d(
-            self.num_features, self.out_chans * 4, 3, 1, 1, bias=True
-        )
+        self.skipup1 = nn.Conv2d(self.in_chans // 4, self.num_features * 4, 3, 1, 1, bias=True)
+        self.skipup2 = nn.Conv2d(self.num_features, self.out_chans * 4, 3, 1, 1, bias=True)
 
         #### activation function
         self.lrelu = nn.LeakyReLU(0.1, inplace=True)
@@ -358,9 +347,7 @@ class BSRT(nn.Module):
         )
         skip2 = self.skip_pixel_shuffle(self.skipup2(skip1))
 
-        x_ = self.conv_flow(self.flow_ps(x.view(B * N, C, H, W))).view(
-            B, N, -1, H * 2, W * 2
-        )
+        x_ = self.conv_flow(self.flow_ps(x.view(B * N, C, H, W))).view(B, N, -1, H * 2, W * 2)
 
         # calculate flows
         ref_flows = self.get_ref_flows(x_)
@@ -404,21 +391,13 @@ class BSRT(nn.Module):
             ]
             # print(nbr_fea_l[0].shape, flows_l[0].shape)
             nbr_warped_l = [
-                arch_util.flow_warp(
-                    nbr_fea_l[0], flows_l[0].permute(0, 2, 3, 1), "bilinear"
-                ),
-                arch_util.flow_warp(
-                    nbr_fea_l[1], flows_l[1].permute(0, 2, 3, 1), "bilinear"
-                ),
-                arch_util.flow_warp(
-                    nbr_fea_l[2], flows_l[2].permute(0, 2, 3, 1), "bilinear"
-                ),
+                arch_util.flow_warp(nbr_fea_l[0], flows_l[0].permute(0, 2, 3, 1), "bilinear"),
+                arch_util.flow_warp(nbr_fea_l[1], flows_l[1].permute(0, 2, 3, 1), "bilinear"),
+                arch_util.flow_warp(nbr_fea_l[2], flows_l[2].permute(0, 2, 3, 1), "bilinear"),
             ]
             aligned_fea.append(self.align(nbr_fea_l, nbr_warped_l, ref_fea_l, flows_l))
 
-        aligned_fea = torch.stack(
-            aligned_fea, dim=1
-        )  # [B, N, C, H, W] --> [B, T, C, H, W]
+        aligned_fea = torch.stack(aligned_fea, dim=1)  # [B, N, C, H, W] --> [B, T, C, H, W]
 
         if not self.non_local:
             aligned_fea = aligned_fea.view(B, -1, H, W)
@@ -443,9 +422,7 @@ class BSRT(nn.Module):
         b, n, c, h, w = x.size()
         x_nbr = x.reshape(-1, c, h, w)
         x_ref = (
-            x[:, self.center : self.center + 1, :, :, :]
-            .repeat(1, n, 1, 1, 1)
-            .reshape(-1, c, h, w)
+            x[:, self.center : self.center + 1, :, :, :].repeat(1, n, 1, 1, 1).reshape(-1, c, h, w)
         )
 
         # backward

@@ -7,9 +7,7 @@ import torch.nn.functional as F
 
 
 def default_conv(in_channels, out_channels, kernel_size, bias=True):
-    return nn.Conv2d(
-        in_channels, out_channels, kernel_size, padding=(kernel_size // 2), bias=bias
-    )
+    return nn.Conv2d(in_channels, out_channels, kernel_size, padding=(kernel_size // 2), bias=bias)
 
 
 class MeanShift(nn.Conv2d):
@@ -211,11 +209,7 @@ def lanczos_shift(img, shift, p=5, a=3):
     y_shift = shift[:, [0]]
     x_shift = shift[:, [1]]
 
-    k_y = (
-        lanczos_kernel(y_shift, a=a, N=None, dtype=dtype).flip(
-            1
-        )  # flip axis of convolution
-    )[
+    k_y = (lanczos_kernel(y_shift, a=a, N=None, dtype=dtype).flip(1))[  # flip axis of convolution
         :, None, :, None
     ]  # expand dims to get shape (batch, channels, y_kernel, 1)
     k_x = (lanczos_kernel(x_shift, a=a, N=None, dtype=dtype).flip(1))[
@@ -227,9 +221,7 @@ def lanczos_shift(img, shift, p=5, a=3):
     I_s = torch.conv1d(
         I_padded, groups=k_y.shape[0], weight=k_y, padding=[k_y.shape[2] // 2, 0]
     )  # same padding
-    I_s = torch.conv1d(
-        I_s, groups=k_x.shape[0], weight=k_x, padding=[0, k_x.shape[3] // 2]
-    )
+    I_s = torch.conv1d(I_s, groups=k_x.shape[0], weight=k_x, padding=[0, k_x.shape[3] // 2])
 
     I_s = I_s[..., p:-p, p:-p]  # remove padding
 

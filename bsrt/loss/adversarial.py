@@ -8,9 +8,8 @@ import utility
 from torch import Tensor
 from utils.types import GanType
 
+from bsrt.loss.discriminator import Discriminator
 from bsrt.option import Config
-
-from .discriminator import Discriminator
 
 
 @dataclass(eq=False, init=False)
@@ -24,9 +23,7 @@ class Adversarial(nn.Module):
         super().__init__()
         self.gan_type = gan_type
         self.gan_k = config.gan_k
-        self.dis = Discriminator(
-            in_channels=config.n_colors, patch_size=config.patch_size
-        )
+        self.dis = Discriminator(in_channels=config.n_colors, patch_size=config.patch_size)
         # if gan_type == 'WGAN_GP':
         if True:
             # see https://arxiv.org/pdf/1704.00028.pdf pp.4

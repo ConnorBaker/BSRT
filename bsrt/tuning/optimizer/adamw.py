@@ -22,7 +22,5 @@ class AdamWParams:
                 trial.suggest_float("betas_square", low=1e-3, high=1.0, log=True),
             ),
             eps=trial.suggest_float("eps", low=1e-9, high=1e-7, log=True),
-            weight_decay=trial.suggest_float(
-                "weight_decay", low=1e-9, high=1e-3, log=True
-            ),
+            weight_decay=trial.suggest_float("weight_decay", low=1e-9, high=1e-3, log=True),
         )

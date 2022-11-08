@@ -45,9 +45,7 @@ def main_worker(local_rank: int, nprocs: int, config: Config) -> None:
         postprocess_fn = SimplePostProcess(return_np=True)
 
     elif config.data_type == "real":
-        dataset = BurstSRDataset(
-            root=config.root, burst_size=14, crop_sz=80, split="val"
-        )
+        dataset = BurstSRDataset(root=config.root, burst_size=14, crop_sz=80, split="val")
         out_dir = "val/bsrt_real"
         alignment_net: nn.Module = PWCNet(
             load_pretrained=True,
