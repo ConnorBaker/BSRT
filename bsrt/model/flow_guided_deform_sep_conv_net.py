@@ -34,7 +34,7 @@ class FlowGuidedDeformSepConvNet(DeformSepConvNet):
         flows: N, 2, H, W.
         """
         out = self.conv_offset_mask(fea)
-        o1, o2, mask = torch.chunk(out, self.in_channels, dim=1)
+        o1, o2, mask = torch.chunk(out, 3, dim=1)
         offset = torch.cat((o1, o2), dim=1)
         offset = torch.tanh(offset) * 10  # max_residue_magnitude
         offset = offset + flows.flip(1).repeat(1, offset.size(1) // 2, 1, 1)

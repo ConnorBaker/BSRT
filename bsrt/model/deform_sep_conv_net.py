@@ -17,7 +17,7 @@ class DeformSepConvNet(DeformConv2d):
         groups: int = 1,
     ):
         super().__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, groups)
-        channels_ = self.groups * self.in_channels * self.kernel_size[0] * self.kernel_size[1]
+        channels_ = self.groups * 3 * self.kernel_size[0] * self.kernel_size[1]
         self.conv_offset_mask = nn.Conv2d(
             in_channels=in_channels,
             out_channels=channels_,
@@ -39,7 +39,7 @@ class DeformSepConvNet(DeformConv2d):
         fea: other features used for generating offsets and mask: N, C, H, W.
         """
         out = self.conv_offset_mask(fea)
-        o1, o2, mask = torch.chunk(out, self.in_channels, dim=1)
+        o1, o2, mask = torch.chunk(out, 3, dim=1)
         offset = torch.cat((o1, o2), dim=1)
         offset = offset.clamp(-100, 100)
 
