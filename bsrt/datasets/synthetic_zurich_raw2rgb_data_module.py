@@ -1,15 +1,14 @@
 import os
 from dataclasses import dataclass, field
-from typing import Union
+from typing import Callable
 
 import pytorch_lightning as pl
 import torch
 from torch import Tensor
 from torch.utils.data import DataLoader, random_split
 from torch.utils.data.dataset import Dataset
-from typing_extensions import Literal
 
-from bsrt.datasets.synthetic_burst.train_dataset import TrainDataProcessor
+from bsrt.datasets.synthetic_burst.train_dataset import TrainData, TrainDataProcessor
 from bsrt.datasets.zurich_raw2rgb_dataset import ZurichRaw2RgbDataset
 
 
@@ -37,7 +36,7 @@ class SyntheticZurichRaw2RgbDataModule(pl.LightningDataModule):
     crop_size: int
     data_dir: str
     batch_size: int
-    precision: Literal["bf16", 16, 32]
+    precision: torch.dtype
     split_ratio: float = 0.8
     num_workers: int = -1
     pin_memory: bool = False
@@ -64,11 +63,13 @@ class SyntheticZurichRaw2RgbDataModule(pl.LightningDataModule):
 
         # Download the dataset if not present
         ZurichRaw2RgbDataset(data_dir=self.data_dir).download()
-        precision_map = {"bf16": torch.bfloat16, 16: torch.float16, 32: torch.float32}
-        dtype = precision_map[self.precision]
+
+        transform: Callable[[Tensor], TrainData] = TrainDataProcessor(
+            burst_size=self.burst_size, crop_sz=self.crop_size, dtype=self.precision
+        )
         dataset = ZurichRaw2RgbDataset(
             data_dir=self.data_dir,
-            transform=TrainDataProcessor(burst_size=self.burst_size, crop_sz=self.crop_size, dtype=dtype),  # type: ignore
+            transform=transform,
         )
 
         # Split the dataset into train and validation

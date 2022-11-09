@@ -2,12 +2,20 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+from typing import Mapping
 
+import torch
 from typing_extensions import Literal, get_args
 
 OptimizerName = Literal["AdamW", "SGD"]
 SchedulerName = Literal["CosineAnnealingWarmRestarts", "ExponentialLR", "ReduceLROnPlateau"]
-PrecisionName = Literal["bf16", "16", "32"]
+PrecisionName = Literal["bfloat16", "float16", "float32", "float64"]
+PRECISION_MAP: Mapping[PrecisionName, torch.dtype] = {
+    "bfloat16": torch.bfloat16,
+    "float16": torch.float16,
+    "float32": torch.float32,
+    "float64": torch.float64,
+}
 
 
 @dataclass
@@ -21,6 +29,7 @@ class TunerConfig:
     scheduler: SchedulerName
     precision: PrecisionName
 
+    data_dir: str
     num_trials: int
     max_epochs: int
     batch_size: int
@@ -36,6 +45,7 @@ class TunerConfig:
             optimizer=args.optimizer,
             scheduler=args.scheduler,
             precision=args.precision,
+            data_dir=args.data_dir,
             num_trials=args.num_trials,
             max_epochs=args.max_epochs,
             batch_size=args.batch_size,
@@ -78,6 +88,7 @@ CLI_PARSER.add_argument(
 
 
 CLI_PARSER.add_argument_group("DataLoader")
+CLI_PARSER.add_argument("--data_dir", type=str, required=True, help="Path to data directory")
 CLI_PARSER.add_argument("--num_trials", type=int, required=True, help="Number of trials")
 CLI_PARSER.add_argument("--max_epochs", type=int, required=True, help="Max number of epochs")
 CLI_PARSER.add_argument("--batch_size", type=int, required=True, help="Batch size")

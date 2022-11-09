@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
+from typing import TypedDict
 
 import torch
 from torch import Tensor
-from typing_extensions import ClassVar, TypedDict
 
 from bsrt.data_processing.synthetic_burst_generation import (
     ImageProcessingParams,

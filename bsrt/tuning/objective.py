@@ -1,8 +1,7 @@
 import sys
 from logging import StreamHandler
-from typing import NewType, Tuple
+from typing import Mapping, NewType, Tuple
 
-import wandb
 from optuna import Trial
 from optuna.exceptions import TrialPruned
 from optuna.logging import get_logger
@@ -13,8 +12,9 @@ from pytorch_lightning.trainer import Trainer
 from pytorch_lightning.utilities.seed import seed_everything
 from typing_extensions import Literal
 
+import wandb
 from bsrt.lighting_bsrt import LightningBSRT
-from bsrt.tuning.cli_parser import TunerConfig
+from bsrt.tuning.cli_parser import PrecisionName, TunerConfig
 from bsrt.tuning.lr_scheduler.cosine_annealing_warm_restarts import (
     CosineAnnealingWarmRestartsParams,
 )
@@ -145,27 +145,24 @@ def objective(
     wandb_kwargs["group"] = config.experiment_name
     wandb_logger = WandbLogger(**wandb_kwargs)
 
-    if config.precision == "bf16":
-        precision = "bf16"
-    elif config.precision == "16":
-        precision = 16
-    elif config.precision == "32":
-        precision = 32
-    else:
-        logger.error(f"Unknown precision: {config.precision}")
-        raise ValueError(f"Unknown precision {config.precision}")
+    precision_name_to_lightning_precision: Mapping[PrecisionName, Literal["bf16", 16, 32, 64]] = {
+        "bfloat16": "bf16",
+        "float16": 16,
+        "float32": 32,
+        "float64": 64,
+    }
 
     trainer = Trainer(
         accelerator="auto",
         devices="auto",
-        precision=precision,
+        precision=precision_name_to_lightning_precision[config.precision],
         enable_checkpointing=False,
         limit_train_batches=config.limit_train_batches,
         limit_val_batches=config.limit_val_batches,
         max_epochs=config.max_epochs,
         detect_anomaly=False,
         enable_model_summary=False,
-        enable_progress_bar=False,
+        enable_progress_bar=True,
         logger=wandb_logger,
         replace_sampler_ddp=False,
         callbacks=[

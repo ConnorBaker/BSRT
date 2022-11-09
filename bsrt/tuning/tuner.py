@@ -5,14 +5,14 @@ from sys import stdout
 import optuna
 import torch
 import torch.cuda
-import wandb
 from optuna.logging import get_logger
 from optuna.samplers import TPESampler
 from optuna.storages import RDBStorage, RetryFailedTrialCallback
 from pytorch_lightning.utilities.seed import seed_everything
 
+import wandb
 from bsrt.datasets.synthetic_zurich_raw2rgb_data_module import SyntheticZurichRaw2RgbDataModule
-from bsrt.tuning.cli_parser import CLI_PARSER, TunerConfig
+from bsrt.tuning.cli_parser import CLI_PARSER, PRECISION_MAP, TunerConfig
 from bsrt.tuning.objective import objective
 
 # Add stream handler of stdout to show the messages
@@ -39,22 +39,14 @@ if __name__ == "__main__":
     config = TunerConfig.from_args(args)
     wandb.login(key=config.wandb_api_key)
 
-    if config.precision == "bf16":
-        precision = "bf16"
-    elif config.precision == "16":
-        precision = 16
-    elif config.precision == "32":
-        precision = 32
-    else:
-        raise ValueError(f"Unknown precision {config.precision}")
-
     datamodule = SyntheticZurichRaw2RgbDataModule(
-        precision=precision,
+        precision=PRECISION_MAP[config.precision],
         crop_size=256,
-        data_dir="/home/connorbaker/ramdisk/datasets",
+        data_dir=config.data_dir,
         burst_size=14,
         batch_size=config.batch_size,
         num_workers=-1,
+        prefetch_factor=4,
         pin_memory=True,
         persistent_workers=True,
     )
