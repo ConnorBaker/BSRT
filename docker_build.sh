@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 
-set -eou pipefail
+set -euxo pipefail
 
-RELEASE="${RELEASE:-22.09}"
-BASE_IMAGE="nvcr.io/nvidia/pytorch:${RELEASE}-py3"
-TAG="connorbaker01/bsrt:${RELEASE}"
+CUDA_VERSION="${CUDA_VERSION:-11.8.0}"
+BASE_IMAGE="mambaorg/micromamba:1.0-jammy-cuda-${CUDA_VERSION}"
+TAG="connorbaker01/bsrt:jammy-cuda-${CUDA_VERSION}"
 
 echo "---------------------------------------------"
 echo "Build Arguments:"
-echo "RELEASE: ${RELEASE}"
+echo "CUDA_VERSION: ${CUDA_VERSION}"
 echo "BASE_IMAGE: ${BASE_IMAGE}"
 echo "TAG: ${TAG}"
 echo "---------------------------------------------"

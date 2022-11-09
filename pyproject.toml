@@ -1,5 +1,6 @@
 [build-system]
-requires = ["setuptools >= 58.0", "cython", "wheel"]
+# TODO(connor): Are cython and wheel still necessary?
+requires = ["setuptools >= 65", "cython", "wheel"]
 
 [project]
 name = "bsrt"
@@ -14,6 +15,8 @@ readme = "README.md"
 urls = { homepage = "https://github.com/connorbaker/bsrt" }
 requires-python = ">=3.8"
 dependencies = [
+    "torch==1.13.0",
+    "torchvision==0.14.0",
     # Optuna 3.1.0dev patched for recent versions of PyTorch Lightning
     # See: https://github.com/optuna/optuna/pull/4038
     "optuna @ git+https://github.com/optuna/optuna.git@6ffc603da98c09c37af88e21435e9cf91c86a519",
@@ -34,7 +37,7 @@ lint = ["black==22.10.0", "flake8==4.0.1", "isort==5.10.1", "mypy==0.982"]
 
 [tool.black]
 line-length = 99
-target-version = ['py38']
+target-version = ['py310']
 
 [tool.isort]
 profile = "black"
