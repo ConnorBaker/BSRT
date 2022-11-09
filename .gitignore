@@ -131,3 +131,4 @@ dmypy.json
 # ML
 .vscode
 lightning_logs
+wandb
