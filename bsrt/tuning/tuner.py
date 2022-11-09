@@ -7,7 +7,6 @@ import torch
 import torch.cuda
 import wandb
 from optuna.logging import get_logger
-from optuna.pruners import HyperbandPruner
 from optuna.samplers import TPESampler
 from optuna.storages import RDBStorage, RetryFailedTrialCallback
 from pytorch_lightning.utilities.seed import seed_everything
@@ -74,12 +73,6 @@ if __name__ == "__main__":
             group=True,
             n_startup_trials=10,
             n_ei_candidates=24,
-        ),
-        pruner=HyperbandPruner(
-            min_resource=2,
-            max_resource=config.max_epochs,
-            reduction_factor=3,
-            bootstrap_count=2,
         ),
         study_name=study_name,
         load_if_exists=True,

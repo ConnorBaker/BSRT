@@ -5,7 +5,6 @@ from typing import NewType, Tuple
 import wandb
 from optuna import Trial
 from optuna.exceptions import TrialPruned
-from optuna.integration.pytorch_lightning import PyTorchLightningPruningCallback
 from optuna.logging import get_logger
 from pytorch_lightning import LightningDataModule, LightningModule
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
@@ -170,9 +169,6 @@ def objective(
         logger=wandb_logger,
         replace_sampler_ddp=False,
         callbacks=[
-            PyTorchLightningPruningCallback(trial, monitor="val/psnr"),
-            PyTorchLightningPruningCallback(trial, monitor="val/ms_ssim"),
-            PyTorchLightningPruningCallback(trial, monitor="val/lpips"),
             MinEpochsEarlyStopping(
                 monitor="val/psnr",
                 min_delta=1.0,
