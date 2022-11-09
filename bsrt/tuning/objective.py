@@ -2,6 +2,7 @@ import sys
 from logging import StreamHandler
 from typing import Mapping, NewType, Tuple
 
+from lightning_lite.utilities.seed import seed_everything
 from optuna import Trial
 from optuna.exceptions import TrialPruned
 from optuna.logging import get_logger
@@ -9,7 +10,6 @@ from pytorch_lightning import LightningDataModule, LightningModule
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.trainer import Trainer
-from pytorch_lightning.utilities.seed import seed_everything
 from typing_extensions import Literal
 
 import wandb

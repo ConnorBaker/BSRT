@@ -5,10 +5,10 @@ from sys import stdout
 import optuna
 import torch
 import torch.cuda
+from lightning_lite.utilities.seed import seed_everything
 from optuna.logging import get_logger
 from optuna.samplers import TPESampler
 from optuna.storages import RDBStorage, RetryFailedTrialCallback
-from pytorch_lightning.utilities.seed import seed_everything
 
 import wandb
 from bsrt.datasets.synthetic_zurich_raw2rgb_data_module import SyntheticZurichRaw2RgbDataModule
