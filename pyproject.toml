@@ -22,7 +22,7 @@ dependencies = [
     "timm==0.6.11",
     "SQLAlchemy==1.4.43",
     "PyMySQL==1.0.2",
-    "wandb==0.13.4",
+    "wandb==0.13.5",
     # Install LPIPS patched for newer version of torchvision
     "lpips @ git+https://github.com/ercanburak/PerceptualSimilarity.git@9606c353e5777fc95186a5a4c876e7c6a17651a6",
 ]
