@@ -2,6 +2,7 @@ import sys
 from logging import StreamHandler
 from typing import Mapping, NewType, Tuple
 
+import wandb
 from lightning_lite.utilities.seed import seed_everything
 from optuna import Trial
 from optuna.exceptions import TrialPruned
@@ -12,7 +13,6 @@ from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.trainer import Trainer
 from typing_extensions import Literal
 
-import wandb
 from bsrt.lighting_bsrt import LightningBSRT
 from bsrt.tuning.cli_parser import PrecisionName, TunerConfig
 from bsrt.tuning.lr_scheduler.cosine_annealing_warm_restarts import (

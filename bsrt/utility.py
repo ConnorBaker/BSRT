@@ -1,72 +1,11 @@
-import os
-from typing import Union, cast
+from typing import cast
 
 import torch
 import torch.nn.functional as F
-import torch.optim as optim
-import torch.optim.lr_scheduler as lrs
-from torch import Tensor, nn
-from torchmetrics.metric import Metric
-from typing_extensions import Literal, get_args, overload
+from torch import Tensor
+from typing_extensions import get_args
 
-from bsrt.metrics.aligned.l1 import AlignedL1
-from bsrt.metrics.aligned.psnr import AlignedPSNR
-from bsrt.option import DataTypeName, LossName
-from bsrt.utils.postprocessing_functions import BurstSRPostProcess, SimplePostProcess
 from bsrt.utils.types import BayerPattern, NormalizationMode
-
-
-def make_loss_fn(loss: LossName, data_type: DataTypeName) -> Metric:
-    if loss == "L1":
-        if data_type == "synthetic":
-            return L1()
-        elif data_type == "real":
-            # FIXME: Reduce duplication with make_psnr_fn by using the same alignment_net
-            from pwcnet.pwcnet import PWCNet
-
-            alignment_net = PWCNet()
-            for param in alignment_net.parameters():
-                param.requires_grad = False
-            return AlignedL1(alignment_net=alignment_net, boundary_ignore=40)
-
-    elif loss == "MSE":
-        return L2()
-    elif loss == "CB":
-        return CharbonnierLoss()
-    elif loss == "MSSSIM":
-        return MSSSIMLoss()
-
-
-@overload
-def make_postprocess_fn(data_type: Literal["synthetic"]) -> SimplePostProcess:
-    ...
-
-
-@overload
-def make_postprocess_fn(data_type: Literal["real"]) -> BurstSRPostProcess:
-    ...
-
-
-def make_postprocess_fn(
-    data_type: DataTypeName,
-) -> Union[BurstSRPostProcess, SimplePostProcess]:
-    if data_type == "synthetic":
-        return SimplePostProcess(return_np=True)
-    elif data_type == "real":
-        return BurstSRPostProcess(return_np=True)
-
-
-def make_psnr_fn(data_type: DataTypeName) -> Metric:
-    if data_type == "synthetic":
-        return PSNR(boundary_ignore=40)
-    elif data_type == "real":
-        from pwcnet.pwcnet import PWCNet
-
-        alignment_net = PWCNet()
-        for param in alignment_net.parameters():
-            param.requires_grad = False
-        return AlignedPSNR(alignment_net=alignment_net, boundary_ignore=40)
-
 
 ######################## BayerUnifyAug ############################
 
@@ -120,7 +59,8 @@ def bayer_aug(
     Apply augmentation to a bayer raw image.
     """
 
-    aug_pattern, target_pattern = input_pattern, input_pattern
+    aug_pattern: str = input_pattern
+    target_pattern: BayerPattern = input_pattern
 
     out = raw
     if flip_h:

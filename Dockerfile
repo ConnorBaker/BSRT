@@ -1,5 +1,5 @@
-ARG BASE_IMAGE
-FROM ${BASE_IMAGE}
+ARG CUDA_VERSION=11.8.0
+FROM mambaorg/micromamba:1.0-jammy-cuda-${CUDA_VERSION}
 
 RUN \
     --mount=type=cache,target=/var/cache/micromamba \

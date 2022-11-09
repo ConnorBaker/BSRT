@@ -21,31 +21,32 @@ Additionally, some also support batch operations, i.e. inputs of shape (b, c, h,
 def random_ccm() -> Tensor:
     """Generates random RGB -> Camera color correction matrices."""
     # Takes a random convex combination of XYZ -> Camera CCMs.
-    xyz2cams = [
+    xyz2cams = torch.tensor(
         [
-            [1.0234, -0.2969, -0.2266],
-            [-0.5625, 1.6328, -0.0469],
-            [-0.0703, 0.2188, 0.6406],
-        ],
-        [
-            [0.4913, -0.0541, -0.0202],
-            [-0.613, 1.3513, 0.2906],
-            [-0.1564, 0.2151, 0.7183],
-        ],
-        [
-            [0.838, -0.263, -0.0639],
-            [-0.2887, 1.0725, 0.2496],
-            [-0.0627, 0.1427, 0.5438],
-        ],
-        [
-            [0.6596, -0.2079, -0.0562],
-            [-0.4782, 1.3016, 0.1933],
-            [-0.097, 0.1581, 0.5181],
-        ],
-    ]
+            [
+                [1.0234, -0.2969, -0.2266],
+                [-0.5625, 1.6328, -0.0469],
+                [-0.0703, 0.2188, 0.6406],
+            ],
+            [
+                [0.4913, -0.0541, -0.0202],
+                [-0.613, 1.3513, 0.2906],
+                [-0.1564, 0.2151, 0.7183],
+            ],
+            [
+                [0.838, -0.263, -0.0639],
+                [-0.2887, 1.0725, 0.2496],
+                [-0.0627, 0.1427, 0.5438],
+            ],
+            [
+                [0.6596, -0.2079, -0.0562],
+                [-0.4782, 1.3016, 0.1933],
+                [-0.097, 0.1581, 0.5181],
+            ],
+        ]
+    )
 
     num_ccms = len(xyz2cams)
-    xyz2cams = torch.tensor(xyz2cams)
 
     weights = torch.FloatTensor(num_ccms, 1, 1).uniform_(0.0, 1.0)
     weights_sum = weights.sum()
@@ -178,13 +179,13 @@ def process_linear_image_rgb(
 @overload
 def process_linear_image_rgb(
     image: Tensor, meta_info: MetaInfo, return_np: Literal[True]
-) -> npt.NDArray[np.float32]:
+) -> npt.NDArray[np.uint8]:
     ...
 
 
 def process_linear_image_rgb(
     image: Tensor, meta_info: MetaInfo, return_np: bool = False
-) -> Union[Tensor, npt.NDArray[np.float32]]:
+) -> Union[Tensor, npt.NDArray[np.uint8]]:
     image = meta_info.gains.apply(image)
     image = apply_ccm(image, meta_info.cam2rgb)
 

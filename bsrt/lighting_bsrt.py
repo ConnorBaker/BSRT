@@ -122,7 +122,7 @@ class LightningBSRT(LightningModule):
         opt = configure_optimizer(self.model, self.optimizer_params)
         scheduler = configure_scheduler(opt, self.scheduler_params)
 
-        ret = {
+        ret: Dict[str, Union[Optimizer, _LRScheduler, str]] = {
             "optimizer": opt,
             "lr_scheduler": scheduler,
         }

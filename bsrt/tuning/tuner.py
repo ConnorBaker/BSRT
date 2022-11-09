@@ -5,12 +5,12 @@ from sys import stdout
 import optuna
 import torch
 import torch.cuda
+import wandb
 from lightning_lite.utilities.seed import seed_everything
 from optuna.logging import get_logger
 from optuna.samplers import TPESampler
 from optuna.storages import RDBStorage, RetryFailedTrialCallback
 
-import wandb
 from bsrt.datasets.synthetic_zurich_raw2rgb_data_module import SyntheticZurichRaw2RgbDataModule
 from bsrt.tuning.cli_parser import CLI_PARSER, PRECISION_MAP, TunerConfig
 from bsrt.tuning.objective import objective

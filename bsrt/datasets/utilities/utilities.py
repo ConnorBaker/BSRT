@@ -1,75 +1,68 @@
-import cv2
+from typing import TypeVar, Union, overload
+
 import numpy as np
+import numpy.typing as npt
 import torch
 
+_T = TypeVar("_T", bound=np.floating)
 
-def pack_raw_image(im_raw):
+
+@overload
+def pack_raw_image(im_raw: npt.NDArray[_T]) -> npt.NDArray[_T]:
+    ...
+
+
+@overload
+def pack_raw_image(im_raw: torch.Tensor) -> torch.Tensor:
+    ...
+
+
+def pack_raw_image(
+    im_raw: Union[npt.NDArray[_T], torch.Tensor]
+) -> Union[npt.NDArray[_T], torch.Tensor]:
+    im_out: Union[npt.NDArray[_T], torch.Tensor]
     if isinstance(im_raw, np.ndarray):
         im_out = np.zeros_like(im_raw, shape=(4, im_raw.shape[0] // 2, im_raw.shape[1] // 2))
+        for i in range(4):
+            im_out[i, :, :] = im_raw[(i // 2) :: 2, i::2]
+        return im_out
     elif isinstance(im_raw, torch.Tensor):
         im_out = torch.zeros((4, im_raw.shape[0] // 2, im_raw.shape[1] // 2), dtype=im_raw.dtype)
+        for i in range(4):
+            im_out[i, :, :] = im_raw[(i // 2) :: 2, i::2]
+        return im_out
     else:
         raise Exception
 
-    im_out[0, :, :] = im_raw[0::2, 0::2]
-    im_out[1, :, :] = im_raw[0::2, 1::2]
-    im_out[2, :, :] = im_raw[1::2, 0::2]
-    im_out[3, :, :] = im_raw[1::2, 1::2]
-    return im_out
+
+@overload
+def flatten_raw_image(im_raw_4ch: npt.NDArray[_T]) -> npt.NDArray[_T]:
+    ...
 
 
-def flatten_raw_image(im_raw_4ch):
+@overload
+def flatten_raw_image(im_raw_4ch: torch.Tensor) -> torch.Tensor:
+    ...
+
+
+def flatten_raw_image(
+    im_raw_4ch: Union[npt.NDArray[_T], torch.Tensor]
+) -> Union[npt.NDArray[_T], torch.Tensor]:
+    im_out: Union[npt.NDArray[_T], torch.Tensor]
     if isinstance(im_raw_4ch, np.ndarray):
         im_out = np.zeros_like(
             im_raw_4ch, shape=(im_raw_4ch.shape[1] * 2, im_raw_4ch.shape[2] * 2)
         )
+        for i in range(4):
+            im_out[(i // 2) :: 2, i::2] = im_raw_4ch[i, :, :]
+        return im_out
+
     elif isinstance(im_raw_4ch, torch.Tensor):
         im_out = torch.zeros(
             (im_raw_4ch.shape[1] * 2, im_raw_4ch.shape[2] * 2), dtype=im_raw_4ch.dtype
         )
+        for i in range(4):
+            im_out[(i // 2) :: 2, i::2] = im_raw_4ch[i, :, :]
+        return im_out
     else:
         raise Exception
-
-    im_out[0::2, 0::2] = im_raw_4ch[0, :, :]
-    im_out[0::2, 1::2] = im_raw_4ch[1, :, :]
-    im_out[1::2, 0::2] = im_raw_4ch[2, :, :]
-    im_out[1::2, 1::2] = im_raw_4ch[3, :, :]
-
-    return im_out
-
-
-def pack_raw_image_batch(im_raw):
-    im_out = torch.zeros(
-        (
-            im_raw.shape[0],
-            im_raw.shape[1],
-            4,
-            im_raw.shape[3] // 2,
-            im_raw.shape[4] // 2,
-        ),
-        dtype=im_raw.dtype,
-    )
-    im_out[:, :, 0, :, :] = im_raw[:, :, 0, 0::2, 0::2]
-    im_out[:, :, 1, :, :] = im_raw[:, :, 0, 0::2, 1::2]
-    im_out[:, :, 2, :, :] = im_raw[:, :, 0, 1::2, 0::2]
-    im_out[:, :, 3, :, :] = im_raw[:, :, 0, 1::2, 1::2]
-    return im_out
-
-
-def flatten_raw_image_batch(im_raw_4ch):
-    im_out = torch.zeros(
-        (
-            im_raw_4ch.shape[0],
-            im_raw_4ch.shape[1],
-            1,
-            im_raw_4ch.shape[3] * 2,
-            im_raw_4ch.shape[4] * 2,
-        ),
-        dtype=im_raw_4ch.dtype,
-    )
-    im_out[:, :, 0, 0::2, 0::2] = im_raw_4ch[:, :, 0, :, :]
-    im_out[:, :, 0, 0::2, 1::2] = im_raw_4ch[:, :, 1, :, :]
-    im_out[:, :, 0, 1::2, 0::2] = im_raw_4ch[:, :, 2, :, :]
-    im_out[:, :, 0, 1::2, 1::2] = im_raw_4ch[:, :, 3, :, :]
-
-    return im_out

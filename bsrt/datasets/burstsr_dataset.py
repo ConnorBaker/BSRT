@@ -1,8 +1,7 @@
-import os
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Tuple, Union, overload
+from typing import Any, ClassVar, Dict, List, Optional, Tuple, Union, overload
 
 import torch
 import torch.nn.functional as F
@@ -122,28 +121,29 @@ class BurstSRDataset(Dataset):
         im_ids: List[int] = self._sample_images()
 
         # Read the burst images along with HR ground truth, if available
-        if self.split == "test":
-            frames, meta_info = self.get_burst(self.split, index, im_ids)
-        else:
+        gt: Optional[CanonImage] = None
+        if self.split != "test":
             frames, gt, meta_info = self.get_burst(self.split, index, im_ids)
+        else:
+            frames, meta_info = self.get_burst(self.split, index, im_ids)
 
         # Extract crop if needed
-        if frames[0].shape()[-1] != self.crop_sz:
+        if frames[0].im_raw.shape[-1] != self.crop_sz:
             if self.center_crop:
-                r1: int = random.randint(0, frames[0].shape()[-2] - self.crop_sz)
-                c1: int = random.randint(0, frames[0].shape()[-1] - self.crop_sz)
+                r1 = random.randint(0, frames[0].im_raw.shape[-2] - self.crop_sz)
+                c1 = random.randint(0, frames[0].im_raw.shape[-1] - self.crop_sz)
 
             else:
-                r1: int = (frames[0].shape()[-2] - self.crop_sz) // 2
-                c1: int = (frames[0].shape()[-1] - self.crop_sz) // 2
+                r1 = (frames[0].im_raw.shape[-2] - self.crop_sz) // 2
+                c1 = (frames[0].im_raw.shape[-1] - self.crop_sz) // 2
 
             r2 = r1 + self.crop_sz
             c2 = c1 + self.crop_sz
 
             frames = [im.get_crop(r1, r2, c1, c2) for im in frames]
 
-            if self.split != "test":
-                scale_factor: int = gt.shape()[-1] // frames[0].shape()[-1]
+            if gt is not None:
+                scale_factor: int = gt.im_raw.shape[-1] // frames[0].im_raw.shape[-1]
                 gt = gt.get_crop(
                     scale_factor * r1,
                     scale_factor * r2,
@@ -162,7 +162,8 @@ class BurstSRDataset(Dataset):
         ]
 
         # Convert to tensor
-        if self.split != "test":
+        gt_image_data: Optional[Tensor] = None
+        if gt is not None:
             gt_image_data = gt.get_image_data(
                 normalize=True,
                 white_balance=self.white_balance,
@@ -182,7 +183,7 @@ class BurstSRDataset(Dataset):
                     )[:, 1:-1].contiguous()
                     for im in burst_image_data
                 ]
-                if self.split != "test":
+                if gt_image_data is not None:
                     gt_image_data = gt_image_data.flip(
                         [
                             2,
@@ -200,7 +201,7 @@ class BurstSRDataset(Dataset):
                     )[1:-1, :].contiguous()
                     for im in burst_image_data
                 ]
-                if self.split != "test":
+                if gt_image_data is not None:
                     gt_image_data = gt_image_data.flip(
                         [
                             1,
@@ -214,7 +215,7 @@ class BurstSRDataset(Dataset):
                 F.pad(im.unsqueeze(0), pad, mode="replicate").squeeze(0) for im in burst_image_data
             ]
 
-            if self.split != "test":
+            if gt_image_data is not None:
                 gt_image_data = F.pad(
                     gt_image_data.unsqueeze(0), [4 * p for p in pad], mode="replicate"
                 ).squeeze(0)
@@ -223,7 +224,7 @@ class BurstSRDataset(Dataset):
 
         burst_image_meta_info["black_level_subtracted"] = self.substract_black_level
         burst_image_meta_info["while_balance_applied"] = self.white_balance
-        burst_image_meta_info["norm_factor"] = frames[0].norm_factor
+        burst_image_meta_info["norm_factor"] = frames[0].metadata.norm_factor
 
         burst = torch.stack(burst_image_data, dim=0)
         burst_exposure = frames[0].get_exposure_time()
@@ -244,7 +245,7 @@ class BurstSRDataset(Dataset):
 
         meta_info_burst["burst_name"] = meta_info["burst_name"]
 
-        if self.split != "test":
+        if gt is not None and gt_image_data is not None:
             gt_image_meta_info = gt.get_all_meta_data()
 
             canon_exposure = gt.get_exposure_time()
