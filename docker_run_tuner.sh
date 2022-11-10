@@ -1,25 +1,31 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
+set -euxo pipefail
 
-docker run --gpus all \
-  --mount type=bind,source="$(pwd)",target=/BSRT \
-  --mount type=bind,source=/home/connorbaker/ramdisk/datasets,target=/home/connorbaker/ramdisk/datasets \
+# if $HOME/ramdisk doesn't exist, create it
+if [ ! -d "$HOME/ramdisk" ]; then
+  mkdir "$HOME/ramdisk"
+  sudo mount -t tmpfs tmpfs "$HOME/ramdisk"
+  sudo chown $USER:$USER -R "$HOME/ramdisk"
+  mkdir "$HOME/ramdisk/datasets"
+fi
+
+docker run \
+  --gpus all \
+  --mount type=bind,source="$HOME/ramdisk/datasets",target=/datasets \
   --ipc=host \
   --ulimit memlock=-1 \
   --ulimit stack=67108864 \
-  connorbaker01/bsrt:22.09 python \
-  -m bagua.distributed.run \
-  --enable_bagua_net \
-  --autotune_level 1 \
-  -m bsrt.tuning.tuner \
+  --rm connorbaker01/bsrt:main \
+  python -m bsrt.tuning.tuner \
   --experiment_name "model_with_adam_plateau" \
-  --optimizer "DecoupledAdamW" \
+  --optimizer "AdamW" \
   --scheduler "ReduceLROnPlateau" \
-  --precision "bf16" \
+  --precision "bfloat16" \
   --num_trials 1 \
-  --max_epochs 10 \
+  --max_epochs 20 \
   --batch_size 16 \
-  --limit_train_batches 0.01 \
-  --limit_val_batches 0.01 \
+  --limit_train_batches 0.1 \
+  --limit_val_batches 0.1 \
+  --data_dir /datasets \
   "${@}"
