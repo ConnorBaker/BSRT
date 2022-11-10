@@ -175,6 +175,7 @@ def objective(
         enable_progress_bar=True,
         logger=wandb_logger,
         replace_sampler_ddp=False,
+        num_sanity_val_steps=0,
         callbacks=[
             MinEpochsEarlyStopping(
                 monitor="val/psnr",
@@ -227,10 +228,11 @@ def objective(
             logger.error(f"CUDA out of memory error: {e}")
             wandb.finish(1)
             raise TrialPruned()
-        elif isinstance(e, ValueError):
-            logger.error(f"Value error: {e}")
-            wandb.finish(1)
-            raise TrialPruned()
+        # TODO: We want to make sure this is a known value error (e.g. NAN).
+        # elif isinstance(e, ValueError):
+        #     logger.error(f"Value error: {e}")
+        #     wandb.finish(1)
+        #     raise TrialPruned()
         else:
             logger.error(f"Unknown error: {e}")
             wandb.finish(1)
