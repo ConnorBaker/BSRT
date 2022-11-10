@@ -354,7 +354,6 @@ class BSRT(nn.Module):
             _aligned_fea.append(self.align(nbr_fea_l, nbr_warped_l, ref_fea_l, flows_l))
 
         aligned_fea = torch.stack(_aligned_fea, dim=1)  # [B, N, C, H, W] --> [B, T, C, H, W]
-        aligned_fea = aligned_fea.view(B, -1, H, W)
 
         x = self.lrelu(self.fusion(aligned_fea))
 
