@@ -36,10 +36,8 @@ class PyConv2d(nn.Module):
         super(PyConv2d, self).__init__()
 
         assert len(out_channels) == len(pyconv_kernels) == len(pyconv_groups)
-
-        self.pyconv_levels = [None] * len(pyconv_kernels)
-        for i in range(len(pyconv_kernels)):
-            self.pyconv_levels[i] = nn.Conv2d(
+        self.pyconv_levels = nn.ModuleList(
+            nn.Conv2d(
                 in_channels,
                 out_channels[i],
                 kernel_size=pyconv_kernels[i],
@@ -49,7 +47,8 @@ class PyConv2d(nn.Module):
                 dilation=dilation,
                 bias=bias,
             )
-        self.pyconv_levels = nn.ModuleList(self.pyconv_levels)
+            for i in range(len(pyconv_kernels))
+        )
 
     def forward(self, x):
         out = []

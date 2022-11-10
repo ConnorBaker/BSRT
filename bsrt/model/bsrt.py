@@ -1,12 +1,10 @@
-import functools
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Union
+from typing import List, Type, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
-from torch.nn.parameter import Parameter
 from typing_extensions import Literal
 
 from bsrt.model import arch_util
@@ -23,7 +21,6 @@ class BSRT(nn.Module):
     """BurstSR model
 
     Args:
-        ape (bool): absolute position embedding
         attn_drop_rate (float): attention drop rate
         data_type (str): Whether operating on synthetic or real data. Must be one of "synthetic" or "real".
         drop_path_rate (float): drop path rate
@@ -34,7 +31,6 @@ class BSRT(nn.Module):
         lr (float): learning rate
         mlp_ratio (float): mlp ratio
         model_level (str): S or L for small or large model
-        non_local (bool): non local
         norm_layer (int -> nn.Module): normalization layer
         num_features (int): number of features in the feature extraction network
         num_frames (int): number of frames in the burst
@@ -43,13 +39,11 @@ class BSRT(nn.Module):
         patch_size (int): patch size
         qk_scale (float | None): qk scale
         qkv_bias (bool): qkv bias
-        swinfeature (bool): swin feature
         upscale (int): upscale
         use_swin_checkpoint (bool): use swin checkpoint
         window_size (int): window size
     """
 
-    ape: bool = False
     attn_drop_rate: float = 0.0
     data_type: DataTypeName = "synthetic"
     drop_path_rate: float = 0.1
@@ -60,8 +54,7 @@ class BSRT(nn.Module):
     lr: float = 1e-4
     mlp_ratio: float = 4.0
     model_level: Literal["S", "L"] = "S"
-    non_local: bool = False
-    norm_layer: Callable[[int], nn.LayerNorm] = nn.LayerNorm
+    norm_layer: Type[nn.LayerNorm] = nn.LayerNorm
     num_features: int = 64
     num_frames: int = 14
     out_chans: int = 3  # RGB output so 3 channels
@@ -69,7 +62,6 @@ class BSRT(nn.Module):
     patch_size: int = 1
     qk_scale: Union[float, None] = None
     qkv_bias: bool = True
-    swinfeature: bool = False
     upscale: int = 4
     use_swin_checkpoint: bool = False
     window_size: int = 7
@@ -135,36 +127,32 @@ class BSRT(nn.Module):
         )
 
         # stochastic depth
-        dpr = torch.linspace(
+        dpr: List[float] = torch.linspace(
             0, self.drop_path_rate, sum(self.depths)
         ).tolist()  # stochastic depth decay rule
 
-        if self.swinfeature:
-            self.pre_layers = nn.ModuleList()
-            for i_layer in range(self.depths[0]):
-                layer = swu.SwinTransformerBlock(
-                    dim=self.embed_dim,
-                    input_resolution=(
-                        self.patch_embed.patches_resolution[0] // 2,
-                        self.patch_embed.patches_resolution[1] // 2,
-                    ),
-                    num_heads=self.num_heads[0],
-                    window_size=self.window_size,
-                    shift_size=0 if (i_layer % 2 == 0) else self.window_size // 2,
-                    mlp_ratio=self.mlp_ratio,
-                    qkv_bias=self.qkv_bias,
-                    qk_scale=self.qk_scale,
-                    drop=self.drop_rate,
-                    attn_drop=self.attn_drop_rate,
-                    drop_path=dpr[i_layer],
-                    norm_layer=self.norm_layer,
-                )
-                self.pre_layers.append(layer)
+        self.pre_layers = nn.ModuleList()
+        for i_layer in range(self.depths[0]):
+            layer = swu.SwinTransformerBlock(
+                dim=self.embed_dim,
+                input_resolution=(
+                    self.patch_embed.patches_resolution[0] // 2,
+                    self.patch_embed.patches_resolution[1] // 2,
+                ),
+                num_heads=self.num_heads[0],
+                window_size=self.window_size,
+                shift_size=0 if (i_layer % 2 == 0) else self.window_size // 2,
+                mlp_ratio=self.mlp_ratio,
+                qkv_bias=self.qkv_bias,
+                qk_scale=self.qk_scale,
+                drop=self.drop_rate,
+                attn_drop=self.attn_drop_rate,
+                drop_path=dpr[i_layer],
+                norm_layer=self.norm_layer,
+            )
+            self.pre_layers.append(layer)
 
-            self.pre_norm = self.norm_layer(self.embed_dim)
-        else:
-            WARB = functools.partial(arch_util.WideActResBlock, nf=self.embed_dim)
-            self.feature_extraction = arch_util.make_layer(WARB, 5)
+        self.pre_norm = self.norm_layer(self.embed_dim)
 
         self.conv_after_pre_layer = nn.Conv2d(
             self.embed_dim, self.num_features * 4, 3, 1, 1, bias=True
@@ -201,29 +189,15 @@ class BSRT(nn.Module):
         self.align = FlowGuidedPCDAlign(nf=self.num_features, groups=self.flow_alignment_groups)
         #####################################################################################################
         ################################### 3, Multi-frame Feature Fusion  ##################################
-
-        if self.non_local:
-            self.fusion = CrossNonLocalFusion(
-                nf=self.num_features,
-                out_feat=self.embed_dim,
-                nframes=self.num_frames,
-                center=self.center,
-            )
-        else:
-            self.fusion = nn.Conv2d(
-                self.num_frames * self.num_features, self.embed_dim, 1, 1, bias=True
-            )
+        self.fusion = CrossNonLocalFusion(
+            nf=self.num_features,
+            out_feat=self.embed_dim,
+            nframes=self.num_frames,
+            center=self.center,
+        )
 
         #####################################################################################################
         ################################### 4, deep feature extraction ######################################
-
-        # absolute position embedding
-        if self.ape:
-            self.absolute_pos_embed = Parameter(
-                torch.zeros(1, self.patch_embed.num_patches, self.embed_dim)
-            )
-            swu.trunc_normal_(self.absolute_pos_embed, std=0.02)
-
         self.pos_drop = nn.Dropout(self.drop_rate)
 
         # build Residual Swin Transformer blocks (RSTB)
@@ -299,29 +273,21 @@ class BSRT(nn.Module):
         return x
 
     def pre_forward_features(self, x: Tensor) -> Tensor:
-        if self.swinfeature:
-            x_size = (x.shape[-2], x.shape[-1])
-            x = self.patch_embed(x, use_norm=True)
-            if self.ape:
-                x = x + self.absolute_pos_embed
-            x = self.pos_drop(x)
+        x_size = (x.shape[-2], x.shape[-1])
+        x = self.patch_embed(x, use_norm=True)
+        x = self.pos_drop(x)
 
-            for layer in self.pre_layers:
-                x = layer(x, x_size)
+        for layer in self.pre_layers:
+            x = layer(x, x_size)
 
-            x = self.pre_norm(x)
-            x = self.patch_unembed(x, x_size)
-
-        else:
-            x = self.feature_extraction(x)
+        x = self.pre_norm(x)
+        x = self.patch_unembed(x, x_size)
 
         return x
 
     def forward_features(self, x: Tensor) -> Tensor:
         x_size = (x.shape[-2], x.shape[-1])
         x = self.patch_embed(x)
-        if self.ape:
-            x = x + self.absolute_pos_embed
         x = self.pos_drop(x)
 
         for layer in self.layers:
@@ -377,7 +343,7 @@ class BSRT(nn.Module):
             L2_fea[:, self.center, :, :, :].clone(),
             L3_fea[:, self.center, :, :, :].clone(),
         ]
-        aligned_fea = []
+        _aligned_fea = []
         for i in range(N):
             nbr_fea_l = [
                 L1_fea[:, i, :, :, :].clone(),
@@ -395,12 +361,10 @@ class BSRT(nn.Module):
                 arch_util.flow_warp(nbr_fea_l[1], flows_l[1].permute(0, 2, 3, 1), "bilinear"),
                 arch_util.flow_warp(nbr_fea_l[2], flows_l[2].permute(0, 2, 3, 1), "bilinear"),
             ]
-            aligned_fea.append(self.align(nbr_fea_l, nbr_warped_l, ref_fea_l, flows_l))
+            _aligned_fea.append(self.align(nbr_fea_l, nbr_warped_l, ref_fea_l, flows_l))
 
-        aligned_fea = torch.stack(aligned_fea, dim=1)  # [B, N, C, H, W] --> [B, T, C, H, W]
-
-        if not self.non_local:
-            aligned_fea = aligned_fea.view(B, -1, H, W)
+        aligned_fea = torch.stack(_aligned_fea, dim=1)  # [B, N, C, H, W] --> [B, T, C, H, W]
+        aligned_fea = aligned_fea.view(B, -1, H, W)
 
         x = self.lrelu(self.fusion(aligned_fea))
 

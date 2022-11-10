@@ -150,9 +150,10 @@ def demosaic(image: Tensor) -> Tensor:
         device=image_normed.device,
         dtype=torch.uint8,
     )
-    im_sc[:, ::2, ::2, 0] = image_normed[:, 0, :, :]
-    im_sc[:, ::2, 1::2, 0] = image_normed[:, 1, :, :]
-    im_sc[:, 1::2, ::2, 0] = image_normed[:, 2, :, :]
+
+    im_sc[:, 0::2, 0::2, 0] = image_normed[:, 0, :, :]
+    im_sc[:, 0::2, 1::2, 0] = image_normed[:, 1, :, :]
+    im_sc[:, 1::2, 0::2, 0] = image_normed[:, 2, :, :]
     im_sc[:, 1::2, 1::2, 0] = image_normed[:, 3, :, :]
 
     # We cannot convert a tensor on the GPU to a numpy array, so we need to move it to the CPU first.

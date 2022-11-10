@@ -16,6 +16,7 @@ requires-python = ">=3.10"
 dependencies = [
     "torch==1.13.0",
     "torchvision==0.14.0",
+    "opencv-python-headless==4.6.0.66",
     "optuna==3.0.3",
     "pytorch-lightning==1.8.0.post1",
     "torchmetrics==0.10.2",
@@ -49,6 +50,10 @@ exclude = [
     "bsrt/test_synthetic_burst.py",
     "bsrt/datasets/synthetic_burst/test_dataset.py",
     "bsrt/datasets/burstsr_dataset.py",
+    "bsrt/model/swin_util.py",
+    "bsrt/model/non_local",
+    "bsrt/pwcnet",
+    "model/utils/psconv.py"
 ]
 ignore = ["bsrt/loss", "bsrt/metrics"]
 defineConstant = { DEBUG = true }

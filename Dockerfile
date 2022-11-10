@@ -10,7 +10,6 @@ RUN \
         python==3.10.6 \
         pip==22.3.1 \
         git==2.38.1 \
-        fastai::opencv-python-headless==4.6.0.66 \
     && micromamba clean \
         --all \
         --yes

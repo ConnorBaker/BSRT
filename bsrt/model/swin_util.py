@@ -5,12 +5,13 @@
 # -----------------------------------------------------------------------------------
 
 import math
-from typing import Optional
+from typing import Callable, Iterable, Optional, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
+from torch import Tensor
 
 # import torch.utils.checkpoint as checkpoint
 from bsrt.model.checkpoint import CheckpointFunction as checkpoint
@@ -609,7 +610,7 @@ class RSTB(nn.Module):
         qk_scale=None,
         drop=0.0,
         attn_drop=0.0,
-        drop_path=0.0,
+        drop_path: Union[float, Iterable[float]] = 0.0,
         norm_layer=nn.LayerNorm,
         downsample=None,
         use_checkpoint=False,
@@ -641,6 +642,7 @@ class RSTB(nn.Module):
             use_checkpoint=use_checkpoint,
         )
 
+        self.conv: Callable[[Tensor], Tensor]
         if resi_connection == "1conv":
             self.conv = nn.Conv2d(dim, dim, 3, 1, 1)
 
