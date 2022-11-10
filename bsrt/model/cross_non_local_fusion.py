@@ -43,7 +43,7 @@ class CrossNonLocalFusion(nn.Module):
         aligned_fea_F = torch.cat(non_l, dim=1)
         aligned_fea = torch.cat([aligned_fea_T, aligned_fea_F], dim=1)
 
-        #### fusion
+        # fusion
         fea = self.fea_fusion(aligned_fea)
 
         return fea

@@ -54,8 +54,8 @@ def apply_kernel(im, ksz, gauss_kernel):
 
 
 def match_colors(im_ref, im_q, im_test, ksz, gauss_kernel) -> Tuple[torch.Tensor, torch.Tensor]:
-    """Estimates a color transformation matrix between im_ref and im_q. Applies the estimated transformation to
-    im_test
+    """Estimates a color transformation matrix between im_ref and im_q. Applies the estimated
+    transformation to im_test
     """
     bi = 5
 

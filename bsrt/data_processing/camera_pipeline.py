@@ -13,8 +13,9 @@ from bsrt.data_processing.meta_info import MetaInfo
 from bsrt.utils.data_format_utils import npimage_to_torch, torch_to_npimage
 
 """ Based on http://timothybrooks.com/tech/unprocessing
-Functions for forward and inverse camera pipeline. All functions input a torch float tensor of shape (c, h, w).
-Additionally, some also support batch operations, i.e. inputs of shape (b, c, h, w)
+Functions for forward and inverse camera pipeline. All functions input a torch float tensor of
+shape (c, h, w). Additionally, some also support batch operations, i.e. inputs of shape
+(b, c, h, w).
 """
 
 
@@ -156,7 +157,8 @@ def demosaic(image: Tensor) -> Tensor:
     im_sc[:, 1::2, 0::2, 0] = image_normed[:, 2, :, :]
     im_sc[:, 1::2, 1::2, 0] = image_normed[:, 3, :, :]
 
-    # We cannot convert a tensor on the GPU to a numpy array, so we need to move it to the CPU first.
+    # We cannot convert a tensor on the GPU to a numpy array, so we need to move it to the CPU
+    # first.
     im_sc_np: npt.NDArray[np.uint8] = im_sc.cpu().numpy()
 
     out: List[Tensor] = [

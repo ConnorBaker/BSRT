@@ -24,8 +24,10 @@ class SyntheticZurichRaw2RgbDataModule(pl.LightningDataModule):
         precision (Literal["bf16", 16, 32]): The precision to use for the data.
         split_ratio (float): The ratio of the dataset to use for training.
         num_workers (int): The number of subprocesses to use for data loading.
-        pin_memory (bool): If ``True``, the data loader will copy Tensors into CUDA pinned memory before returning them.
-        persistent_workers (bool): If ``True``, the data loader will not shutdown the worker processes after a dataset has been consumed.
+        pin_memory (bool): If ``True``, the data loader will copy Tensors into CUDA pinned memory
+            before returning them.
+        persistent_workers (bool): If ``True``, the data loader will not shutdown the worker
+            processes after a dataset has been consumed.
         drop_last (bool): If ``True``, the data loader will drop the last incomplete batch.
         timeout (float): If positive, the timeout value for collecting a batch from workers.
             Should always be non-negative.

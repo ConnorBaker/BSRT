@@ -75,7 +75,8 @@ class LightningBSRT(LightningModule):
         loss: Dict[str, Tensor] = self.train_metrics(srs, gts)
         self.log_dict(self.train_metrics, on_step=True, on_epoch=False)  # type: ignore
 
-        # PyTorch Lightning requires that when validation_step returns a dict, it must contain a key named loss
+        # PyTorch Lightning requires that when validation_step returns a dict, it must contain a
+        # key named loss
         loss["loss"] = loss["train/lpips"]
         return loss
 
@@ -96,7 +97,8 @@ class LightningBSRT(LightningModule):
         # Log the image only for the first batch
         # TODO: We could log different images with different names
         if batch_idx == 0 and isinstance(self.logger, WandbLogger):
-            # Gross hack to work around "RuntimeError: "upsample_nearest2d_out_frame" not implemented for 'BFloat16'"
+            # Gross hack to work around "RuntimeError: "upsample_nearest2d_out_frame" not
+            # implemented for 'BFloat16'"
             nn_busrts: Tensor = F.interpolate(
                 demosaic(
                     bursts[:, 0, :, :].to(
@@ -114,7 +116,8 @@ class LightningBSRT(LightningModule):
                     caption=["LR", "SR", "GT"],
                 )
 
-        # PyTorch Lightning requires that when validation_step returns a dict, it must contain a key named loss
+        # PyTorch Lightning requires that when validation_step returns a dict, it must contain a
+        # key named loss
         loss["loss"] = loss["val/lpips"]
         return loss
 

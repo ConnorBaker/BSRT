@@ -34,8 +34,8 @@ class Downloadable(ABC):
                         filename=self.filename,
                     )
                     return
-                except:
-                    raise Exception("Could not download dataset")
+                except Exception as e:
+                    raise Exception(f"Could not download dataset: {e}")
 
             if not file.exists():
                 raise Exception("Could not download dataset")

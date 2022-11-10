@@ -1,23 +1,12 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
 import torch
 from datasets.utilities.downloadable import Downloadable
 from datasets.utilities.image_folder_data import ImageFolderData
-from datasets.utilities.provides import (
-    ProvidesDataset,
-    ProvidesDatasetPipeline,
-    ProvidesDatasource,
-)
-from ray.data import read_datasource
-from ray.data.aggregate import AggregateFn
-from ray.data.block import DataBatch
-from ray.data.dataset import Dataset
-from ray.data.dataset_pipeline import DatasetPipeline
-from ray.data.datasource import ImageFolderDatasource
 from torch import Tensor
 from typing_extensions import ClassVar
 

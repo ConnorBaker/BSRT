@@ -56,8 +56,9 @@ def flow_warp(
         align_corners (bool): Before pytorch 1.3, the default value is
             align_corners=True. After pytorch 1.3, the default value is
             align_corners=False. Here, we use the True as default.
-        use_pad_mask (bool): only used for PWCNet, x is first padded with ones along the channel dimension.
-            The mask is generated according to the grid_sample results of the padded dimension.
+        use_pad_mask (bool): only used for PWCNet, x is first padded with ones along the channel
+            dimension. The mask is generated according to the grid_sample results of the padded
+            dimension.
 
 
     Returns:

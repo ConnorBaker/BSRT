@@ -1,2 +1,15 @@
 [flake8]
 max-line-length = 99
+extend-ignore = E203
+exclude = 
+    .git,
+    __pycache__,
+    bsrt/pwcnet/correlation/correlation.py,
+    bsrt/model/swin_util.py,
+    bsrt/model/non_local,
+    bsrt/model/utils/psconv.py,
+    bsrt/model/spynet_util.py,
+    bsrt/metrics,
+    bsrt/loss,
+    bsrt/pwcnet,
+    bsrt/datasets/synthetic_burst

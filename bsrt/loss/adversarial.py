@@ -9,7 +9,6 @@ from torch import Tensor
 from utils.types import GanType
 
 from bsrt.loss.discriminator import Discriminator
-from bsrt.option import Config
 
 
 @dataclass(eq=False, init=False)

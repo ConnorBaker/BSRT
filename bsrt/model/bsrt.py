@@ -12,7 +12,6 @@ from bsrt.model import swin_util as swu
 from bsrt.model.cross_non_local_fusion import CrossNonLocalFusion
 from bsrt.model.flow_guided_pcd_align import FlowGuidedPCDAlign
 from bsrt.model.spynet_util import SpyNet
-from bsrt.option import DataTypeName, LossName
 from bsrt.utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 
@@ -22,12 +21,10 @@ class BSRT(nn.Module):
 
     Args:
         attn_drop_rate (float): attention drop rate
-        data_type (str): Whether operating on synthetic or real data. Must be one of "synthetic" or "real".
         drop_path_rate (float): drop path rate
         drop_rate (float): drop rate
         flow_alignment_groups (int): number of groups for flow alignment
         in_chans (int): number of input channels
-        loss_type (str): loss function configuration (L1, MSE, CB, or MSSSIM)
         lr (float): learning rate
         mlp_ratio (float): mlp ratio
         model_level (str): S or L for small or large model
@@ -45,12 +42,10 @@ class BSRT(nn.Module):
     """
 
     attn_drop_rate: float = 0.0
-    data_type: DataTypeName = "synthetic"
     drop_path_rate: float = 0.1
     drop_rate: float = 0.0
     flow_alignment_groups: int = 8
     in_chans: int = 4  # RAW images are RGGB or the like, so 4 channels
-    loss_type: LossName = "L1"
     lr: float = 1e-4
     mlp_ratio: float = 4.0
     model_level: Literal["S", "L"] = "S"
@@ -119,8 +114,7 @@ class BSRT(nn.Module):
             norm_layer=self.norm_layer if self.patch_norm else None,
         )
 
-        #####################################################################################################
-        ################################### 1, shallow feature extraction ###################################
+        # 1, shallow feature extraction
         self.conv_flow = nn.Conv2d(1, 3, kernel_size=3, stride=1, padding=1)
         self.conv_first = nn.Conv2d(
             self.in_chans * (1 + 2 * 0), self.embed_dim, 3, 1, 1, bias=True
@@ -164,8 +158,7 @@ class BSRT(nn.Module):
             self.num_features * 2, self.num_features * 4, 3, 2, 1, bias=True
         )
 
-        #####################################################################################################
-        ################################### 2, Feature Enhanced PCD Align ###################################
+        # 2, Feature Enhanced PCD Align
 
         # Top layers
         self.toplayer = nn.Conv2d(
@@ -187,8 +180,7 @@ class BSRT(nn.Module):
         )
 
         self.align = FlowGuidedPCDAlign(nf=self.num_features, groups=self.flow_alignment_groups)
-        #####################################################################################################
-        ################################### 3, Multi-frame Feature Fusion  ##################################
+        # 3, Multi-frame Feature Fusion
         self.fusion = CrossNonLocalFusion(
             nf=self.num_features,
             out_feat=self.embed_dim,
@@ -196,8 +188,7 @@ class BSRT(nn.Module):
             center=self.center,
         )
 
-        #####################################################################################################
-        ################################### 4, deep feature extraction ######################################
+        # 4, deep feature extraction
         self.pos_drop = nn.Dropout(self.drop_rate)
 
         # build Residual Swin Transformer blocks (RSTB)
@@ -233,8 +224,7 @@ class BSRT(nn.Module):
         # build the last conv layer in deep feature extraction
         self.conv_after_body = nn.Conv2d(self.embed_dim, self.embed_dim, 3, 1, 1)
 
-        #####################################################################################################
-        ################################ 5, high quality image reconstruction ################################
+        # 5, high quality image reconstruction
 
         self.upconv1 = nn.Conv2d(self.embed_dim, self.num_features * 4, 3, 1, 1, bias=True)
         self.upconv2 = nn.Conv2d(self.num_features, 64 * 4, 3, 1, 1, bias=True)
@@ -242,12 +232,12 @@ class BSRT(nn.Module):
         self.HRconv = nn.Conv2d(64, 64, 3, 1, 1, bias=True)
         self.conv_last = nn.Conv2d(64, self.out_chans, 3, 1, 1, bias=True)
 
-        #### skip #############
+        # skip
         self.skip_pixel_shuffle = nn.PixelShuffle(2)
         self.skipup1 = nn.Conv2d(self.in_chans // 4, self.num_features * 4, 3, 1, 1, bias=True)
         self.skipup2 = nn.Conv2d(self.num_features, self.out_chans * 4, 3, 1, 1, bias=True)
 
-        #### activation function
+        # activation function
         self.lrelu = nn.LeakyReLU(0.1, inplace=True)
         self.lrelu2 = nn.LeakyReLU(0.1, inplace=True)
 
@@ -307,7 +297,7 @@ class BSRT(nn.Module):
         B, N, C, H, W = x.size()  # N video frames
         x_center = x[:, self.center, :, :, :].contiguous()
 
-        #### skip module ########
+        # skip module
         skip1 = self.lrelu2(
             self.skip_pixel_shuffle(self.skipup1(self.skip_pixel_shuffle(x_center)))
         )
@@ -318,7 +308,7 @@ class BSRT(nn.Module):
         # calculate flows
         ref_flows = self.get_ref_flows(x_)
 
-        #### extract LR features
+        # extract LR features
         x = self.lrelu(self.conv_first(x.view(B * N, -1, H, W)))
 
         L1_fea = self.mid_ps(self.conv_after_pre_layer(self.pre_forward_features(x)))
@@ -336,7 +326,7 @@ class BSRT(nn.Module):
         L2_fea = L2_fea.view(B, N, -1, H // 2, W // 2).contiguous()
         L3_fea = L3_fea.view(B, N, -1, H // 4, W // 4).contiguous()
 
-        #### PCD align
+        # PCD align
         # ref feature list
         ref_fea_l = [
             L1_fea[:, self.center, :, :, :].clone(),

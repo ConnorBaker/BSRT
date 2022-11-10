@@ -1,5 +1,3 @@
-import pickle as pkl
-
 import cv2
 import numpy as np
 import torch
@@ -31,8 +29,8 @@ class RealWorldBurstTest(Dataset):
             index: Index of the burst
 
         returns:
-            burst: LR RAW burst, a torch tensor of shape
-                   The 4 channels correspond to 'R', 'G', 'G', and 'B' values in the RGGB bayer mosaick.
+            burst: LR RAW burst, a torch tensor of shape Bx4xHxW. The 4 channels correspond to
+                'R', 'G', 'G', and 'B' values in the RGGB bayer mosaick.
             meta_info: Meta information about the burst
         """
         burst_name = "{:04d}".format(index)

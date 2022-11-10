@@ -7,8 +7,6 @@ from typing_extensions import get_args
 
 from bsrt.utils.types import BayerPattern, NormalizationMode
 
-######################## BayerUnifyAug ############################
-
 
 def bayer_unify(
     raw: Tensor,
