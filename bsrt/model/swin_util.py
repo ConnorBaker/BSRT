@@ -256,7 +256,7 @@ def calculate_mask(x_size, window_size, shift_size, device: Optional[str] = None
     cnt = 0
     for h in h_slices:
         for w in w_slices:
-            img_mask[:, h, w, :] = cnt
+            img_mask[:, h, w, :].fill_(cnt)
             cnt += 1
 
     mask_windows = window_partition(img_mask, window_size)  # nW, window_size, window_size, 1
