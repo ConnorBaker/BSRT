@@ -30,16 +30,14 @@ class RgbGains:
         """Inverts gains while safely handling saturated pixels."""
         assert image.dim() == 3
         channels = image.shape[0]
+        assert channels == 3 or channels == 4
+        middle = [1.0] * (channels // 2)
 
-        if channels == 3:
-            gains: Tensor = torch.tensor([self.red_gain, 1.0, self.blue_gain]) * self.rgb_gain
-        elif channels == 4:
-            gains: Tensor = torch.tensor([self.red_gain, 1.0, 1.0, self.blue_gain]) * self.rgb_gain
-        else:
-            assert False, "Invalid number of channels"
-
+        gains: Tensor = (
+            torch.tensor([self.red_gain, *middle, self.blue_gain], dtype=image.dtype)
+            * self.rgb_gain
+        )
         gains = gains.view(-1, 1, 1)
-        gains = gains.type_as(image)
 
         return (image * gains).clamp(0.0, 1.0)
 
