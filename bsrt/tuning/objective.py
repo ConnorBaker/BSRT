@@ -9,8 +9,12 @@ from optuna.exceptions import TrialPruned
 from optuna.logging import get_logger
 from pytorch_lightning import LightningDataModule, LightningModule
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAveraging
 from pytorch_lightning.loggers.wandb import WandbLogger
+from pytorch_lightning.strategies.ddp import DDPStrategy
 from pytorch_lightning.trainer import Trainer
+from torch.distributed.algorithms.ddp_comm_hooks import default_hooks
+from torch.distributed.algorithms.ddp_comm_hooks import post_localSGD_hook as post_localSGD
 from typing_extensions import Literal
 
 from bsrt.lighting_bsrt import LightningBSRT
@@ -170,13 +174,26 @@ def objective(
         limit_train_batches=config.limit_train_batches,
         limit_val_batches=config.limit_val_batches,
         max_epochs=config.max_epochs,
+        strategy=DDPStrategy(
+            static_graph=True, find_unused_parameters=False, gradient_as_bucket_view=True,
+            ddp_comm_state=post_localSGD.PostLocalSGDState(
+                process_group=None,
+                subgroup=None,
+                start_localSGD_iter=8,
+            ),
+            ddp_comm_hook=post_localSGD.post_localSGD_hook,
+            ddp_comm_wrapper=default_hooks.bf16_compress_wrapper,
+            model_averaging_period=4,
+        ),
         detect_anomaly=False,
         enable_model_summary=False,
         enable_progress_bar=True,
         logger=wandb_logger,
-        replace_sampler_ddp=False,
         num_sanity_val_steps=0,
+        gradient_clip_val=0.5,
+        gradient_clip_algorithm="norm",
         callbacks=[
+            StochasticWeightAveraging(swa_lrs=1e-3),
             MinEpochsEarlyStopping(
                 monitor="val/psnr",
                 min_delta=1.0,
