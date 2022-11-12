@@ -37,7 +37,6 @@ class BSRT(nn.Module):
         qk_scale (float | None): qk scale
         qkv_bias (bool): qkv bias
         upscale (int): upscale
-        use_swin_checkpoint (bool): use swin checkpoint
         window_size (int): window size
     """
 
@@ -58,7 +57,6 @@ class BSRT(nn.Module):
     qk_scale: Union[float, None] = None
     qkv_bias: bool = True
     upscale: int = 4
-    use_swin_checkpoint: bool = False
     window_size: int = 7
 
     center: int = field(init=False, default=0)
@@ -213,7 +211,6 @@ class BSRT(nn.Module):
                 ],  # no impact on SR results
                 norm_layer=self.norm_layer,
                 downsample=None,
-                use_checkpoint=self.use_swin_checkpoint,
                 img_size=self.img_size,
                 patch_size=self.patch_size,
             )

@@ -14,9 +14,6 @@ import torch.nn.functional as F
 from timm.models.layers import DropPath, trunc_normal_
 from torch import Tensor
 
-# import torch.utils.checkpoint as checkpoint
-from bsrt.model.checkpoint import CheckpointFunction as checkpoint
-
 _T = TypeVar("_T")
 
 
@@ -314,7 +311,6 @@ class SwinTransformerBlock(nn.Module):
         drop_path=0.0,
         act_layer=nn.GELU,
         norm_layer=nn.LayerNorm,
-        use_checkpoint=False,
     ):
         super().__init__()
         self.dim = dim
@@ -323,7 +319,6 @@ class SwinTransformerBlock(nn.Module):
         self.window_size = window_size
         self.shift_size = shift_size
         self.mlp_ratio = mlp_ratio
-        self.use_checkpoint = use_checkpoint
         if min(self.input_resolution) <= self.window_size:
             # if window size is larger than input resolution, we don't partition windows
             self.shift_size = 0
@@ -390,24 +385,13 @@ class SwinTransformerBlock(nn.Module):
         # window size
 
         # if self.input_resolution == x_size:
-        #     if self.use_checkpoint:
-        #         # nW*B, window_size*window_size, C
-        #         attn_windows = checkpoint.apply(self.attn, x_windows, self.attn_mask)
-        #     else:
-        #         # nW*B, window_size*window_size, C
-        #         attn_windows = self.attn(x_windows, mask=self.attn_mask)
+        #     # nW*B, window_size*window_size, C
+        #     attn_windows = self.attn(x_windows, mask=self.attn_mask)
         # else:
-        #     if self.use_checkpoint:
-        #         attn_windows = checkpoint.apply(
-        #             self.attn,
-        #             x_windows,
-        #             self.calculate_mask(x_size)
-        #         )
-        #     else:
-        #         attn_windows = self.attn(
-        #             x_windows,
-        #             mask=self.calculate_mask(x_size)
-        #         )
+        #     attn_windows = self.attn(
+        #         x_windows,
+        #         mask=self.calculate_mask(x_size)
+        #     )
 
         attn_mask = calculate_mask(
             x_size, self.window_size, self.shift_size, device=x.device, dtype=x.dtype
@@ -521,7 +505,6 @@ class BasicLayer(nn.Module):
         norm_layer (nn.Module, optional): Normalization layer. Default: nn.LayerNorm
         downsample (nn.Module | None, optional): Downsample layer at the end of the layer.
             Default: None
-        use_checkpoint (bool): Whether to use checkpointing to save memory. Default: False.
     """
 
     def __init__(
@@ -539,14 +522,12 @@ class BasicLayer(nn.Module):
         drop_path: Union[float, Iterable[float]] = 0.0,
         norm_layer=nn.LayerNorm,
         downsample=None,
-        use_checkpoint=False,
     ):
 
         super().__init__()
         self.dim = dim
         self.input_resolution = input_resolution
         self.depth = depth
-        self.use_checkpoint = False
 
         # build blocks
         self.blocks = nn.ModuleList(
@@ -564,7 +545,6 @@ class BasicLayer(nn.Module):
                     attn_drop=attn_drop,
                     drop_path=_drop_path,
                     norm_layer=norm_layer,
-                    use_checkpoint=use_checkpoint,
                 )
                 for i, _drop_path in zip(
                     range(depth),
@@ -580,12 +560,8 @@ class BasicLayer(nn.Module):
             self.downsample = None
 
     def forward(self, x, x_size):
-        for i, blk in enumerate(self.blocks):
-            if self.use_checkpoint:
-                # x = checkpoint.checkpoint(blk, x, x_size)
-                x = checkpoint.apply(blk, 2, x, x_size)
-            else:
-                x = blk(x, x_size)
+        for blk in self.blocks:
+            x = blk(x, x_size)
         if self.downsample is not None:
             x = self.downsample(x)
         return x
@@ -622,7 +598,6 @@ class RSTB(nn.Module):
         norm_layer (nn.Module, optional): Normalization layer. Default: nn.LayerNorm
         downsample (nn.Module | None, optional): Downsample layer at the end of the layer.
             Default: None
-        use_checkpoint (bool): Whether to use checkpointing to save memory. Default: False.
         img_size: Input image size.
         patch_size: Patch size.
         resi_connection: The convolutional block before residual connection.
@@ -643,7 +618,6 @@ class RSTB(nn.Module):
         drop_path: Union[float, Iterable[float]] = 0.0,
         norm_layer=nn.LayerNorm,
         downsample=None,
-        use_checkpoint=False,
         img_size=224,
         patch_size=4,
         resi_connection="1conv",
@@ -667,7 +641,6 @@ class RSTB(nn.Module):
             drop_path=drop_path,
             norm_layer=norm_layer,
             downsample=downsample,
-            use_checkpoint=use_checkpoint,
         )
 
         self.conv: Callable[[Tensor], Tensor]
@@ -873,7 +846,6 @@ class SwinIR(nn.Module):
         norm_layer (nn.Module): Normalization layer. Default: nn.LayerNorm.
         ape (bool): If True, add absolute position embedding to the patch embedding. Default: False
         patch_norm (bool): If True, add normalization after patch embedding. Default: True
-        use_checkpoint (bool): Whether to use checkpointing to save memory. Default: False
         upscale: Upscale factor. 2/3/4/8 for image SR, 1 for denoising and compress artifact
             reduction
         img_range: Image range. 1. or 255.
@@ -900,7 +872,6 @@ class SwinIR(nn.Module):
         norm_layer=nn.LayerNorm,
         ape=False,
         patch_norm=True,
-        use_checkpoint=False,
         upscale=2,
         img_range=1.0,
         upsampler="",
@@ -985,7 +956,6 @@ class SwinIR(nn.Module):
                 ],  # no impact on SR results
                 norm_layer=norm_layer,
                 downsample=None,
-                use_checkpoint=use_checkpoint,
                 img_size=img_size,
                 patch_size=patch_size,
                 resi_connection=resi_connection,

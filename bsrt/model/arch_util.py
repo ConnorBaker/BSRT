@@ -1,42 +1,8 @@
 from typing import Literal
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
-from torch.nn.utils.weight_norm import weight_norm
-
-
-def make_layer(block, n_layers):
-    layers = []
-    for _ in range(n_layers):
-        layers.append(block())
-    return nn.Sequential(*layers)
-
-
-class WideActResBlock(nn.Module):
-    def __init__(self, nf=64):
-        super(WideActResBlock, self).__init__()
-        self.res_scale = 1
-        body = []
-        expand = 6
-        linear = 0.8
-        kernel_size = 3
-        act = nn.ReLU(True)
-
-        body.append(weight_norm(nn.Conv2d(nf, nf * expand, 1, padding=1 // 2)))
-        body.append(act)
-        body.append(weight_norm(nn.Conv2d(nf * expand, int(nf * linear), 1, padding=1 // 2)))
-        body.append(
-            weight_norm(nn.Conv2d(int(nf * linear), nf, kernel_size, padding=kernel_size // 2))
-        )
-
-        self.body = nn.Sequential(*body)
-
-    def forward(self, x):
-        res = self.body(x) * self.res_scale
-        res += x
-        return res
 
 
 # TODO: Do we really need gradients for this?
