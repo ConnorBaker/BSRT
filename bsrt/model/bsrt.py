@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Type, Union
+from typing import List, Type
 
 import torch
 import torch.nn as nn
@@ -34,7 +34,6 @@ class BSRT(nn.Module):
         out_chans (int): number of output channels
         patch_norm (bool): patch norm
         patch_size (int): patch size
-        qk_scale (float | None): qk scale
         qkv_bias (bool): qkv bias
         upscale (int): upscale
         window_size (int): window size
@@ -54,7 +53,6 @@ class BSRT(nn.Module):
     out_chans: int = 3  # RGB output so 3 channels
     patch_norm: bool = True
     patch_size: int = 1
-    qk_scale: Union[float, None] = None
     qkv_bias: bool = True
     upscale: int = 4
     window_size: int = 7
@@ -136,7 +134,6 @@ class BSRT(nn.Module):
                 shift_size=0 if (i_layer % 2 == 0) else self.window_size // 2,
                 mlp_ratio=self.mlp_ratio,
                 qkv_bias=self.qkv_bias,
-                qk_scale=self.qk_scale,
                 drop=self.drop_rate,
                 attn_drop=self.attn_drop_rate,
                 drop_path=dpr[i_layer],
@@ -203,7 +200,6 @@ class BSRT(nn.Module):
                 window_size=self.window_size,
                 mlp_ratio=self.mlp_ratio,
                 qkv_bias=self.qkv_bias,
-                qk_scale=self.qk_scale,
                 drop=self.drop_rate,
                 attn_drop=self.attn_drop_rate,
                 drop_path=dpr[
