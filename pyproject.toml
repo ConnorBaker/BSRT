@@ -55,7 +55,6 @@ exclude = [
     "bsrt/pwcnet",
     "model/utils/psconv.py"
 ]
-ignore = ["bsrt/metrics"]
 defineConstant = { DEBUG = true }
 reportMissingImports = true
 reportMissingTypeStubs = false

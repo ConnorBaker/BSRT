@@ -27,7 +27,8 @@ def prepare_aligned(
     # Warp the prediction to the ground truth coordinates
     pred_warped = warp(pred, flow)
 
-    # Warp the base input frame to the ground truth. This will be used to estimate the color transformation between
+    # Warp the base input frame to the ground truth. This will be used to estimate the color
+    # transformation between
     # the input and the ground truth
     sr_factor = sr_factor
     ds_factor = 1.0 / float(2.0 * sr_factor)

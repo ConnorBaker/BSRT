@@ -9,6 +9,5 @@ exclude =
     bsrt/model/non_local,
     bsrt/model/utils/psconv.py,
     bsrt/model/spynet_util.py,
-    bsrt/metrics,
     bsrt/pwcnet,
     bsrt/datasets/synthetic_burst
