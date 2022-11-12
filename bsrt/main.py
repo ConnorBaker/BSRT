@@ -1,7 +1,7 @@
 from pytorch_lightning.cli import LightningCLI
 from pytorch_lightning.loggers.wandb import WandbLogger
 
-from bsrt.datasets.synthetic_zurich_raw2rgb_data_module import SyntheticZurichRaw2RgbDataModule
+from bsrt.datasets.synthetic_zurich_raw2rgb import SyntheticZurichRaw2Rgb
 from bsrt.lighting_bsrt import LightningBSRT
 
 if __name__ == "__main__":
@@ -30,7 +30,7 @@ if __name__ == "__main__":
 
     cli = LightningCLI(
         LightningBSRT,
-        SyntheticZurichRaw2RgbDataModule,
+        SyntheticZurichRaw2Rgb,
         run=False,
         save_config_callback=None,
     )

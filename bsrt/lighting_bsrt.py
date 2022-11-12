@@ -14,7 +14,7 @@ from torchmetrics.image.psnr import PeakSignalNoiseRatio as PSNR
 from torchmetrics.image.ssim import MultiScaleStructuralSimilarityIndexMeasure as MS_SSIM
 
 from bsrt.data_processing.camera_pipeline import demosaic
-from bsrt.datasets.synthetic_burst.train_dataset import TrainData
+from bsrt.data_processing.synthetic_burst_generator import SyntheticBurstGeneratorData
 from bsrt.model.bsrt import BSRT
 from bsrt.tuning.lr_scheduler.cosine_annealing_warm_restarts import (
     CosineAnnealingWarmRestartsParams,
@@ -61,7 +61,9 @@ class LightningBSRT(LightningModule):
     def forward(self, bursts: Tensor) -> Tensor:
         return self.model(bursts)
 
-    def training_step(self, batch: TrainData, batch_idx: int) -> Dict[str, Tensor]:
+    def training_step(
+        self, batch: SyntheticBurstGeneratorData, batch_idx: int
+    ) -> Dict[str, Tensor]:
         bursts = batch["burst"]
         gts = batch["gt"]
         srs: Tensor = self(bursts)
@@ -80,7 +82,9 @@ class LightningBSRT(LightningModule):
         loss["loss"] = loss["train/lpips"]
         return loss
 
-    def validation_step(self, batch: TrainData, batch_idx: int) -> Dict[str, Tensor]:
+    def validation_step(
+        self, batch: SyntheticBurstGeneratorData, batch_idx: int
+    ) -> Dict[str, Tensor]:
         bursts = batch["burst"]
         gts = batch["gt"]
         srs: Tensor = self(bursts)

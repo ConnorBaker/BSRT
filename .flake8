@@ -1,9 +1,4 @@
 [flake8]
 max-line-length = 99
 extend-ignore = E203
-exclude = 
-    .git,
-    __pycache__,
-    bsrt/model/swin_util.py,
-    bsrt/model/spynet_util.py,
-    bsrt/datasets/synthetic_burst
+exclude = __pycache__

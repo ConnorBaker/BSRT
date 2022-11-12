@@ -8,12 +8,15 @@ from torch import Tensor
 from torch.utils.data import DataLoader, random_split
 from torch.utils.data.dataset import Dataset
 
-from bsrt.datasets.synthetic_burst.train_dataset import TrainData, TrainDataProcessor
-from bsrt.datasets.zurich_raw2rgb_dataset import ZurichRaw2RgbDataset
+from bsrt.data_processing.synthetic_burst_generator import (
+    SyntheticBurstGeneratorData,
+    SyntheticBurstGeneratorTransform,
+)
+from bsrt.datasets.zurich_raw2rgb import ZurichRaw2Rgb
 
 
 @dataclass
-class SyntheticZurichRaw2RgbDataModule(pl.LightningDataModule):
+class SyntheticZurichRaw2Rgb(pl.LightningDataModule):
     """DataModule for the "Zurich RAW to RGB mapping" dataset.
 
     Args:
@@ -64,12 +67,14 @@ class SyntheticZurichRaw2RgbDataModule(pl.LightningDataModule):
             self.num_workers = cpu_count
 
         # Download the dataset if not present
-        ZurichRaw2RgbDataset(data_dir=self.data_dir).download()
+        ZurichRaw2Rgb(data_dir=self.data_dir).download()
 
-        transform: Callable[[Tensor], TrainData] = TrainDataProcessor(
+        transform: Callable[
+            [Tensor], SyntheticBurstGeneratorData
+        ] = SyntheticBurstGeneratorTransform(
             burst_size=self.burst_size, crop_sz=self.crop_size, dtype=self.precision
         )
-        dataset = ZurichRaw2RgbDataset(
+        dataset = ZurichRaw2Rgb(
             data_dir=self.data_dir,
             transform=transform,
         )

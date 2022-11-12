@@ -44,7 +44,7 @@ class SpyNet(nn.Module):
         self.basic_module = nn.ModuleList([BasicModule() for _ in range(6)])
 
         weights_dict = torch.hub.load_state_dict_from_url(
-            "https://github.com/JingyunLiang/VRT/releases/download/v0.0/spynet_sintel_final-3d2a1287.pth"
+            "https://github.com/JingyunLiang/VRT/releases/download/v0.0/spynet_sintel_final-3d2a1287.pth"  # noqa: E501
         )
         self.load_state_dict(weights_dict["params"])
 
@@ -64,7 +64,8 @@ class SpyNet(nn.Module):
         # ref = [ref]
         # supp = [supp]
 
-        # FIXME: By repeatedly averaging these values, we can end up with a tensor where the width and height are one.
+        # FIXME: By repeatedly averaging these values, we can end up with a tensor where the width
+        # and height are one.
         for level in range(5):
             ref.insert(
                 0,
@@ -79,7 +80,8 @@ class SpyNet(nn.Module):
             [
                 ref[0].size(0),
                 2,
-                # FIXME: Continued: taking the floor of these values can yield a tensor of width or height zero.
+                # FIXME: Continued: taking the floor of these values can yield a tensor of width
+                # or height zero.
                 ref[0].size(2) // 2,
                 ref[0].size(3) // 2,
             ]

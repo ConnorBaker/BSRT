@@ -1,20 +1,27 @@
-# Modified from https://github.com/JingyunLiang/SwinIR/blob/9d14daa8b6169c57e7604af8d0bf31f1c3496a50/models/network_swinir.py
+# Modified from
+# https://github.com/JingyunLiang/SwinIR/blob/9d14daa8b6169c57e7604af8d0bf31f1c3496a50/models/network_swinir.py
 # -----------------------------------------------------------------------------------
 # SwinIR: Image Restoration Using Swin Transformer, https://arxiv.org/abs/2108.10257
 # Originally Written by Ze Liu, Modified by Jingyun Liang.
 # -----------------------------------------------------------------------------------
 
 import math
-from typing import Callable, Iterable, Optional, Union
+from typing import Callable, Iterable, Optional, Tuple, TypeVar, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from timm.models.layers import DropPath, to_2tuple, trunc_normal_
+from timm.models.layers import DropPath, trunc_normal_
 from torch import Tensor
 
 # import torch.utils.checkpoint as checkpoint
 from bsrt.model.checkpoint import CheckpointFunction as checkpoint
+
+_T = TypeVar("_T")
+
+
+def to_2tuple(x: _T) -> Tuple[_T, _T]:
+    return (x, x)
 
 
 class Mlp(nn.Module):
@@ -44,7 +51,8 @@ class Mlp(nn.Module):
 
 
 class Mlp_GEGLU(nn.Module):
-    """Multilayer perceptron with gated linear unit (GEGLU). Ref. "GLU Variants Improve Transformer".
+    """Multilayer perceptron with gated linear unit (GEGLU). Ref. "GLU Variants Improve
+    Transformer".
 
     Args:
         x: (B, D, H, W, C)
@@ -119,7 +127,8 @@ class WindowAttention(nn.Module):
         dim (int): Number of input channels.
         window_size (tuple[int]): The height and width of the window.
         num_heads (int): Number of attention heads.
-        qkv_bias (bool, optional):  If True, add a learnable bias to query, key, value. Default: True
+        qkv_bias (bool, optional):  If True, add a learnable bias to query, key, value. Default:
+            True
         qk_scale (float | None, optional): Override default qk scale of head_dim ** -0.5 if set
         attn_drop (float, optional): Dropout ratio of attention weight. Default: 0.0
         proj_drop (float, optional): Dropout ratio of output. Default: 0.0
@@ -194,6 +203,7 @@ class WindowAttention(nn.Module):
         q = q * self.scale
         attn = q @ k.transpose(-2, -1)
 
+        assert isinstance(self.relative_position_index, Tensor)
         relative_position_bias = self.relative_position_bias_table[
             self.relative_position_index.view(-1)
         ].view(
@@ -279,7 +289,8 @@ class SwinTransformerBlock(nn.Module):
         window_size (int): Window size.
         shift_size (int): Shift size for SW-MSA.
         mlp_ratio (float): Ratio of mlp hidden dim to embedding dim.
-        qkv_bias (bool, optional): If True, add a learnable bias to query, key, value. Default: True
+        qkv_bias (bool, optional): If True, add a learnable bias to query, key, value. Default:
+            True
         qk_scale (float | None, optional): Override default qk scale of head_dim ** -0.5 if set.
         drop (float, optional): Dropout rate. Default: 0.0
         attn_drop (float, optional): Attention dropout rate. Default: 0.0
@@ -375,18 +386,28 @@ class SwinTransformerBlock(nn.Module):
             -1, self.window_size * self.window_size, C
         )  # nW*B, window_size*window_size, C
 
-        # W-MSA/SW-MSA (to be compatible for testing on images whose shapes are the multiple of window size
+        # W-MSA/SW-MSA (to be compatible for testing on images whose shapes are the multiple of
+        # window size
 
         # if self.input_resolution == x_size:
         #     if self.use_checkpoint:
-        #         attn_windows = checkpoint.apply(self.attn, x_windows, self.attn_mask)  # nW*B, window_size*window_size, C
+        #         # nW*B, window_size*window_size, C
+        #         attn_windows = checkpoint.apply(self.attn, x_windows, self.attn_mask)
         #     else:
-        #         attn_windows = self.attn(x_windows, mask=self.attn_mask)  # nW*B, window_size*window_size, C
+        #         # nW*B, window_size*window_size, C
+        #         attn_windows = self.attn(x_windows, mask=self.attn_mask)
         # else:
         #     if self.use_checkpoint:
-        #         attn_windows = checkpoint.apply(self.attn, x_windows, self.calculate_mask(x_size))
+        #         attn_windows = checkpoint.apply(
+        #             self.attn,
+        #             x_windows,
+        #             self.calculate_mask(x_size)
+        #         )
         #     else:
-        #         attn_windows = self.attn(x_windows, mask=self.calculate_mask(x_size))
+        #         attn_windows = self.attn(
+        #             x_windows,
+        #             mask=self.calculate_mask(x_size)
+        #         )
 
         attn_mask = calculate_mask(
             x_size, self.window_size, self.shift_size, device=x.device, dtype=x.dtype
@@ -412,8 +433,9 @@ class SwinTransformerBlock(nn.Module):
 
     def extra_repr(self) -> str:
         return (
-            f"dim={self.dim}, input_resolution={self.input_resolution}, num_heads={self.num_heads}, "
-            f"window_size={self.window_size}, shift_size={self.shift_size}, mlp_ratio={self.mlp_ratio}"
+            f"dim={self.dim}, input_resolution={self.input_resolution}, "
+            f"num_heads={self.num_heads}, window_size={self.window_size}, "
+            f"shift_size={self.shift_size}, mlp_ratio={self.mlp_ratio}"
         )
 
     def flops(self):
@@ -490,13 +512,15 @@ class BasicLayer(nn.Module):
         num_heads (int): Number of attention heads.
         window_size (int): Local window size.
         mlp_ratio (float): Ratio of mlp hidden dim to embedding dim.
-        qkv_bias (bool, optional): If True, add a learnable bias to query, key, value. Default: True
+        qkv_bias (bool, optional): If True, add a learnable bias to query, key, value. Default:
+            True
         qk_scale (float | None, optional): Override default qk scale of head_dim ** -0.5 if set.
         drop (float, optional): Dropout rate. Default: 0.0
         attn_drop (float, optional): Attention dropout rate. Default: 0.0
         drop_path (float | tuple[float], optional): Stochastic depth rate. Default: 0.0
         norm_layer (nn.Module, optional): Normalization layer. Default: nn.LayerNorm
-        downsample (nn.Module | None, optional): Downsample layer at the end of the layer. Default: None
+        downsample (nn.Module | None, optional): Downsample layer at the end of the layer.
+            Default: None
         use_checkpoint (bool): Whether to use checkpointing to save memory. Default: False.
     """
 
@@ -512,7 +536,7 @@ class BasicLayer(nn.Module):
         qk_scale=None,
         drop=0.0,
         attn_drop=0.0,
-        drop_path=0.0,
+        drop_path: Union[float, Iterable[float]] = 0.0,
         norm_layer=nn.LayerNorm,
         downsample=None,
         use_checkpoint=False,
@@ -538,11 +562,14 @@ class BasicLayer(nn.Module):
                     qk_scale=qk_scale,
                     drop=drop,
                     attn_drop=attn_drop,
-                    drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
+                    drop_path=_drop_path,
                     norm_layer=norm_layer,
                     use_checkpoint=use_checkpoint,
                 )
-                for i in range(depth)
+                for i, _drop_path in zip(
+                    range(depth),
+                    drop_path if isinstance(drop_path, Iterable) else [drop_path] * depth,
+                )
             ]
         )
 
@@ -569,6 +596,7 @@ class BasicLayer(nn.Module):
     def flops(self):
         flops = 0
         for blk in self.blocks:
+            assert isinstance(blk, SwinTransformerBlock)
             flops += blk.flops()
         if self.downsample is not None:
             flops += self.downsample.flops()
@@ -585,13 +613,15 @@ class RSTB(nn.Module):
         num_heads (int): Number of attention heads.
         window_size (int): Local window size.
         mlp_ratio (float): Ratio of mlp hidden dim to embedding dim.
-        qkv_bias (bool, optional): If True, add a learnable bias to query, key, value. Default: True
+        qkv_bias (bool, optional): If True, add a learnable bias to query, key, value. Default:
+            True
         qk_scale (float | None, optional): Override default qk scale of head_dim ** -0.5 if set.
         drop (float, optional): Dropout rate. Default: 0.0
         attn_drop (float, optional): Attention dropout rate. Default: 0.0
         drop_path (float | tuple[float], optional): Stochastic depth rate. Default: 0.0
         norm_layer (nn.Module, optional): Normalization layer. Default: nn.LayerNorm
-        downsample (nn.Module | None, optional): Downsample layer at the end of the layer. Default: None
+        downsample (nn.Module | None, optional): Downsample layer at the end of the layer.
+            Default: None
         use_checkpoint (bool): Whether to use checkpointing to save memory. Default: False.
         img_size: Input image size.
         patch_size: Patch size.
@@ -619,8 +649,6 @@ class RSTB(nn.Module):
         resi_connection="1conv",
     ):
         super(RSTB, self).__init__()
-
-        # print(f'dim: {dim}, input_resolution: {input_resolution}, depth: {depth}, num_heads: {num_heads}, window_size: {window_size}, img_size: {img_size}. patch_size: {patch_size}')
 
         self.dim = dim
         self.input_resolution = input_resolution
@@ -703,14 +731,14 @@ class PatchEmbed(nn.Module):
 
     def __init__(self, img_size=224, patch_size=4, in_chans=3, embed_dim=96, norm_layer=None):
         super().__init__()
-        img_size = to_2tuple(img_size)
-        patch_size = to_2tuple(patch_size)
+        _img_size: Tuple[int, int] = to_2tuple(img_size)
+        _patch_size: Tuple[int, int] = to_2tuple(patch_size)
         patches_resolution = [
-            img_size[0] // patch_size[0],
-            img_size[1] // patch_size[1],
+            _img_size[0] // _patch_size[0],
+            _img_size[1] // _patch_size[1],
         ]
-        self.img_size = img_size
-        self.patch_size = patch_size
+        self.img_size = _img_size
+        self.patch_size = _patch_size
         self.patches_resolution = patches_resolution
         self.num_patches = patches_resolution[0] * patches_resolution[1]
 
@@ -796,7 +824,8 @@ class Upsample(nn.Sequential):
 
 
 class UpsampleOneStep(nn.Sequential):
-    """UpsampleOneStep module (the difference with Upsample is that it always only has 1conv + 1pixelshuffle)
+    """UpsampleOneStep module (the difference with Upsample is that it always only has 1conv +
+    1pixelshuffle)
        Used in lightweight SR to save parameters.
 
     Args:
@@ -805,7 +834,9 @@ class UpsampleOneStep(nn.Sequential):
 
     """
 
-    def __init__(self, scale, num_feat, num_out_ch, input_resolution=None):
+    def __init__(
+        self, scale, num_feat, num_out_ch, input_resolution: Optional[Tuple[int, int]] = None
+    ):
         self.num_feat = num_feat
         self.input_resolution = input_resolution
         m = []
@@ -814,6 +845,7 @@ class UpsampleOneStep(nn.Sequential):
         super(UpsampleOneStep, self).__init__(*m)
 
     def flops(self):
+        assert self.input_resolution is not None
         H, W = self.input_resolution
         flops = H * W * self.num_feat * 3 * 9
         return flops
@@ -821,7 +853,8 @@ class UpsampleOneStep(nn.Sequential):
 
 class SwinIR(nn.Module):
     r"""SwinIR
-        A PyTorch impl of : `SwinIR: Image Restoration Using Swin Transformer`, based on Swin Transformer.
+        A PyTorch impl of : `SwinIR: Image Restoration Using Swin Transformer`, based on Swin
+        Transformer.
 
     Args:
         img_size (int | tuple(int)): Input image size. Default 64
@@ -841,9 +874,11 @@ class SwinIR(nn.Module):
         ape (bool): If True, add absolute position embedding to the patch embedding. Default: False
         patch_norm (bool): If True, add normalization after patch embedding. Default: True
         use_checkpoint (bool): Whether to use checkpointing to save memory. Default: False
-        upscale: Upscale factor. 2/3/4/8 for image SR, 1 for denoising and compress artifact reduction
+        upscale: Upscale factor. 2/3/4/8 for image SR, 1 for denoising and compress artifact
+            reduction
         img_range: Image range. 1. or 255.
-        upsampler: The reconstruction reconstruction module. 'pixelshuffle'/'pixelshuffledirect'/'nearest+conv'/None
+        upsampler: The reconstruction reconstruction module. 'pixelshuffle'/'pixelshuffledirect'/
+            'nearest+conv'/None
         resi_connection: The convolutional block before residual connection. '1conv'/'3conv'
     """
 
@@ -886,12 +921,10 @@ class SwinIR(nn.Module):
         self.upsampler = upsampler
         self.window_size = window_size
 
-        #####################################################################################################
-        ################################### 1, shallow feature extraction ###################################
+        # 1, shallow feature extraction
         self.conv_first = nn.Conv2d(num_in_ch, embed_dim, 3, 1, 1)
 
-        #####################################################################################################
-        ################################### 2, deep feature extraction ######################################
+        # 2, deep feature extraction
         self.num_layers = len(depths)
         self.embed_dim = embed_dim
         self.ape = ape
@@ -973,8 +1006,7 @@ class SwinIR(nn.Module):
                 nn.Conv2d(embed_dim // 4, embed_dim, 3, 1, 1),
             )
 
-        #####################################################################################################
-        ################################ 3, high quality image reconstruction ################################
+        # 3, high quality image reconstruction
         if self.upsampler == "pixelshuffle":
             # for classical SR
             self.conv_before_upsample = nn.Sequential(
@@ -1015,14 +1047,6 @@ class SwinIR(nn.Module):
         elif isinstance(m, nn.LayerNorm):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
-
-    @torch.jit.ignore
-    def no_weight_decay(self):
-        return {"absolute_pos_embed"}
-
-    @torch.jit.ignore
-    def no_weight_decay_keywords(self):
-        return {"relative_position_bias_table"}
 
     def check_image_size(self, x):
         _, _, h, w = x.size()
@@ -1092,31 +1116,9 @@ class SwinIR(nn.Module):
         flops += H * W * 3 * self.embed_dim * 9
         flops += self.patch_embed.flops()
         for i, layer in enumerate(self.layers):
+            assert isinstance(layer, RSTB)
             flops += layer.flops()
         flops += H * W * 3 * self.embed_dim * self.embed_dim
+        assert isinstance(self.upsample, UpsampleOneStep)
         flops += self.upsample.flops()
         return flops
-
-
-if __name__ == "__main__":
-    upscale = 4
-    window_size = 8
-    height = (1024 // upscale // window_size + 1) * window_size
-    width = (720 // upscale // window_size + 1) * window_size
-    model = SwinIR(
-        upscale=2,
-        img_size=(height, width),
-        window_size=window_size,
-        img_range=1.0,
-        depths=[6, 6, 6, 6],
-        embed_dim=60,
-        num_heads=[6, 6, 6, 6],
-        mlp_ratio=2,
-        upsampler="pixelshuffledirect",
-    )
-    print(model)
-    print(height, width, model.flops() / 1e9)
-
-    x = torch.randn((1, 3, height, width))
-    x = model(x)
-    print(x.shape)

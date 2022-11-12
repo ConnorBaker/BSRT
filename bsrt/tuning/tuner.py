@@ -11,7 +11,7 @@ from optuna.logging import get_logger
 from optuna.samplers import TPESampler
 from optuna.storages import RDBStorage, RetryFailedTrialCallback
 
-from bsrt.datasets.synthetic_zurich_raw2rgb_data_module import SyntheticZurichRaw2RgbDataModule
+from bsrt.datasets.synthetic_zurich_raw2rgb import SyntheticZurichRaw2Rgb
 from bsrt.tuning.cli_parser import CLI_PARSER, PRECISION_MAP, TunerConfig
 from bsrt.tuning.objective import objective
 
@@ -39,7 +39,7 @@ if __name__ == "__main__":
     config = TunerConfig.from_args(args)
     wandb.login(key=config.wandb_api_key)
 
-    datamodule = SyntheticZurichRaw2RgbDataModule(
+    datamodule = SyntheticZurichRaw2Rgb(
         precision=PRECISION_MAP[config.precision],
         crop_size=256,
         data_dir=config.data_dir,

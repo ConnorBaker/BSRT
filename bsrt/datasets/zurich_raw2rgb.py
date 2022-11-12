@@ -11,7 +11,7 @@ from bsrt.datasets.utilities.downloadable import Downloadable
 
 
 @dataclass
-class ZurichRaw2RgbDataset(VisionDataset, Downloadable):
+class ZurichRaw2Rgb(VisionDataset, Downloadable):
     """Canon RGB images from the "Zurich RAW to RGB mapping" dataset. You can download the full
     dataset (22 GB) from http://people.ee.ethz.ch/~ihnatova/pynet.html#dataset. Alternatively, you
     can only download the Canon RGB images (5.5 GB) from
