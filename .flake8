@@ -7,7 +7,6 @@ exclude =
     bsrt/pwcnet/correlation/correlation.py,
     bsrt/model/swin_util.py,
     bsrt/model/non_local,
-    bsrt/model/utils/psconv.py,
     bsrt/model/spynet_util.py,
     bsrt/pwcnet,
     bsrt/datasets/synthetic_burst
