@@ -58,7 +58,7 @@ if __name__ == "__main__":
             heartbeat_interval=60,
             grace_period=180,
             failed_trial_callback=RetryFailedTrialCallback(max_retry=3),
-        ),
+        ) if config.db_uri != "" else None,
         sampler=TPESampler(
             seed=42,
             multivariate=True,
