@@ -1,27 +1,29 @@
-from typing import Literal, Optional
+from typing import Literal, Optional, Sequence, Union
 
+import torch
 from torch import Tensor, nn
+from torch.nn import functional as F
 
 
-# TODO:
-# - [ ] Is inter_channels really optional? Unless a tensor's view method allows None, it's not.
-# - [ ] Implement a forward method and remove the need for all the other classes to implement it.
 class _NonLocalBlockNDGeneral(nn.Module):
     def __init__(
         self,
-        in_channels: int,
-        inter_channels: Optional[int] = None,
-        dimension: int = 3,
-        sub_sample: bool = True,
-        bn_layer: bool = True,
         kind: Literal[
             "concatenation", "gaussian", "embedded_gaussian", "dot_product", "cross_dot_product"
-        ] = "embedded_gaussian",
+        ],
+        in_channels: int,
+        inter_channels: int,
+        dimension: Literal[1, 2, 3] = 3,
+        sub_sample: bool = True,
+        bn_layer: bool = True,
     ):
         super().__init__()
 
         assert dimension in [1, 2, 3]
 
+        self.kind: Literal[
+            "concatenation", "gaussian", "embedded_gaussian", "dot_product", "cross_dot_product"
+        ] = kind
         self.dimension = dimension
         self.sub_sample = sub_sample
 
@@ -117,5 +119,75 @@ class _NonLocalBlockNDGeneral(nn.Module):
                 nn.Sequential(self.phi, max_pool_layer) if kind != "gaussian" else max_pool_layer
             )
 
-    def forward(self, x: Tensor, return_nl_map: bool = False) -> Tensor:
-        raise NotImplementedError
+    def forward(
+        self, x: Tensor, ref: Optional[Tensor] = None, return_nl_map: bool = False
+    ) -> Union[Tensor, Sequence[Tensor]]:
+        """
+        :param x: (b, c, t, h, w)
+        :param return_nl_map: if True return z, nl_map, else only return z.
+        :return:
+        """
+        assert (ref is not None) == (self.kind == "cross_dot_product")
+        batch_size = x.size(0)
+
+        g_x: Tensor = self.g(x).view(batch_size, self.inter_channels, -1)
+        g_x = g_x.permute(0, 2, 1)
+
+        # Calculate phi_x
+        if self.kind == "gaussian" and not self.sub_sample:
+            phi_x: Tensor = x.view(batch_size, self.in_channels, -1)
+        else:
+            # In this case, we always need to calculate self.phi(x)
+            phi_x: Tensor = self.phi(x)
+            if self.kind == "gaussian":
+                phi_x = phi_x.view(batch_size, self.in_channels, -1)
+            elif self.kind == "concatenation":
+                # (b, c, 1, N)
+                phi_x = phi_x.view(batch_size, self.inter_channels, 1, -1)
+            else:
+                phi_x = phi_x.view(batch_size, self.inter_channels, -1)
+
+        # Calculate theta_x (or theta_ref)
+        if self.kind == "gaussian":
+            theta_x: Tensor = x.view(batch_size, self.in_channels, -1)
+        else:
+            # In this case, we always need to calculate self.theta(x) (or self.theta(ref))
+            # ref is only not None when self.kind == "cross_dot_product"
+            theta_x: Tensor = self.theta(x if ref is None else ref)
+            if self.kind == "concatenation":
+                # (b, c, N, 1)
+                theta_x = theta_x.view(batch_size, self.inter_channels, -1, 1)
+            else:
+                theta_x = theta_x.view(batch_size, self.inter_channels, -1)
+
+        # Calculate f_div_C
+        if self.kind == "concatenation":
+            h = theta_x.size(2)
+            w = phi_x.size(3)
+            theta_x = theta_x.repeat(1, 1, 1, w)
+            phi_x = phi_x.repeat(1, 1, h, 1)
+
+            concat_feature = torch.cat([theta_x, phi_x], dim=1)
+            f: Tensor = self.concat_project(concat_feature)
+            b, _, h, w = f.size()
+            f = f.view(b, h, w)
+            N = f.size(-1)
+            f_div_C = f / N
+        else:
+            theta_x = theta_x.permute(0, 2, 1)
+            f = torch.matmul(theta_x, phi_x)
+            if self.kind == "gaussian" or self.kind == "embedded_gaussian":
+                f_div_C = F.softmax(f, dim=-1)
+            else:
+                N = f.size(-1)
+                f_div_C = f / N
+
+        y = torch.matmul(f_div_C, g_x)
+        y = y.permute(0, 2, 1).contiguous()
+        y = y.view(batch_size, self.inter_channels, *x.size()[2:])
+        W_y = self.W(y)
+        z = W_y + x
+
+        if return_nl_map:
+            return z, f_div_C
+        return z

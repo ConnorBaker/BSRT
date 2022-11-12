@@ -2,8 +2,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from bsrt.model.non_local.non_local_cross_dot_product import NONLocalBlock2D as NonLocalCross
-from bsrt.model.non_local.non_local_dot_product import NONLocalBlock2D as NonLocal
+from bsrt.model.non_local.non_local_general import _NonLocalBlockNDGeneral
 
 
 class CrossNonLocalFusion(nn.Module):
@@ -18,10 +17,24 @@ class CrossNonLocalFusion(nn.Module):
 
         for i in range(nframes):
             self.non_local_T.append(
-                NonLocalCross(nf, inter_channels=nf // 2, sub_sample=True, bn_layer=False)
+                _NonLocalBlockNDGeneral(
+                    kind="cross_dot_product",
+                    in_channels=nf,
+                    inter_channels=nf // 2,
+                    dimension=2,
+                    sub_sample=True,
+                    bn_layer=False,
+                )
             )
             self.non_local_F.append(
-                NonLocal(nf, inter_channels=nf // 2, sub_sample=True, bn_layer=False)
+                _NonLocalBlockNDGeneral(
+                    kind="dot_product",
+                    in_channels=nf,
+                    inter_channels=nf // 2,
+                    dimension=2,
+                    sub_sample=True,
+                    bn_layer=False,
+                )
             )
 
         # fusion conv: using 1x1 to save parameters and computation
