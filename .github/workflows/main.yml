@@ -6,38 +6,38 @@ defaults:
 
 on:
   push:
+    branches:
+      - main
   pull_request:
   workflow_dispatch:
 
 jobs:
-  lint:
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v3
+  isort:
+    uses: ./.github/workflows/lint.yml
+    with:
+      command: isort --check-only --diff .
 
-      - uses: actions/setup-python@v4
-        with:
-          python-version: "3.10"
+  black:
+    uses: ./.github/workflows/lint.yml
+    with:
+      command: black --check --diff .
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install '.[lint]'
+  flake8:
+    uses: ./.github/workflows/lint.yml
+    with:
+      command: flake8 .
 
-      - name: isort
-        run: isort --check-only --diff .
-      
-      - name: black
-        run: black --check --diff .
-
-      - name: flake8
-        run: flake8 .
-
-      - name: pyright
-        run: pyright .
+  pyright:
+    uses: ./.github/workflows/lint.yml
+    with:
+      command: pyright .
 
   build:
-    needs: lint
+    needs:
+      - isort
+      - black
+      - flake8
+      - pyright
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
