@@ -17,11 +17,11 @@ class BasicModule(nn.Module):
 
     channel_steps: ClassVar[Sequence[int]] = [8, 32, 64, 32, 16, 2]
 
-    net: nn.Sequential = field(init=False)
+    basic_module: nn.Sequential = field(init=False)
 
     def __post_init__(self):
         super().__init__()
-        self.net = nn.Sequential(
+        self.basic_module = nn.Sequential(
             # We drop the first element because we do not want to apply a ReLU to the input.
             *[
                 layer
@@ -42,7 +42,7 @@ class BasicModule(nn.Module):
         )
 
     def forward(self, tensor_input: Tensor) -> Tensor:
-        return self.net(tensor_input)
+        return self.basic_module(tensor_input)
 
 
 @dataclass(eq=False)
@@ -59,13 +59,13 @@ class SpyNet(nn.Module):
     ] = "https://github.com/JingyunLiang/VRT/releases/download/v0.0/spynet_sintel_final-3d2a1287.pth"  # noqa: E501
 
     return_levels: Sequence[int] = field(default_factory=lambda: [5])
-    net: nn.ModuleList = field(init=False)
+    basic_module: nn.ModuleList = field(init=False)
     mean: Tensor = field(init=False)
     std: Tensor = field(init=False)
 
     def __post_init__(self):
         super().__init__()
-        self.net = nn.ModuleList([BasicModule() for _ in range(6)])
+        self.basic_module = nn.ModuleList([BasicModule() for _ in range(6)])
 
         weights_dict = torch.hub.load_state_dict_from_url(SpyNet.weights_url)
         self.load_state_dict(weights_dict["params"])
@@ -118,7 +118,7 @@ class SpyNet(nn.Module):
                 upsampled_flow = F.pad(input=upsampled_flow, pad=[0, 1, 0, 0], mode="replicate")
 
             flow = (
-                self.net[level](
+                self.basic_module[level](
                     torch.cat(
                         [
                             _ref[level],
