@@ -12,32 +12,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  isort:
+  lint:
     uses: ./.github/workflows/lint.yml
-    with:
-      command: isort --check-only --diff .
-
-  black:
-    uses: ./.github/workflows/lint.yml
-    with:
-      command: black --check --diff .
-
-  flake8:
-    uses: ./.github/workflows/lint.yml
-    with:
-      command: flake8 .
-
-  pyright:
-    uses: ./.github/workflows/lint.yml
-    with:
-      command: pyright .
 
   build:
-    needs:
-      - isort
-      - black
-      - flake8
-      - pyright
+    needs: lint
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
