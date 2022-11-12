@@ -10,6 +10,5 @@ exclude =
     bsrt/model/utils/psconv.py,
     bsrt/model/spynet_util.py,
     bsrt/metrics,
-    bsrt/loss,
     bsrt/pwcnet,
     bsrt/datasets/synthetic_burst
