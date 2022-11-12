@@ -38,7 +38,7 @@ target-version = ['py310']
 [tool.isort]
 profile = "black"
 line_length = 99
-py_version = "auto"
+py_version = "39" # 3.10 isn't supported yet
 
 [tool.setuptools]
 packages = ["bsrt"]
