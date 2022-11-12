@@ -347,9 +347,9 @@ class BSRT(nn.Module):
             ]
             # print(nbr_fea_l[0].shape, flows_l[0].shape)
             nbr_warped_l = [
-                arch_util.flow_warp(nbr_fea_l[0], flows_l[0].permute(0, 2, 3, 1), "bilinear"),
-                arch_util.flow_warp(nbr_fea_l[1], flows_l[1].permute(0, 2, 3, 1), "bilinear"),
-                arch_util.flow_warp(nbr_fea_l[2], flows_l[2].permute(0, 2, 3, 1), "bilinear"),
+                arch_util.flow_warp(nbr_fea_l[0], flows_l[0].permute(0, 2, 3, 1)),
+                arch_util.flow_warp(nbr_fea_l[1], flows_l[1].permute(0, 2, 3, 1)),
+                arch_util.flow_warp(nbr_fea_l[2], flows_l[2].permute(0, 2, 3, 1)),
             ]
             _aligned_fea.append(self.align(nbr_fea_l, nbr_warped_l, ref_fea_l, flows_l))
 

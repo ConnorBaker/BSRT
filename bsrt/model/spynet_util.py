@@ -102,7 +102,6 @@ class SpyNet(nn.Module):
                             arch_util.flow_warp(
                                 supp[level],
                                 upsampled_flow.permute(0, 2, 3, 1),
-                                interp_mode="bilinear",
                                 padding_mode="border",
                             ),
                             upsampled_flow,
