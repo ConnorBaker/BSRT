@@ -79,9 +79,7 @@ class TrainDataProcessor:
     def __post_init__(self):
         self.final_crop_sz = self.crop_sz + 2 * self.burst_transformation_params.border_crop
         self.cropper = RandomCrop(self.final_crop_sz)
-        self.boundary_ignorer = CenterCrop(
-            self.crop_sz - self.burst_transformation_params.border_crop
-        )
+        self.boundary_ignorer = CenterCrop(self.crop_sz)
         self.pre_dtype_converter = ConvertImageDtype(torch.float32)
         self.post_dtype_converter = ConvertImageDtype(self.dtype)
 
