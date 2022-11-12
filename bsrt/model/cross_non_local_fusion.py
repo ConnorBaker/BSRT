@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from torch import Tensor
 
 from bsrt.model.non_local.non_local_cross_dot_product import NONLocalBlock2D as NonLocalCross
 from bsrt.model.non_local.non_local_dot_product import NONLocalBlock2D as NonLocal
@@ -8,7 +9,7 @@ from bsrt.model.non_local.non_local_dot_product import NONLocalBlock2D as NonLoc
 class CrossNonLocalFusion(nn.Module):
     """Cross Non Local fusion module"""
 
-    def __init__(self, nf=64, out_feat=96, nframes=5, center=2):
+    def __init__(self, nf: int = 64, out_feat: int = 96, nframes: int = 5, center: int = 2):
         super(CrossNonLocalFusion, self).__init__()
         self.center = center
 
@@ -28,7 +29,7 @@ class CrossNonLocalFusion(nn.Module):
 
         self.lrelu = nn.LeakyReLU(negative_slope=0.1, inplace=True)
 
-    def forward(self, aligned_fea):
+    def forward(self, aligned_fea: Tensor) -> Tensor:
         B, N, C, H, W = aligned_fea.size()  # N video frames
         ref = aligned_fea[:, self.center, :, :, :].clone()
 

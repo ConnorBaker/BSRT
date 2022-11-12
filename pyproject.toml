@@ -51,7 +51,6 @@ exclude = [
     "bsrt/datasets/synthetic_burst/test_dataset.py",
     "bsrt/datasets/burstsr_dataset.py",
     "bsrt/model/swin_util.py",
-    "bsrt/model/non_local",
     "bsrt/pwcnet"
 ]
 defineConstant = { DEBUG = true }
