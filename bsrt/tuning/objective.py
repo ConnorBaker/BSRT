@@ -175,7 +175,9 @@ def objective(
         limit_val_batches=config.limit_val_batches,
         max_epochs=config.max_epochs,
         strategy=DDPStrategy(
-            static_graph=True, find_unused_parameters=False, gradient_as_bucket_view=True,
+            static_graph=True,
+            find_unused_parameters=False,
+            gradient_as_bucket_view=True,
             ddp_comm_state=post_localSGD.PostLocalSGDState(
                 process_group=None,
                 subgroup=None,
