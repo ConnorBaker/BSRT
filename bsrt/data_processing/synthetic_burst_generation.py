@@ -19,53 +19,8 @@ from bsrt.data_processing.image_transformation_params import ImageTransformation
 from bsrt.data_processing.meta_info import MetaInfo
 from bsrt.data_processing.noises import Noises
 from bsrt.data_processing.rgb_gains import RgbGains
-from bsrt.utils.bilinear_upsample_2d import bilinear_upsample_2d
 from bsrt.utils.data_format_utils import numpy_to_torch, torch_to_numpy
 from bsrt.utils.types import InterpolationType
-
-
-def random_crop(frames: Tensor, crop_sz: Union[float, List[float], Tuple[float, ...]]) -> Tensor:
-    """Extract a random crop of size crop_sz from the input frames. If the crop_sz is larger than
-    the input image size, then the largest possible crop of same aspect ratio as crop_sz will be
-    extracted from frames, and upsampled to crop_sz.
-    """
-    if not isinstance(crop_sz, (tuple, list)):
-        crop_sz = (crop_sz, crop_sz)
-    crop_sz_t: Tensor = torch.tensor(crop_sz).float()
-
-    shape = frames.shape
-
-    # Select scale_factor. Ensure the crop fits inside the image
-    max_scale_factor = torch.tensor(shape[-2:]).float() / crop_sz_t
-    max_scale_factor = max_scale_factor.min().item()
-
-    if max_scale_factor < 1.0:
-        scale_factor = max_scale_factor
-    else:
-        scale_factor = 1.0
-
-    # Extract the crop
-    orig_crop_sz = (crop_sz_t * scale_factor).floor()
-
-    assert (
-        orig_crop_sz[-2] <= shape[-2] and orig_crop_sz[-1] <= shape[-1]
-    ), "Bug in crop size estimation!"
-
-    r1 = random.randint(0, int(shape[-2] - orig_crop_sz[-2]))
-    c1 = random.randint(0, int(shape[-1] - orig_crop_sz[-1]))
-
-    r2 = r1 + orig_crop_sz[0].int().item()
-    c2 = c1 + orig_crop_sz[1].int().item()
-
-    frames_crop = frames[:, r1:r2, c1:c2]
-
-    # Resize to crop_sz
-    if scale_factor < 1.0:
-        frames_crop = bilinear_upsample_2d(
-            frames_crop.unsqueeze(0),
-            size=tuple(crop_sz_t.int().tolist()),
-        ).squeeze(0)
-    return frames_crop
 
 
 def rgb2rawburst(

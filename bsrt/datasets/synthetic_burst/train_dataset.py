@@ -3,14 +3,13 @@ from typing import TypedDict
 
 import torch
 from torch import Tensor
+from torchvision.transforms import CenterCrop, ConvertImageDtype, RandomCrop
 
 from bsrt.data_processing.synthetic_burst_generation import (
     ImageProcessingParams,
     ImageTransformationParams,
-    random_crop,
     rgb2rawburst,
 )
-from bsrt.metrics.utils.ignore_boundry import ignore_boundary
 from bsrt.utils.types import InterpolationType
 
 
@@ -79,27 +78,32 @@ class TrainDataProcessor:
 
     def __post_init__(self):
         self.final_crop_sz = self.crop_sz + 2 * self.burst_transformation_params.border_crop
+        self.cropper = RandomCrop(self.final_crop_sz)
+        self.boundary_ignorer = CenterCrop(
+            self.crop_sz - self.burst_transformation_params.border_crop
+        )
+        self.pre_dtype_converter = ConvertImageDtype(torch.float32)
+        self.post_dtype_converter = ConvertImageDtype(self.dtype)
 
     def __call__(self, frame: Tensor) -> TrainData:
         # Extract a random crop from the image
-        cropped_frame = random_crop(frame, self.final_crop_sz)
-
-        # If the image is uint8, convert it to float32
-        if cropped_frame.dtype == torch.uint8:
-            cropped_frame = cropped_frame.float() / 255.0
+        cropped_frame: Tensor = self.cropper(frame)
+        converted_frame: Tensor = self.pre_dtype_converter(cropped_frame)
 
         burst, gt, _burst_rgb, flow_vectors, meta_info = rgb2rawburst(
-            cropped_frame,
+            converted_frame,
             self.burst_size,
             self.downsample_factor,
             burst_transformation_params=self.burst_transformation_params,
             image_processing_params=self.image_processing_params,
             interpolation_type=self.interpolation_type,
         )
-        gt = ignore_boundary(gt, self.burst_transformation_params.border_crop)
+        burst = self.post_dtype_converter(burst)
+        gt = self.post_dtype_converter(self.boundary_ignorer(gt))
+        flow_vectors = self.post_dtype_converter(flow_vectors)
 
         return TrainData(
-            burst=burst.type(self.dtype),
-            gt=gt.type(self.dtype),
-            flow_vectors=flow_vectors.type(self.dtype),
+            burst=burst,
+            gt=gt,
+            flow_vectors=flow_vectors,
         )

@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 import torch
 from datasets.utilities.downloadable import Downloadable
-from datasets.utilities.image_folder_data import ImageFolderData
 from torch import Tensor
 from typing_extensions import ClassVar
 
