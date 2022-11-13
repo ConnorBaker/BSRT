@@ -45,7 +45,6 @@ def configure_scheduler(
             epochs=scheduler_params.epochs,
             steps_per_epoch=scheduler_params.steps_per_epoch,
             pct_start=scheduler_params.pct_start,
-            cycle_momentum=scheduler_params.cycle_momentum,
             base_momentum=scheduler_params.base_momentum,
             max_momentum=scheduler_params.max_momentum,
             div_factor=scheduler_params.div_factor,
