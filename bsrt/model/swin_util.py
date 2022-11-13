@@ -12,7 +12,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from timm.models.layers import DropPath, Mlp, trunc_normal_
-from timm.models.swin_transformer_v2 import WindowAttention, window_partition, window_reverse
+from timm.models.swin_transformer_v2_cr import (
+    WindowMultiHeadAttention,
+    window_partition,
+    window_reverse,
+)
 from torch import Tensor
 
 _T = TypeVar("_T")
@@ -100,13 +104,12 @@ class SwinTransformerBlock(nn.Module):
         assert 0 <= self.shift_size < self.window_size, "shift_size must in 0-window_size"
 
         self.norm1 = norm_layer(dim)
-        self.attn = WindowAttention(
+        self.attn = WindowMultiHeadAttention(
             dim,
-            window_size=to_2tuple(self.window_size),
             num_heads=num_heads,
-            qkv_bias=qkv_bias,
-            attn_drop=attn_drop,
-            proj_drop=drop,
+            window_size=to_2tuple(self.window_size),
+            drop_attn=attn_drop,
+            drop_proj=drop,
         )
 
         self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
