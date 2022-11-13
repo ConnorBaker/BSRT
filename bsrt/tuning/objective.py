@@ -1,6 +1,6 @@
 import sys
 from logging import StreamHandler
-from typing import List, Mapping, NewType, Tuple, Union
+from typing import List, NewType, Tuple, Union
 
 from lightning_lite.utilities.seed import seed_everything
 from optuna import Trial
@@ -8,6 +8,7 @@ from optuna.exceptions import TrialPruned
 from optuna.logging import get_logger
 from pytorch_lightning import LightningDataModule
 from pytorch_lightning.callbacks import Callback
+from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.strategies.ddp import DDPStrategy
 from pytorch_lightning.strategies.strategy import Strategy
@@ -42,58 +43,74 @@ PSNR_DIVERGENCE_THRESHOLD: float = 16.0
 MS_SSIM_DIVERGENCE_THRESHOLD: float = 0.8
 LPIPS_DIVERGENCE_THRESHOLD: float = 0.2
 
-PRECISION_NAME_TO_LIGHTNING_PRECISION: Mapping[PrecisionName, Literal["bf16", 16, 32, 64]] = {
-    "bfloat16": "bf16",
-    "float16": 16,
-    "float32": 32,
-    "float64": 64,
-}
 
-STRATEGY: Strategy = DDPStrategy(
-    accelerator="auto",
-    static_graph=True,
-    find_unused_parameters=False,
-    gradient_as_bucket_view=True,
-    ddp_comm_state=post_localSGD.PostLocalSGDState(
-        process_group=None,
-        subgroup=None,
-        start_localSGD_iter=8,
-    ),
-    ddp_comm_hook=post_localSGD.post_localSGD_hook,
-    ddp_comm_wrapper=default_hooks.bf16_compress_wrapper,
-    model_averaging_period=4,
-)
+def get_lightning_precision(precision_name: PrecisionName) -> Literal["bf16", 16, 32, 64]:
+    if precision_name == "bfloat16":
+        return "bf16"
+    elif precision_name == "float16":
+        return 16
+    elif precision_name == "float32":
+        return 32
+    elif precision_name == "float64":
+        return 64
+    else:
+        error_msg = f"Precision {precision_name} not supported."
+        logger.error(error_msg)
+        raise ValueError(error_msg)
 
-CALLBACKS: List[Callback] = [
-    # StochasticWeightAveraging(swa_lrs=1e-3),
-    MinEpochsEarlyStopping(
-        monitor="val/psnr",
-        min_delta=1.0,
-        patience=3,
-        mode="max",
-        divergence_threshold=PSNR_DIVERGENCE_THRESHOLD / 2,
-        min_epochs=5,
-        verbose=True,
-    ),
-    MinEpochsEarlyStopping(
-        monitor="val/ms_ssim",
-        min_delta=0.1,
-        patience=3,
-        mode="max",
-        divergence_threshold=MS_SSIM_DIVERGENCE_THRESHOLD / 2,
-        min_epochs=5,
-        verbose=True,
-    ),
-    MinEpochsEarlyStopping(
-        monitor="val/lpips",
-        min_delta=0.1,
-        patience=3,
-        mode="min",
-        divergence_threshold=LPIPS_DIVERGENCE_THRESHOLD * 2,
-        min_epochs=5,
-        verbose=True,
-    ),
-]
+
+def get_strategy() -> Strategy:
+    return DDPStrategy(
+        static_graph=True,
+        find_unused_parameters=False,
+        gradient_as_bucket_view=True,
+        ddp_comm_state=post_localSGD.PostLocalSGDState(
+            process_group=None,
+            subgroup=None,
+            start_localSGD_iter=8,
+        ),
+        ddp_comm_hook=post_localSGD.post_localSGD_hook,
+        ddp_comm_wrapper=default_hooks.bf16_compress_wrapper,
+        model_averaging_period=4,
+    )
+
+
+def get_callbacks() -> List[Callback]:
+    return [
+        # StochasticWeightAveraging(swa_lrs=1e-3),
+        ModelCheckpoint(
+            monitor="val/lpips",
+            mode="min",
+            auto_insert_metric_name=False,
+        ),
+        MinEpochsEarlyStopping(
+            monitor="val/psnr",
+            min_delta=1.0,
+            patience=3,
+            mode="max",
+            divergence_threshold=PSNR_DIVERGENCE_THRESHOLD / 2,
+            min_epochs=5,
+            verbose=True,
+        ),
+        MinEpochsEarlyStopping(
+            monitor="val/ms_ssim",
+            min_delta=0.1,
+            patience=3,
+            mode="max",
+            divergence_threshold=MS_SSIM_DIVERGENCE_THRESHOLD / 2,
+            min_epochs=5,
+            verbose=True,
+        ),
+        MinEpochsEarlyStopping(
+            monitor="val/lpips",
+            min_delta=0.1,
+            patience=3,
+            mode="min",
+            divergence_threshold=LPIPS_DIVERGENCE_THRESHOLD * 2,
+            min_epochs=5,
+            verbose=True,
+        ),
+    ]
 
 
 def get_optimizer_params(
@@ -156,30 +173,27 @@ def objective(
         for k, v in params.__dict__.items()
     }
 
-    wandb_kwargs = {
-        "entity": "connorbaker",
-        "project": "bsrt",
-        "group": config.experiment_name,
-        "reinit": True,
-    }
-    wandb_logger = WandbLogger(**wandb_kwargs)
+    wandb_logger = WandbLogger(
+        entity="connorbaker", project="bsrt", group=config.experiment_name, reinit=True
+    )
 
     trainer = Trainer(
+        accelerator="auto",
         devices="auto",
-        precision=PRECISION_NAME_TO_LIGHTNING_PRECISION[config.precision],
-        enable_checkpointing=False,
+        precision=get_lightning_precision(config.precision),
+        enable_checkpointing=True,
         limit_train_batches=config.limit_train_batches,
         limit_val_batches=config.limit_val_batches,
         max_epochs=config.max_epochs,
-        strategy=STRATEGY,
+        strategy=get_strategy(),
         detect_anomaly=False,
         enable_model_summary=False,
-        enable_progress_bar=True,
+        enable_progress_bar=False,
         logger=wandb_logger,
         num_sanity_val_steps=0,
         gradient_clip_val=0.5,
         gradient_clip_algorithm="norm",
-        callbacks=CALLBACKS,
+        callbacks=get_callbacks(),
     )
 
     for _logger in trainer.loggers:
