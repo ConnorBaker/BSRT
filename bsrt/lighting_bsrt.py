@@ -20,6 +20,7 @@ from bsrt.tuning.lr_scheduler.cosine_annealing_warm_restarts import (
     CosineAnnealingWarmRestartsParams,
 )
 from bsrt.tuning.lr_scheduler.exponential_lr import ExponentialLRParams
+from bsrt.tuning.lr_scheduler.one_cycle_lr import OneCycleLRParams
 from bsrt.tuning.lr_scheduler.reduce_lr_on_plateau import ReduceLROnPlateauParams
 from bsrt.tuning.lr_scheduler.utilities import configure_scheduler
 from bsrt.tuning.model.bsrt import BSRTParams
@@ -33,7 +34,10 @@ class LightningBSRT(LightningModule):
     bsrt_params: BSRTParams
     optimizer_params: Union[AdamWParams, SGDParams]
     scheduler_params: Union[
-        CosineAnnealingWarmRestartsParams, ExponentialLRParams, ReduceLROnPlateauParams
+        CosineAnnealingWarmRestartsParams,
+        ExponentialLRParams,
+        OneCycleLRParams,
+        ReduceLROnPlateauParams,
     ]
 
     # lr_scheduler: Optional[torch.optim.lr_scheduler._LRScheduler]

@@ -8,7 +8,9 @@ import torch
 from typing_extensions import Literal, get_args
 
 OptimizerName = Literal["AdamW", "SGD"]
-SchedulerName = Literal["CosineAnnealingWarmRestarts", "ExponentialLR", "ReduceLROnPlateau"]
+SchedulerName = Literal[
+    "CosineAnnealingWarmRestarts", "ExponentialLR", "OneCycleLR", "ReduceLROnPlateau"
+]
 PrecisionName = Literal["bfloat16", "float16", "float32", "float64"]
 PRECISION_MAP: Mapping[PrecisionName, torch.dtype] = {
     "bfloat16": torch.bfloat16,

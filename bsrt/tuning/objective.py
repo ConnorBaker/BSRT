@@ -23,6 +23,7 @@ from bsrt.tuning.lr_scheduler.cosine_annealing_warm_restarts import (
     CosineAnnealingWarmRestartsParams,
 )
 from bsrt.tuning.lr_scheduler.exponential_lr import ExponentialLRParams
+from bsrt.tuning.lr_scheduler.one_cycle_lr import OneCycleLRParams
 from bsrt.tuning.lr_scheduler.reduce_lr_on_plateau import ReduceLROnPlateauParams
 from bsrt.tuning.model.bsrt import BSRTParams
 from bsrt.tuning.optimizer.adamw import AdamWParams
@@ -127,6 +128,8 @@ def objective(
         scheduler_params = ReduceLROnPlateauParams.suggest(trial)
     elif config.scheduler == "CosineAnnealingWarmRestarts":
         scheduler_params = CosineAnnealingWarmRestartsParams.suggest(trial)
+    elif config.scheduler == "OneCycleLR":
+        scheduler_params = OneCycleLRParams.suggest(trial, config.max_epochs, config.batch_size)
     elif config.scheduler == "ExponentialLR":
         scheduler_params = ExponentialLRParams.suggest(trial)
     else:
@@ -153,7 +156,7 @@ def objective(
         "project": "bsrt",
         # "group": Provided by the experiment name passed in from the command line
         "reinit": True,
-        "settings": wandb.Settings(start_method="fork"),
+        # "settings": wandb.Settings(start_method="fork"),
     }
 
     wandb_kwargs["group"] = config.experiment_name
@@ -199,28 +202,28 @@ def objective(
             MinEpochsEarlyStopping(
                 monitor="val/psnr",
                 min_delta=1.0,
-                patience=5,
+                patience=3,
                 mode="max",
                 divergence_threshold=PSNR_DIVERGENCE_THRESHOLD,
-                min_epochs=10,
+                min_epochs=5,
                 verbose=True,
             ),
             MinEpochsEarlyStopping(
                 monitor="val/ms_ssim",
                 min_delta=0.1,
-                patience=5,
+                patience=3,
                 mode="max",
                 divergence_threshold=MS_SSIM_DIVERGENCE_THRESHOLD,
-                min_epochs=10,
+                min_epochs=5,
                 verbose=True,
             ),
             MinEpochsEarlyStopping(
                 monitor="val/lpips",
                 min_delta=0.1,
-                patience=5,
+                patience=3,
                 mode="min",
                 divergence_threshold=LPIPS_DIVERGENCE_THRESHOLD,
-                min_epochs=10,
+                min_epochs=5,
                 verbose=True,
             ),
         ],
