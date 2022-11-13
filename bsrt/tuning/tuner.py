@@ -8,7 +8,6 @@ import torch.cuda
 import wandb
 from lightning_lite.utilities.seed import seed_everything
 from optuna.logging import get_logger
-from optuna.samplers import TPESampler
 from optuna.storages import RDBStorage, RetryFailedTrialCallback
 
 from bsrt.datasets.synthetic_zurich_raw2rgb import SyntheticZurichRaw2Rgb
@@ -61,13 +60,6 @@ if __name__ == "__main__":
         )
         if config.db_uri != ""
         else None,
-        sampler=TPESampler(
-            seed=42,
-            multivariate=True,
-            group=True,
-            n_startup_trials=10,
-            n_ei_candidates=24,
-        ),
         study_name=study_name,
         load_if_exists=True,
         directions=["maximize", "maximize", "minimize"],
