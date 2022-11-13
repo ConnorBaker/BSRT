@@ -1,30 +1,30 @@
 import sys
 from logging import StreamHandler
-from typing import Mapping, NewType, Tuple
+from typing import List, Mapping, NewType, Tuple, Union
 
-import wandb
 from lightning_lite.utilities.seed import seed_everything
 from optuna import Trial
 from optuna.exceptions import TrialPruned
 from optuna.logging import get_logger
-from pytorch_lightning import LightningDataModule, LightningModule
-from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning.callbacks.stochastic_weight_avg import StochasticWeightAveraging
+from pytorch_lightning import LightningDataModule
+from pytorch_lightning.callbacks import Callback
 from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.strategies.ddp import DDPStrategy
+from pytorch_lightning.strategies.strategy import Strategy
 from pytorch_lightning.trainer import Trainer
 from torch.distributed.algorithms.ddp_comm_hooks import default_hooks
 from torch.distributed.algorithms.ddp_comm_hooks import post_localSGD_hook as post_localSGD
 from typing_extensions import Literal
 
 from bsrt.lighting_bsrt import LightningBSRT
-from bsrt.tuning.cli_parser import PrecisionName, TunerConfig
+from bsrt.tuning.cli_parser import OptimizerName, PrecisionName, TunerConfig
 from bsrt.tuning.lr_scheduler.cosine_annealing_warm_restarts import (
     CosineAnnealingWarmRestartsParams,
 )
 from bsrt.tuning.lr_scheduler.exponential_lr import ExponentialLRParams
 from bsrt.tuning.lr_scheduler.one_cycle_lr import OneCycleLRParams
 from bsrt.tuning.lr_scheduler.reduce_lr_on_plateau import ReduceLROnPlateauParams
+from bsrt.tuning.min_epochs_early_stopping import MinEpochsEarlyStopping
 from bsrt.tuning.model.bsrt import BSRTParams
 from bsrt.tuning.optimizer.adamw import AdamWParams
 from bsrt.tuning.optimizer.sgd import SGDParams
@@ -42,70 +42,93 @@ PSNR_DIVERGENCE_THRESHOLD: float = 16.0
 MS_SSIM_DIVERGENCE_THRESHOLD: float = 0.8
 LPIPS_DIVERGENCE_THRESHOLD: float = 0.2
 
+PRECISION_NAME_TO_LIGHTNING_PRECISION: Mapping[PrecisionName, Literal["bf16", 16, 32, 64]] = {
+    "bfloat16": "bf16",
+    "float16": 16,
+    "float32": 32,
+    "float64": 64,
+}
 
-class MinEpochsEarlyStopping(EarlyStopping):
-    """
-    A custom early stopping callback that doesn't stop training if the minimum number of epochs
-    hasn't been reached yet. This is useful for when we want to train for a longer time to see if
-    the model can recover from a bad initialization.
+STRATEGY: Strategy = DDPStrategy(
+    accelerator="auto",
+    static_graph=True,
+    find_unused_parameters=False,
+    gradient_as_bucket_view=True,
+    ddp_comm_state=post_localSGD.PostLocalSGDState(
+        process_group=None,
+        subgroup=None,
+        start_localSGD_iter=8,
+    ),
+    ddp_comm_hook=post_localSGD.post_localSGD_hook,
+    ddp_comm_wrapper=default_hooks.bf16_compress_wrapper,
+    model_averaging_period=4,
+)
 
-    Patience is incremented by 1 if the minimum number of epochs hasn't been reached yet, ensuring
-    that we don't stop training prematurely. It is reset to the original value once the minimum
-    number of epochs has been reached. In this way, patience does not start until we have reached
-    the minimum number of epochs.
+CALLBACKS: List[Callback] = [
+    # StochasticWeightAveraging(swa_lrs=1e-3),
+    MinEpochsEarlyStopping(
+        monitor="val/psnr",
+        min_delta=1.0,
+        patience=3,
+        mode="max",
+        divergence_threshold=PSNR_DIVERGENCE_THRESHOLD / 2,
+        min_epochs=5,
+        verbose=True,
+    ),
+    MinEpochsEarlyStopping(
+        monitor="val/ms_ssim",
+        min_delta=0.1,
+        patience=3,
+        mode="max",
+        divergence_threshold=MS_SSIM_DIVERGENCE_THRESHOLD / 2,
+        min_epochs=5,
+        verbose=True,
+    ),
+    MinEpochsEarlyStopping(
+        monitor="val/lpips",
+        min_delta=0.1,
+        patience=3,
+        mode="min",
+        divergence_threshold=LPIPS_DIVERGENCE_THRESHOLD * 2,
+        min_epochs=5,
+        verbose=True,
+    ),
+]
 
-    When the minimum number of epochs has been reached, in addition to patience being reset to its
-    original value, the divergence threshold is added to the callback and the wait counter is
-    reset to zero.
-    """
 
-    def __init__(
-        self,
-        monitor: str,
-        min_delta: float,
-        patience: int,
-        min_epochs: int,
-        mode: Literal["min", "max"],
-        divergence_threshold: float,
-        verbose: bool = False,
-    ):
-        """
-        Args:
-            divergence_threshold (float): The divergence threshold for the metric to be monitored.
-            monitor (str): The metric to be monitored.
-            patience (int): The number of epochs to wait for the metric to be monitored to improve.
-            min_epochs (int): The minimum number of epochs to train for.
-            min_delta (float): The minimum change in the monitored metric to qualify as an
-                improvement.
-            mode (Literal["min", "max"]): Whether the monitored metric should be increasing or
-                decreasing.
-            verbose (bool, optional): Whether to print messages. Defaults to False.
-        """
-        super().__init__(
-            monitor=monitor,
-            min_delta=min_delta,
-            patience=patience,
-            mode=mode,
-            verbose=verbose,
-        )
-        self.min_epochs = min_epochs
-        self._divergence_threshold = divergence_threshold
+def get_optimizer_params(
+    optimizer_name: OptimizerName, trial: Trial
+) -> Union[AdamWParams, SGDParams]:
+    if optimizer_name == "AdamW":
+        return AdamWParams.suggest(trial)
+    elif optimizer_name == "SGD":
+        return SGDParams.suggest(trial)
+    else:
+        error_msg = f"Optimizer {optimizer_name} not supported."
+        logger.error(error_msg)
+        raise ValueError(error_msg)
 
-    def on_validation_end(self, trainer: Trainer, pl_module: LightningModule) -> None:
-        return
 
-    def on_validation_epoch_end(self, trainer: Trainer, pl_module: LightningModule) -> None:
-        if trainer.current_epoch < self.min_epochs:
-            # Reset the wait counter to 0
-            self.wait_count = 0
-        elif trainer.current_epoch == self.min_epochs:
-            # Reset the wait counter to 0
-            self.wait_count = 0
-            # Add the divergence threshold attribute now that we've reached the minimum number of
-            # epochs
-            self.divergence_threshold = self._divergence_threshold
-
-        self._run_early_stopping_check(trainer)
+def get_lr_scheduler_params(
+    lr_scheduler_name: str, trial: Trial, max_epochs: int, batch_size: int
+) -> Union[
+    CosineAnnealingWarmRestartsParams,
+    ExponentialLRParams,
+    OneCycleLRParams,
+    ReduceLROnPlateauParams,
+]:
+    if lr_scheduler_name == "CosineAnnealingWarmRestarts":
+        return CosineAnnealingWarmRestartsParams.suggest(trial)
+    elif lr_scheduler_name == "ExponentialLR":
+        return ExponentialLRParams.suggest(trial)
+    elif lr_scheduler_name == "OneCycleLR":
+        return OneCycleLRParams.suggest(trial, max_epochs, batch_size)
+    elif lr_scheduler_name == "ReduceLROnPlateau":
+        return ReduceLROnPlateauParams.suggest(trial)
+    else:
+        error_msg = f"Learning rate scheduler {lr_scheduler_name} not supported."
+        logger.error(error_msg)
+        raise ValueError(error_msg)
 
 
 def objective(
@@ -115,28 +138,10 @@ def objective(
 ) -> Tuple[PSNR, MS_SSIM, LPIPS]:
     seed_everything(42)
 
-    if config.optimizer == "AdamW":
-        optimizer_params = AdamWParams.suggest(trial)
-    elif config.optimizer == "SGD":
-        optimizer_params = SGDParams.suggest(trial)
-    else:
-        error_msg = f"Optimizer {config.optimizer} not supported."
-        logger.error(error_msg)
-        raise ValueError(error_msg)
-
-    if config.scheduler == "ReduceLROnPlateau":
-        scheduler_params = ReduceLROnPlateauParams.suggest(trial)
-    elif config.scheduler == "CosineAnnealingWarmRestarts":
-        scheduler_params = CosineAnnealingWarmRestartsParams.suggest(trial)
-    elif config.scheduler == "OneCycleLR":
-        scheduler_params = OneCycleLRParams.suggest(trial, config.max_epochs, config.batch_size)
-    elif config.scheduler == "ExponentialLR":
-        scheduler_params = ExponentialLRParams.suggest(trial)
-    else:
-        error_msg = f"Scheduler {config.scheduler} not supported."
-        logger.error(error_msg)
-        raise ValueError(error_msg)
-
+    optimizer_params = get_optimizer_params(config.optimizer, trial)
+    scheduler_params = get_lr_scheduler_params(
+        config.scheduler, trial, config.max_epochs, config.batch_size
+    )
     bsrt_params = BSRTParams.suggest(trial)
 
     model = LightningBSRT(
@@ -154,42 +159,19 @@ def objective(
     wandb_kwargs = {
         "entity": "connorbaker",
         "project": "bsrt",
-        # "group": Provided by the experiment name passed in from the command line
+        "group": config.experiment_name,
         "reinit": True,
-        # "settings": wandb.Settings(start_method="fork"),
     }
-
-    wandb_kwargs["group"] = config.experiment_name
     wandb_logger = WandbLogger(**wandb_kwargs)
 
-    precision_name_to_lightning_precision: Mapping[PrecisionName, Literal["bf16", 16, 32, 64]] = {
-        "bfloat16": "bf16",
-        "float16": 16,
-        "float32": 32,
-        "float64": 64,
-    }
-
     trainer = Trainer(
-        accelerator="auto",
         devices="auto",
-        precision=precision_name_to_lightning_precision[config.precision],
+        precision=PRECISION_NAME_TO_LIGHTNING_PRECISION[config.precision],
         enable_checkpointing=False,
         limit_train_batches=config.limit_train_batches,
         limit_val_batches=config.limit_val_batches,
         max_epochs=config.max_epochs,
-        strategy=DDPStrategy(
-            static_graph=True,
-            find_unused_parameters=False,
-            gradient_as_bucket_view=True,
-            ddp_comm_state=post_localSGD.PostLocalSGDState(
-                process_group=None,
-                subgroup=None,
-                start_localSGD_iter=8,
-            ),
-            ddp_comm_hook=post_localSGD.post_localSGD_hook,
-            ddp_comm_wrapper=default_hooks.bf16_compress_wrapper,
-            model_averaging_period=4,
-        ),
+        strategy=STRATEGY,
         detect_anomaly=False,
         enable_model_summary=False,
         enable_progress_bar=True,
@@ -197,43 +179,14 @@ def objective(
         num_sanity_val_steps=0,
         gradient_clip_val=0.5,
         gradient_clip_algorithm="norm",
-        callbacks=[
-            StochasticWeightAveraging(swa_lrs=1e-3),
-            MinEpochsEarlyStopping(
-                monitor="val/psnr",
-                min_delta=1.0,
-                patience=3,
-                mode="max",
-                divergence_threshold=PSNR_DIVERGENCE_THRESHOLD,
-                min_epochs=5,
-                verbose=True,
-            ),
-            MinEpochsEarlyStopping(
-                monitor="val/ms_ssim",
-                min_delta=0.1,
-                patience=3,
-                mode="max",
-                divergence_threshold=MS_SSIM_DIVERGENCE_THRESHOLD,
-                min_epochs=5,
-                verbose=True,
-            ),
-            MinEpochsEarlyStopping(
-                monitor="val/lpips",
-                min_delta=0.1,
-                patience=3,
-                mode="min",
-                divergence_threshold=LPIPS_DIVERGENCE_THRESHOLD,
-                min_epochs=5,
-                verbose=True,
-            ),
-        ],
+        callbacks=CALLBACKS,
     )
 
     for _logger in trainer.loggers:
         _logger.log_hyperparams(hyperparams)
 
-        if isinstance(_logger, WandbLogger):
-            _logger.watch(model, log="all", log_graph=True)
+        # if isinstance(_logger, WandbLogger):
+        #     _logger.watch(model, log="all", log_graph=True)
 
     try:
         trainer.fit(model=model, datamodule=datamodule)
@@ -243,18 +196,16 @@ def objective(
         lpips = LPIPS(trainer.callback_metrics["val/lpips"].item())
 
         logger.info(f"Finihsed training with PSNR: {psnr}, MS-SSIM: {ms_ssim}, LPIPS: {lpips}")
-        wandb.finish()
+        wandb_logger.experiment.finish()
         return psnr, ms_ssim, lpips
     except Exception as e:
+        wandb_logger.experiment.finish(1)
         if isinstance(e, RuntimeError) and "CUDA out of memory" in str(e):
             logger.error(f"CUDA out of memory error: {e}")
-            wandb.finish(1)
             raise TrialPruned()
         elif isinstance(e, ValueError) and "tensor(nan" in str(e):
             logger.error(f"NAN value error: {e}")
-            wandb.finish(1)
             raise TrialPruned()
         else:
             logger.error(f"Unknown error: {e}")
-            wandb.finish(1)
             raise e

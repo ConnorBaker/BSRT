@@ -36,7 +36,6 @@ if __name__ == "__main__":
 
     args = CLI_PARSER.parse_args()
     config = TunerConfig.from_args(args)
-    wandb.login(key=config.wandb_api_key)
 
     datamodule = SyntheticZurichRaw2Rgb(
         precision=PRECISION_MAP[config.precision],
@@ -64,6 +63,9 @@ if __name__ == "__main__":
         load_if_exists=True,
         directions=["maximize", "maximize", "minimize"],
     )
+
+    wandb.setup()
+    wandb.login(key=config.wandb_api_key)
 
     study.optimize(
         partial(objective, config, datamodule),  # type: ignore
