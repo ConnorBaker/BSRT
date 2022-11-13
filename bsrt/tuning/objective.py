@@ -250,11 +250,10 @@ def objective(
             logger.error(f"CUDA out of memory error: {e}")
             wandb.finish(1)
             raise TrialPruned()
-        # TODO: We want to make sure this is a known value error (e.g. NAN).
-        # elif isinstance(e, ValueError):
-        #     logger.error(f"Value error: {e}")
-        #     wandb.finish(1)
-        #     raise TrialPruned()
+        elif isinstance(e, ValueError) and "tensor(nan" in str(e):
+            logger.error(f"NAN value error: {e}")
+            wandb.finish(1)
+            raise TrialPruned()
         else:
             logger.error(f"Unknown error: {e}")
             wandb.finish(1)
