@@ -62,7 +62,7 @@ class LightningBSRT(LightningModule):
         self.train_metrics = metrics.clone(prefix="train/")
         self.valid_metrics = metrics.clone(prefix="val/")
 
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=['model', 'train_metrics', 'valid_metrics'])
 
     def forward(self, bursts: Tensor) -> Tensor:
         return self.model(bursts)
