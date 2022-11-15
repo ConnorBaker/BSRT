@@ -2,12 +2,12 @@ from pathlib import Path
 
 import torch
 import torch.cuda
+import wandb
 from lightning_lite.utilities.seed import seed_everything
 from syne_tune import StoppingCriterion, Tuner
 from syne_tune.backend import LocalBackend
 from syne_tune.optimizer.schedulers.multiobjective.moasha import MOASHA
 
-import wandb
 from bsrt.tuning.cli_parser import CLI_PARSER, TunerConfig
 from bsrt.tuning.lr_scheduler.one_cycle_lr import OneCycleLRConfigSpace
 from bsrt.tuning.model.bsrt import BSRTConfigSpace
