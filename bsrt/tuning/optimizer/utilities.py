@@ -1,4 +1,5 @@
-from typing import Union
+from argparse import ArgumentParser
+from typing import Union, get_args
 
 import torch.nn as nn
 from torch.optim import SGD, AdamW
@@ -8,6 +9,12 @@ from bsrt.tuning.optimizer.adamw import AdamWParams
 from bsrt.tuning.optimizer.sgd import SGDParams
 
 OptimizerParams = Union[AdamWParams, SGDParams]
+
+
+def add_optimizers_to_argparse(parser: ArgumentParser) -> None:
+    for cls in get_args(OptimizerParams):
+        assert issubclass(cls, OptimizerParams)
+        cls.add_to_argparse(parser)
 
 
 def configure_optimizer(model: nn.Module, optimizer_params: OptimizerParams) -> Optimizer:

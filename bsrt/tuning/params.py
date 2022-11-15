@@ -21,9 +21,7 @@ class Params(ABC):
     def add_to_argparse(cls, parser: ArgumentParser) -> None:
         arg_group = parser.add_argument_group(cls.__name__)
         for field in fields(cls):
-            arg_group.add_argument(
-                f"--{cls.__name__}.{field.name}", type=STR_TO_TYPE[field.type], required=True
-            )
+            arg_group.add_argument(f"--{cls.__name__}.{field.name}", type=STR_TO_TYPE[field.type])
 
     @classmethod
     def from_args(cls: Type[_T], args: Namespace) -> _T:

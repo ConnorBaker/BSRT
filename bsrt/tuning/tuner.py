@@ -7,11 +7,44 @@ from lightning_lite.utilities.seed import seed_everything
 from syne_tune import StoppingCriterion, Tuner
 from syne_tune.backend import LocalBackend
 from syne_tune.optimizer.schedulers.multiobjective.moasha import MOASHA
+from syne_tune.util import experiment_path
 
-from bsrt.tuning.cli_parser import CLI_PARSER, TunerConfig
+from bsrt.tuning.cli_parser import CLI_PARSER, OptimizerName, SchedulerName, TunerConfig
+from bsrt.tuning.config_space import ConfigSpace
+from bsrt.tuning.lr_scheduler.cosine_annealing_warm_restarts import (
+    CosineAnnealingWarmRestartsConfigSpace,
+)
+from bsrt.tuning.lr_scheduler.exponential_lr import ExponentialLRConfigSpace
 from bsrt.tuning.lr_scheduler.one_cycle_lr import OneCycleLRConfigSpace
+from bsrt.tuning.lr_scheduler.reduce_lr_on_plateau import ReduceLROnPlateauConfigSpace
 from bsrt.tuning.model.bsrt import BSRTConfigSpace
 from bsrt.tuning.optimizer.adamw import AdamWConfigSpace
+from bsrt.tuning.optimizer.sgd import SGDConfigSpace
+
+
+def get_optimizer_config_space(optimizer_name: OptimizerName) -> ConfigSpace:
+    if optimizer_name == "AdamW":
+        return AdamWConfigSpace()
+    elif optimizer_name == "SGD":
+        return SGDConfigSpace()
+    else:
+        raise ValueError(f"Optimizer {optimizer_name} not supported")
+
+
+def get_scheduler_config_space(
+    scheduler_name: SchedulerName, epochs: int, steps_per_epoch: int
+) -> ConfigSpace:
+    if scheduler_name == "OneCycleLR":
+        return OneCycleLRConfigSpace(epochs=epochs, steps_per_epoch=steps_per_epoch)
+    elif scheduler_name == "CosineAnnealingWarmRestarts":
+        return CosineAnnealingWarmRestartsConfigSpace()
+    elif scheduler_name == "ExponentialLR":
+        return ExponentialLRConfigSpace()
+    elif scheduler_name == "ReduceLROnPlateau":
+        return ReduceLROnPlateauConfigSpace()
+    else:
+        raise ValueError(f"Scheduler {scheduler_name} not supported")
+
 
 if __name__ == "__main__":
     seed_everything(42)
@@ -37,19 +70,18 @@ if __name__ == "__main__":
     wandb.login(key=tuner_config.wandb_api_key)
 
     bsrt_config_space = BSRTConfigSpace()
-    adamw_config_space = AdamWConfigSpace()
-    # TODO: Incorrect calculation of the number of steps per epoch
-    one_cycle_lr_config_space = OneCycleLRConfigSpace(
+    optimizer_config_space = get_optimizer_config_space(tuner_config.optimizer)
+    scheduler_config_space = get_scheduler_config_space(
+        tuner_config.scheduler,
         tuner_config.max_epochs,
         int((tuner_config.limit_train_batches * 46839 * 0.8) / tuner_config.batch_size),
     )
     config_space = (
         tuner_config.__dict__
         | bsrt_config_space.to_dict()
-        | adamw_config_space.to_dict()
-        | one_cycle_lr_config_space.to_dict()
+        | optimizer_config_space.to_dict()
+        | scheduler_config_space.to_dict()
     )
-
     scheduler = MOASHA(
         time_attr="epoch",
         max_t=tuner_config.max_epochs,
@@ -58,25 +90,26 @@ if __name__ == "__main__":
         mode=["min", "max", "max"],
     )
 
-    # tuner_dir = Path(__file__).parent / "syne_tune"
-    # tuner_dir.mkdir(exist_ok=True)
-
     entry_point = Path(__file__).parent / "objective.py"
     trial_backend = LocalBackend(entry_point=entry_point.as_posix())
-    # trial_backend.set_path(tuner_dir.as_posix())
 
-    stop_criterion = StoppingCriterion()
-    tuner = Tuner(
-        tuner_name="blarg",
-        trial_backend=trial_backend,
-        scheduler=scheduler,
-        stop_criterion=stop_criterion,
-        n_workers=1,
-        max_failures=1000,
-        sleep_time=5.0,
-        save_tuner=True,
-        suffix_tuner_name=False,
+    tuner_name = tuner_config.experiment_name or "-".join(
+        ["BSRT", tuner_config.optimizer, tuner_config.scheduler, scheduler.__class__.__name__]
     )
-    # if (tuner_dir / "tuner.dill").exists():
-    #     tuner.load(tuner_dir.as_posix())
+    tuner_path = Path(experiment_path(tuner_name=tuner_name))
+    try:
+        tuner = Tuner.load(tuner_path.as_posix())
+    except FileNotFoundError:
+        tuner = Tuner(
+            tuner_name=tuner_name,
+            trial_backend=trial_backend,
+            scheduler=scheduler,
+            stop_criterion=StoppingCriterion(),
+            n_workers=1,
+            max_failures=1000,
+            sleep_time=5.0,
+            save_tuner=True,
+            suffix_tuner_name=False,
+        )
+
     tuner.run()

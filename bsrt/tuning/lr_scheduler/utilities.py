@@ -1,4 +1,5 @@
-from typing import Union
+from argparse import ArgumentParser
+from typing import Union, get_args
 
 from torch.optim.lr_scheduler import (
     CosineAnnealingWarmRestarts,
@@ -22,6 +23,12 @@ SchedulerParams = Union[
     OneCycleLRParams,
     ReduceLROnPlateauParams,
 ]
+
+
+def add_schedulers_to_argparse(parser: ArgumentParser) -> None:
+    for cls in get_args(SchedulerParams):
+        assert issubclass(cls, SchedulerParams)
+        cls.add_to_argparse(parser)
 
 
 def configure_scheduler(
