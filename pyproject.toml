@@ -21,7 +21,7 @@ dependencies = [
     "pytorch-lightning==1.8.1",
     "torchmetrics==0.10.2",
     "timm==0.6.11",
-    "SQLAlchemy==1.4.43",
+    "SQLAlchemy==1.4.44",
     "PyMySQL==1.0.2",
     "wandb==0.13.5",
     # Install LPIPS patched for newer version of torchvision
