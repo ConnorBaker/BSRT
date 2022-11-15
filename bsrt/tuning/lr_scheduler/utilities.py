@@ -16,15 +16,17 @@ from bsrt.tuning.lr_scheduler.exponential_lr import ExponentialLRParams
 from bsrt.tuning.lr_scheduler.one_cycle_lr import OneCycleLRParams
 from bsrt.tuning.lr_scheduler.reduce_lr_on_plateau import ReduceLROnPlateauParams
 
+SchedulerParams = Union[
+    CosineAnnealingWarmRestartsParams,
+    ExponentialLRParams,
+    OneCycleLRParams,
+    ReduceLROnPlateauParams,
+]
+
 
 def configure_scheduler(
     optimizer: Optimizer,
-    scheduler_params: Union[
-        CosineAnnealingWarmRestartsParams,
-        ExponentialLRParams,
-        OneCycleLRParams,
-        ReduceLROnPlateauParams,
-    ],
+    scheduler_params: SchedulerParams,
 ) -> _LRScheduler:
     if isinstance(scheduler_params, CosineAnnealingWarmRestartsParams):
         return CosineAnnealingWarmRestarts(

@@ -5,6 +5,7 @@ import torch
 import torch.nn.functional as F
 from pytorch_lightning import LightningModule
 from pytorch_lightning.loggers.wandb import WandbLogger
+from syne_tune.report import Reporter
 from torch import Tensor, nn
 from torch.optim.lr_scheduler import ReduceLROnPlateau, _LRScheduler
 from torch.optim.optimizer import Optimizer
@@ -44,6 +45,7 @@ class LightningBSRT(LightningModule):
     model: nn.Module = field(init=False)
     train_metrics: MetricCollection = field(init=False)
     valid_metrics: MetricCollection = field(init=False)
+    reporter: Reporter = field(init=False)
 
     def __post_init__(self):
         super().__init__()
@@ -61,8 +63,9 @@ class LightningBSRT(LightningModule):
         )
         self.train_metrics = metrics.clone(prefix="train/")
         self.valid_metrics = metrics.clone(prefix="val/")
+        self.reporter = Reporter()
 
-        self.save_hyperparameters(ignore=['model', 'train_metrics', 'valid_metrics'])
+        self.save_hyperparameters(ignore=["model", "train_metrics", "valid_metrics", "reporter"])
 
     def forward(self, bursts: Tensor) -> Tensor:
         return self.model(bursts)

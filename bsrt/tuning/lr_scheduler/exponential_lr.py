@@ -2,15 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from optuna.trial import Trial
+from syne_tune.config_space import Float, loguniform
+
+from bsrt.tuning.config_space import ConfigSpace
+from bsrt.tuning.params import Params
 
 
 @dataclass
-class ExponentialLRParams:
-    gamma: float
+class ExponentialLRConfigSpace(ConfigSpace):
+    gamma: Float = loguniform(1e-4, 1.0)
 
-    @classmethod
-    def suggest(cls, trial: Trial) -> ExponentialLRParams:
-        return cls(
-            gamma=trial.suggest_float("gamma", low=1e-4, high=1.0, log=True),
-        )
+
+@dataclass
+class ExponentialLRParams(Params):
+    gamma: float

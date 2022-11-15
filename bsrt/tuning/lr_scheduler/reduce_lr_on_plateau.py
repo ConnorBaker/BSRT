@@ -2,15 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from optuna.trial import Trial
+from syne_tune.config_space import Float, loguniform
+
+from bsrt.tuning.config_space import ConfigSpace
+from bsrt.tuning.params import Params
 
 
 @dataclass
-class ReduceLROnPlateauParams:
-    factor: float
+class ReduceLROnPlateauConfigSpace(ConfigSpace):
+    factor: Float = loguniform(1e-4, 1.0)
 
-    @classmethod
-    def suggest(cls, trial: Trial) -> ReduceLROnPlateauParams:
-        return cls(
-            factor=trial.suggest_float("factor", low=1e-4, high=1.0, log=True),
-        )
+
+@dataclass
+class ReduceLROnPlateauParams(Params):
+    factor: float

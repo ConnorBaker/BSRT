@@ -2,21 +2,23 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from optuna.trial import Trial
+from syne_tune.config_space import Float, loguniform
+
+from bsrt.tuning.config_space import ConfigSpace
+from bsrt.tuning.params import Params
 
 
 @dataclass
-class SGDParams:
+class SGDConfigSpace(ConfigSpace):
+    lr: Float = loguniform(1e-6, 1.0)
+    momentum: Float = loguniform(1e-9, 1.0)
+    dampening: Float = loguniform(1e-9, 1.0)
+    weight_decay: Float = loguniform(1e-9, 1e-3)
+
+
+@dataclass
+class SGDParams(Params):
     lr: float
     momentum: float
     dampening: float
     weight_decay: float
-
-    @classmethod
-    def suggest(cls, trial: Trial) -> SGDParams:
-        return cls(
-            lr=trial.suggest_float("lr", low=1e-6, high=1.0, log=True),
-            momentum=trial.suggest_float("momentum", low=1e-9, high=1.0, log=True),
-            dampening=trial.suggest_float("dampening", low=1e-9, high=1.0, log=True),
-            weight_decay=trial.suggest_float("weight_decay", low=1e-9, high=1e-3, log=True),
-        )
