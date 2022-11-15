@@ -40,7 +40,8 @@ if __name__ == "__main__":
     adamw_config_space = AdamWConfigSpace()
     # TODO: Incorrect calculation of the number of steps per epoch
     one_cycle_lr_config_space = OneCycleLRConfigSpace(
-        tuner_config.max_epochs, tuner_config.batch_size
+        tuner_config.max_epochs,
+        int((tuner_config.limit_train_batches * 46839 * 0.8) / tuner_config.batch_size),
     )
     config_space = (
         tuner_config.__dict__
@@ -51,7 +52,7 @@ if __name__ == "__main__":
 
     scheduler = MOASHA(
         time_attr="epoch",
-        max_t=30,
+        max_t=tuner_config.max_epochs,
         config_space=config_space,
         metrics=["val/lpips", "val/ms_ssim", "val/psnr"],
         mode=["min", "max", "max"],
