@@ -3,7 +3,6 @@ from typing import List, Type
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch import Tensor
 from typing_extensions import Literal
 
@@ -46,7 +45,7 @@ class BSRT(nn.Module):
     in_chans: int = 4  # RAW images are RGGB or the like, so 4 channels
     lr: float = 1e-4
     mlp_ratio: float = 4.0
-    model_level: Literal["S", "L"] = "S"
+    model_level: Literal["S", "L"] = "L"
     norm_layer: Type[nn.LayerNorm] = nn.LayerNorm
     num_features: int = 64
     num_frames: int = 14
@@ -121,26 +120,16 @@ class BSRT(nn.Module):
             0, self.drop_path_rate, sum(self.depths)
         ).tolist()  # stochastic depth decay rule
 
-        self.pre_layers = nn.ModuleList()
-        for i_layer in range(self.depths[0]):
-            layer = swu.SwinTransformerBlock(
-                dim=self.embed_dim,
-                input_resolution=(
-                    self.patch_embed.patches_resolution[0] // 2,
-                    self.patch_embed.patches_resolution[1] // 2,
-                ),
-                num_heads=self.num_heads[0],
-                window_size=self.window_size,
-                shift_size=0 if (i_layer % 2 == 0) else self.window_size // 2,
-                mlp_ratio=self.mlp_ratio,
-                qkv_bias=self.qkv_bias,
-                drop=self.drop_rate,
-                attn_drop=self.attn_drop_rate,
-                drop_path=dpr[i_layer],
-                norm_layer=self.norm_layer,
-            )
-            self.pre_layers.append(layer)
-
+        self.pre_layer = swu.BasicLayer(
+            dim=self.embed_dim,
+            depth=self.depths[0],
+            num_heads=self.num_heads[0],
+            window_size=[self.window_size, self.window_size],
+            mlp_ratio=self.mlp_ratio,
+            drop=self.drop_rate,
+            attn_drop=self.attn_drop_rate,
+            drop_path=dpr,
+        )
         self.pre_norm = self.norm_layer(self.embed_dim)
 
         self.conv_after_pre_layer = nn.Conv2d(
@@ -154,7 +143,6 @@ class BSRT(nn.Module):
         )
 
         # 2, Feature Enhanced PCD Align
-
         # Top layers
         self.toplayer = nn.Conv2d(
             self.num_features * 4, self.num_features, kernel_size=1, stride=1, padding=0
@@ -173,8 +161,8 @@ class BSRT(nn.Module):
         self.latlayer2 = nn.Conv2d(
             self.num_features * 1, self.num_features, kernel_size=1, stride=1, padding=0
         )
-
         self.align = FlowGuidedPCDAlign(nf=self.num_features, groups=self.flow_alignment_groups)
+
         # 3, Multi-frame Feature Fusion
         self.fusion = CrossNonLocalFusion(
             nf=self.num_features,
@@ -187,38 +175,32 @@ class BSRT(nn.Module):
         self.pos_drop = nn.Dropout(self.drop_rate)
 
         # build Residual Swin Transformer blocks (RSTB)
-        self.layers = nn.ModuleList()
-        for i_layer in range(1, self.num_layers):
-            layer = swu.RSTB(
-                dim=self.embed_dim,
-                input_resolution=(
-                    self.patch_embed.patches_resolution[0],
-                    self.patch_embed.patches_resolution[1],
-                ),
-                depth=self.depths[i_layer],
-                num_heads=self.num_heads[i_layer],
-                window_size=self.window_size,
-                mlp_ratio=self.mlp_ratio,
-                qkv_bias=self.qkv_bias,
-                drop=self.drop_rate,
-                attn_drop=self.attn_drop_rate,
-                drop_path=dpr[
-                    sum(self.depths[:i_layer]) : sum(self.depths[: i_layer + 1])
-                ],  # no impact on SR results
-                norm_layer=self.norm_layer,
-                downsample=None,
-                img_size=self.img_size,
-                patch_size=self.patch_size,
-            )
-            self.layers.append(layer)
-
+        self.layers = nn.ModuleList(
+            [
+                swu.RSTB(
+                    dim=self.embed_dim,
+                    depth=self.depths[i_layer],
+                    num_heads=self.num_heads[i_layer],
+                    window_size=[self.window_size, self.window_size],
+                    mlp_ratio=self.mlp_ratio,
+                    drop=self.drop_rate,
+                    attn_drop=self.attn_drop_rate,
+                    drop_path=dpr[
+                        sum(self.depths[:i_layer]) : sum(self.depths[: i_layer + 1])
+                    ],  # no impact on SR results
+                    norm_layer=self.norm_layer,
+                    img_size=self.img_size,
+                    patch_size=self.patch_size,
+                )
+                for i_layer in range(1, self.num_layers)
+            ]
+        )
         self.norm = self.norm_layer(self.embed_dim)
 
         # build the last conv layer in deep feature extraction
         self.conv_after_body = nn.Conv2d(self.embed_dim, self.embed_dim, 3, 1, 1)
 
         # 5, high quality image reconstruction
-
         self.upconv1 = nn.Conv2d(self.embed_dim, self.num_features * 4, 3, 1, 1, bias=True)
         self.upconv2 = nn.Conv2d(self.num_features, 64 * 4, 3, 1, 1, bias=True)
         self.pixel_shuffle = nn.PixelShuffle(2)
@@ -238,7 +220,7 @@ class BSRT(nn.Module):
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
-            swu.trunc_normal_(m.weight, std=0.02)
+            nn.init.trunc_normal_(m.weight, std=0.02)
             if isinstance(m, nn.Linear) and m.bias is not None:
                 nn.init.constant_(m.bias, 0)
         elif isinstance(m, nn.LayerNorm):
@@ -248,21 +230,11 @@ class BSRT(nn.Module):
     def _upsample_add(self, x: Tensor, y: Tensor) -> Tensor:
         return bilinear_upsample_2d(x, scale_factor=2) + y
 
-    def check_image_size(self, x: Tensor) -> Tensor:
-        _, _, h, w = x.size()
-        mod_pad_h = (self.window_size - h % self.window_size) % self.window_size
-        mod_pad_w = (self.window_size - w % self.window_size) % self.window_size
-        x = F.pad(x, (0, mod_pad_w, 0, mod_pad_h), "reflect")
-        return x
-
     def pre_forward_features(self, x: Tensor) -> Tensor:
         x_size = (x.shape[-2], x.shape[-1])
         x = self.patch_embed(x, use_norm=True)
         x = self.pos_drop(x)
-
-        for layer in self.pre_layers:
-            x = layer(x, x_size)
-
+        x = self.pre_layer(x, x_size)
         x = self.pre_norm(x)
         x = self.patch_unembed(x, x_size)
 
