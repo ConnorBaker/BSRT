@@ -27,7 +27,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-lint = ["black==22.10.0", "flake8==5.0.4", "isort==5.10.1", "pyright==1.1.279"]
+lint = ["black==22.10.0", "flake8==5.0.4", "isort==5.10.1", "pyright==1.1.280"]
 
 [tool.black]
 line-length = 99
