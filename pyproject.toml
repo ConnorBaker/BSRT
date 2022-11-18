@@ -18,7 +18,7 @@ dependencies = [
     "torchvision==0.14.0",
     "opencv-python-headless==4.6.0.66",
     "optuna==3.0.3",
-    "pytorch-lightning==1.8.1",
+    "pytorch-lightning==1.8.2",
     "torchmetrics==0.10.3",
     "wandb==0.13.5",
     # Install LPIPS patched for newer version of torchvision
