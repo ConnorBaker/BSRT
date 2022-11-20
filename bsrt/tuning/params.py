@@ -9,9 +9,13 @@ _T = TypeVar("_T", bound="Params")
 
 STR_TO_TYPE = {
     "bool": bool,
-    "float": float,
     "int": int,
+    "float": float,
     "str": str,
+    "Optional[bool]": lambda x: bool(x) if x is not None else None,
+    "Optional[int]": lambda x: int(x) if x is not None else None,
+    "Optional[float]": lambda x: float(x) if x is not None else None,
+    "Optional[str]": lambda x: str(x) if x is not None else None,
 }
 
 

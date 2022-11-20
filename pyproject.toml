@@ -14,18 +14,18 @@ readme = "README.md"
 urls = { homepage = "https://github.com/connorbaker/bsrt" }
 requires-python = ">=3.10"
 dependencies = [
-    "torch==1.13.0",
-    "torchvision==0.14.0",
+    "torch[dynamo]==1.14.0.dev20221119+cu117",
+    "torchvision==0.15.0.dev20221119+cu117",
     "opencv-python-headless==4.6.0.66",
     "pytorch-lightning==1.8.2",
-    "torchmetrics==0.10.3",
+    "torchmetrics[image]==0.10.3",
     "wandb==0.13.5",
-    # Install LPIPS patched for newer version of torchvision
-    "lpips @ git+https://github.com/ercanburak/PerceptualSimilarity.git@9606c353e5777fc95186a5a4c876e7c6a17651a6",
-    "syne-tune[gpsearchers] @ git+https://github.com/awslabs/syne-tune.git@6cd74b969bd85fa094b4116b32476e0072371ccd"
 ]
 
 [project.optional-dependencies]
+tune = [
+    "syne-tune[gpsearchers] @ git+https://github.com/awslabs/syne-tune.git@db591a7ec1571a267725da1c2ce422e27f22874f",
+]
 lint = ["black==22.10.0", "flake8==5.0.4", "isort==5.10.1", "pyright==1.1.280"]
 
 [tool.black]
@@ -43,7 +43,6 @@ packages = ["bsrt"]
 [tool.pyright]
 include = ["bsrt"]
 exclude = ["**/__pycache__"]
-defineConstant = { DEBUG = true }
 reportMissingImports = true
 reportMissingTypeStubs = false
 pythonVersion = "3.10"

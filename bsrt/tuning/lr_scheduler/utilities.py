@@ -4,9 +4,9 @@ from typing import Union, get_args
 from torch.optim.lr_scheduler import (
     CosineAnnealingWarmRestarts,
     ExponentialLR,
+    LRScheduler,
     OneCycleLR,
     ReduceLROnPlateau,
-    _LRScheduler,
 )
 from torch.optim.optimizer import Optimizer
 
@@ -34,7 +34,7 @@ def add_schedulers_to_argparse(parser: ArgumentParser) -> None:
 def configure_scheduler(
     optimizer: Optimizer,
     scheduler_params: SchedulerParams,
-) -> _LRScheduler:
+) -> LRScheduler:
     if isinstance(scheduler_params, CosineAnnealingWarmRestartsParams):
         return CosineAnnealingWarmRestarts(
             optimizer,
@@ -48,11 +48,11 @@ def configure_scheduler(
             gamma=scheduler_params.gamma,
         )
     elif isinstance(scheduler_params, OneCycleLRParams):
+        assert scheduler_params.total_steps is not None
         return OneCycleLR(
             optimizer,
             max_lr=scheduler_params.max_lr,
-            epochs=scheduler_params.epochs,
-            steps_per_epoch=scheduler_params.steps_per_epoch,
+            total_steps=scheduler_params.total_steps,
             pct_start=scheduler_params.pct_start,
             base_momentum=scheduler_params.base_momentum,
             max_momentum=scheduler_params.max_momentum,

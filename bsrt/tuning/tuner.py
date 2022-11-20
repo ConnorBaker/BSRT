@@ -31,11 +31,9 @@ def get_optimizer_config_space(optimizer_name: OptimizerName) -> ConfigSpace:
         raise ValueError(f"Optimizer {optimizer_name} not supported")
 
 
-def get_scheduler_config_space(
-    scheduler_name: SchedulerName, epochs: int, steps_per_epoch: int
-) -> ConfigSpace:
+def get_scheduler_config_space(scheduler_name: SchedulerName) -> ConfigSpace:
     if scheduler_name == "OneCycleLR":
-        return OneCycleLRConfigSpace(epochs=epochs, steps_per_epoch=steps_per_epoch)
+        return OneCycleLRConfigSpace()
     elif scheduler_name == "CosineAnnealingWarmRestarts":
         return CosineAnnealingWarmRestartsConfigSpace()
     elif scheduler_name == "ExponentialLR":
@@ -71,11 +69,7 @@ if __name__ == "__main__":
 
     bsrt_config_space = BSRTConfigSpace()
     optimizer_config_space = get_optimizer_config_space(tuner_config.optimizer)
-    scheduler_config_space = get_scheduler_config_space(
-        tuner_config.scheduler,
-        tuner_config.max_epochs,
-        int((tuner_config.limit_train_batches * 46839 * 0.8) / tuner_config.batch_size),
-    )
+    scheduler_config_space = get_scheduler_config_space(tuner_config.scheduler)
     config_space = (
         tuner_config.__dict__
         | bsrt_config_space.to_dict()

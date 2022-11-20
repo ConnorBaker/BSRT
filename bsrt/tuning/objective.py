@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from lightning_lite.utilities.seed import seed_everything
-from pytorch_lightning.callbacks import Callback
+from pytorch_lightning.callbacks import Callback, StochasticWeightAveraging
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.strategies.ddp import DDPStrategy
@@ -92,7 +92,7 @@ def get_strategy() -> Strategy:
 
 def get_callbacks(st_checkpoint_dir: Optional[str] = None) -> List[Callback]:
     return [
-        # StochasticWeightAveraging(swa_lrs=1e-3),
+        StochasticWeightAveraging(swa_lrs=1e-2),
         ModelCheckpoint(
             monitor="val/lpips",
             mode="min",
@@ -116,6 +116,31 @@ def objective(
 ) -> None:
     seed_everything(42)
 
+    # TODO: Add name/version to make it clear we're resuming runs
+    wandb_logger = WandbLogger(
+        entity="connorbaker", project="bsrt", group=tuner_config.experiment_name, reinit=True
+    )
+
+    trainer = Trainer(
+        accelerator="auto",
+        devices="auto",
+        precision=get_lightning_precision(tuner_config.precision),
+        enable_checkpointing=True,
+        limit_train_batches=tuner_config.limit_train_batches,
+        limit_val_batches=tuner_config.limit_val_batches,
+        max_epochs=tuner_config.max_epochs,
+        # strategy=get_strategy(),
+        detect_anomaly=False,
+        enable_model_summary=False,
+        enable_progress_bar=False,
+        logger=wandb_logger,
+        num_sanity_val_steps=0,
+        gradient_clip_val=0.5,
+        gradient_clip_algorithm="norm",
+        accumulate_grad_batches=8,
+        callbacks=get_callbacks(st_checkpoint_dir),
+    )
+
     model = LightningBSRT(
         bsrt_params=bsrt_params,
         optimizer_params=optimizer_params,
@@ -138,30 +163,6 @@ def objective(
         prefetch_factor=4,
         pin_memory=True,
         persistent_workers=True,
-    )
-
-    # TODO: Add name/version to make it clear we're resuming runs
-    wandb_logger = WandbLogger(
-        entity="connorbaker", project="bsrt", group=tuner_config.experiment_name, reinit=True
-    )
-
-    trainer = Trainer(
-        accelerator="auto",
-        devices="auto",
-        precision=get_lightning_precision(tuner_config.precision),
-        enable_checkpointing=True,
-        limit_train_batches=tuner_config.limit_train_batches,
-        limit_val_batches=tuner_config.limit_val_batches,
-        max_epochs=tuner_config.max_epochs,
-        strategy=get_strategy(),
-        detect_anomaly=False,
-        enable_model_summary=False,
-        enable_progress_bar=False,
-        logger=wandb_logger,
-        num_sanity_val_steps=0,
-        gradient_clip_val=0.5,
-        gradient_clip_algorithm="norm",
-        callbacks=get_callbacks(st_checkpoint_dir),
     )
 
     for _logger in trainer.loggers:

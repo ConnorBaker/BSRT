@@ -42,6 +42,6 @@ jobs:
 
       - run: python3 -m pip install pip --upgrade
 
-      - run: python3 -m pip install '.[lint]'
+      - run: python3 -m pip install --pre --extra-index-url https://download.pytorch.org/whl/nightly/cu117 '.[tune,lint]'
 
       - run: pyright .

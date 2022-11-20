@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from pytorch_lightning import LightningModule
 from pytorch_lightning.loggers.wandb import WandbLogger
 from torch import Tensor, nn
-from torch.optim.lr_scheduler import ReduceLROnPlateau, _LRScheduler
+from torch.optim.lr_scheduler import LRScheduler, ReduceLROnPlateau
 from torch.optim.optimizer import Optimizer
 from torchmetrics import MetricCollection
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity as LPIPS
@@ -130,11 +130,21 @@ class LightningBSRT(LightningModule):
         loss["loss"] = loss["val/lpips"]
         return loss
 
-    def configure_optimizers(self) -> Dict[str, Union[Optimizer, _LRScheduler, str]]:
+    def configure_optimizers(self) -> Dict[str, Union[Optimizer, LRScheduler, str]]:
+        if (
+            isinstance(self.scheduler_params, OneCycleLRParams)
+            and self.scheduler_params.total_steps is None
+        ):
+            total_steps = self.trainer.estimated_stepping_batches
+            assert (
+                isinstance(total_steps, int) and total_steps >= 1
+            ), "Cannot use OneCycleLR with infinite or negative total_steps"
+            self.scheduler_params.total_steps = total_steps
+
         opt = configure_optimizer(self.model, self.optimizer_params)
         scheduler = configure_scheduler(opt, self.scheduler_params)
 
-        ret: Dict[str, Union[Optimizer, _LRScheduler, str]] = {
+        ret: Dict[str, Union[Optimizer, LRScheduler, str]] = {
             "optimizer": opt,
             "lr_scheduler": scheduler,
         }
@@ -146,3 +156,13 @@ class LightningBSRT(LightningModule):
     # Set gradients to `None` instead of zero to improve performance.
     def optimizer_zero_grad(self, epoch, batch_idx, optimizer, optimizer_idx):
         optimizer.zero_grad(set_to_none=True)
+
+    # Due to the LRScheduler refactor in PyTorch 1.14, we need to override this method to avoid
+    # the following error we get with any scheduler:
+    #
+    # lightning_lite.utilities.exceptions.MisconfigurationException: The provided lr scheduler
+    # `OneCycleLR` doesn't follow PyTorch's LRScheduler API. You should override the
+    # `LightningModule.lr_scheduler_step` hook with your own logic if you are using a custom LR
+    # scheduler.
+    def lr_scheduler_step(self, scheduler, optimizer_idx, metric):
+        super().lr_scheduler_step(scheduler, optimizer_idx, metric)
