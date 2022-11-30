@@ -17,7 +17,7 @@ dependencies = [
     "torch[dynamo]==1.14.0.dev20221119+cu117",
     "torchvision==0.15.0.dev20221119+cu117",
     "opencv-python-headless==4.6.0.66",
-    "pytorch-lightning==1.8.2",
+    "pytorch-lightning==1.8.3.post1",
     "torchmetrics[image]==0.10.3",
     "wandb==0.13.5",
 ]
