@@ -15,8 +15,18 @@ jobs:
   lint:
     uses: ./.github/workflows/lint.yml
 
+  typecheck:
+    uses: ./.github/workflows/typecheck.yml
+  
+  test:
+    needs:
+      - typecheck
+    uses: ./.github/workflows/test.yml
+
   build:
-    needs: lint
+    needs:
+      - lint
+      - test
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
