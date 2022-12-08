@@ -19,13 +19,12 @@ jobs:
     uses: ./.github/workflows/typecheck.yml
   
   test:
-    needs:
-      - typecheck
     uses: ./.github/workflows/test.yml
 
   build:
     needs:
       - lint
+      - typecheck
       - test
     runs-on: ubuntu-22.04
     steps:

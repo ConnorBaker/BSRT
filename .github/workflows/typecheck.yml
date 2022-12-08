@@ -19,7 +19,7 @@ jobs:
           cache-dependency-path: "**/pyproject.toml"
       - run: python3 -m pip install pip --upgrade
       - run: python3 -m pip install --pre --extra-index-url https://download.pytorch.org/whl/nightly/cu117 '.[tune,lint,test,typecheck]'
-      - run: mypy .
+      - run: mypy ./bsrt ./tests
 
   pyright:
     runs-on: ubuntu-22.04
