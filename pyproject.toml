@@ -14,8 +14,8 @@ readme = "README.md"
 urls = { homepage = "https://github.com/connorbaker/bsrt" }
 requires-python = ">=3.10"
 dependencies = [
-    "torch[dynamo]==1.14.0.dev20221119+cu117",
-    "torchvision==0.15.0.dev20221119+cu117",
+    "torch[dynamo]==1.14.0.dev20221121+cu117",
+    "torchvision==0.15.0.dev20221121+cu117",
     "opencv-python-headless==4.6.0.66",
     "pytorch-lightning==1.8.3.post1",
     "torchmetrics[image]==0.11.0",
@@ -27,6 +27,7 @@ tune = [
     "syne-tune[gpsearchers] @ git+https://github.com/awslabs/syne-tune.git@db591a7ec1571a267725da1c2ce422e27f22874f",
 ]
 lint = ["black==22.10.0", "flake8==6.0.0", "isort==5.10.1", "pyright==1.1.282"]
+test = ["pytest==7.2.0", "pytest-xdist==3.1.0", "hypothesis==6.60.0"]
 
 [tool.black]
 line-length = 99
@@ -47,3 +48,8 @@ reportMissingImports = true
 reportMissingTypeStubs = false
 pythonVersion = "3.10"
 pythonPlatform = "Linux"
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-n4 --hypothesis-profile=ci_gpu"
+testpaths = ["tests"]

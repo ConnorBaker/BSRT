@@ -49,7 +49,7 @@ def random_ccm() -> Tensor:
 
     num_ccms = len(xyz2cams)
 
-    weights = torch.FloatTensor(num_ccms, 1, 1).uniform_(0.0, 1.0)
+    weights = torch.empty(num_ccms, 1, 1).uniform_(0.0, 1.0)
     weights_sum = weights.sum()
     xyz2cam = (xyz2cams * weights).sum(dim=0) / weights_sum
 
@@ -61,7 +61,7 @@ def random_ccm() -> Tensor:
             [0.0193339, 0.1191920, 0.9503041],
         ]
     )
-    rgb2cam = torch.mm(xyz2cam, rgb2xyz)
+    rgb2cam = xyz2cam @ rgb2xyz
 
     # Normalizes each row.
     rgb2cam /= rgb2cam.sum(dim=-1, keepdim=True)

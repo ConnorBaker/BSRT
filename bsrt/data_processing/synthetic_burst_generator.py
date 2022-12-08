@@ -143,6 +143,283 @@ def get_tmat(
     return t_mat
 
 
+def pure_python_get_tmat(
+    image_shape: Tuple[int, int],
+    translation: Tuple[float, float],
+    theta: float,
+    shear_values: Tuple[float, float],
+    scale_factors: Tuple[float, float],
+) -> npt.NDArray[np.float64]:
+    """Generates a transformation matrix corresponding to the input transformation parameters"""
+    # It may look suspect that we have image_y, image_x, but that's because the image shape is
+    # (height, width) (row-major order)
+    image_y, image_x = image_shape
+    image_middle_x = image_x * 0.5
+    image_middle_y = image_y * 0.5
+    translate_x, translate_y = translation
+    shear_x, shear_y = shear_values
+    scale_x, scale_y = scale_factors
+    # To match the semantics of OpenCV's getRotationMatrix2D, we rotate counter-clockwise by
+    # negative theta.
+    rad = np.deg2rad(-theta)
+
+    translate = np.array(
+        [[1.0, 0.0, translate_x], [0.0, 1.0, translate_y], [0.0, 0.0, 1.0]],
+        dtype=np.float64,
+    )
+
+    # Shear using the given shear factors, about the center of the image.
+    # See https://lectureloops.com/shear-transformation/ for more.
+    shear = np.array(
+        [
+            [1.0, shear_x, -0.5 * shear_x * image_x],
+            [shear_y, 1.0, -0.5 * shear_y * image_y],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=np.float64,
+    )
+
+    # Translate the center to the origin
+    shift_center_to_origin = np.array(
+        [
+            [1.0, 0.0, -image_middle_x],
+            [0.0, 1.0, -image_middle_y],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=np.float64,
+    )
+
+    # This matrix performs the rotation about the origin.
+    rotate = np.array(
+        [
+            [np.cos(rad), -np.sin(rad), 0.0],
+            [np.sin(rad), np.cos(rad), 0.0],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=np.float64,
+    )
+
+    # Translate the center back to where it was
+    unshift_center_to_origin = np.array(
+        [
+            [1.0, 0.0, image_middle_x],
+            [0.0, 1.0, image_middle_y],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=np.float64,
+    )
+
+    # Scale by scale factors
+    scale = np.array(
+        [[scale_x, 0.0, 0.0], [0.0, scale_y, 0.0], [0.0, 0.0, 1.0]],
+        dtype=np.float64,
+    )
+
+    expected = (
+        scale @ unshift_center_to_origin @ rotate @ shift_center_to_origin @ shear @ translate
+    )
+    expected = expected[:2, :]
+    return expected
+
+
+def pure_python_get_tmat_fast1(
+    image_shape: Tuple[int, int],
+    translation: Tuple[float, float],
+    theta: float,
+    shear_values: Tuple[float, float],
+    scale_factors: Tuple[float, float],
+) -> npt.NDArray[np.float64]:
+    """Generates a transformation matrix corresponding to the input transformation parameters"""
+    # It may look suspect that we have image_y, image_x, but that's because the image shape is
+    # (height, width) (row-major order)
+    image_y, image_x = image_shape
+    image_middle_x = image_x * 0.5
+    image_middle_y = image_y * 0.5
+    translate_x, translate_y = translation
+    shear_x, shear_y = shear_values
+    scale_x, scale_y = scale_factors
+    # To match the semantics of OpenCV's getRotationMatrix2D, we rotate counter-clockwise by
+    # negative theta.
+    rad = np.deg2rad(-theta)
+
+    translate = np.array(
+        [[1.0, 0.0, translate_x], [0.0, 1.0, translate_y], [0.0, 0.0, 1.0]],
+        dtype=np.float64,
+    )
+
+    # Shear using the given shear factors, about the center of the image.
+    # See https://lectureloops.com/shear-transformation/ for more.
+    shear = np.array(
+        [
+            [1.0, shear_x, -0.5 * shear_x * image_x],
+            [shear_y, 1.0, -0.5 * shear_y * image_y],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=np.float64,
+    )
+
+    # This matrix performs the rotation about the center of the image. It is equivalent to
+    # the following:
+    #   1. Translate the center of the image to the origin
+    #   2. Rotate the image about the origin
+    #   3. Translate the center of the image back to where it was
+    # It is unshift_center_to_origin @ rotate @ shift_center_to_origin from pure_python_get_tmat.
+    rotate = np.array(
+        [
+            [
+                np.cos(rad),
+                -np.sin(rad),
+                image_middle_x * (1 - np.cos(rad)) + image_middle_y * np.sin(rad),
+            ],
+            [
+                np.sin(rad),
+                np.cos(rad),
+                image_middle_y * (1 - np.cos(rad)) - image_middle_x * np.sin(rad),
+            ],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=np.float64,
+    )
+
+    # Scale by scale factors
+    scale = np.array(
+        [[scale_x, 0.0, 0.0], [0.0, scale_y, 0.0], [0.0, 0.0, 1.0]],
+        dtype=np.float64,
+    )
+
+    expected = scale @ rotate @ shear @ translate
+    expected = expected[:2, :]
+    return expected
+
+
+def pure_python_get_tmat_fast2(
+    image_shape: Tuple[int, int],
+    translation: Tuple[float, float],
+    theta: float,
+    shear_values: Tuple[float, float],
+    scale_factors: Tuple[float, float],
+) -> npt.NDArray[np.float64]:
+    """Generates a transformation matrix corresponding to the input transformation parameters"""
+    # It may look suspect that we have image_y, image_x, but that's because the image shape is
+    # (height, width) (row-major order)
+    image_y, image_x = image_shape
+    image_middle_x = image_x * 0.5
+    image_middle_y = image_y * 0.5
+    translate_x, translate_y = translation
+    shear_x, shear_y = shear_values
+    scale_x, scale_y = scale_factors
+    # To match the semantics of OpenCV's getRotationMatrix2D, we rotate counter-clockwise by
+    # negative theta.
+    rad = np.deg2rad(-theta)
+
+    translate = np.array(
+        [[1.0, 0.0, translate_x], [0.0, 1.0, translate_y], [0.0, 0.0, 1.0]],
+        dtype=np.float64,
+    )
+
+    # Shear using the given shear factors, about the center of the image.
+    # See https://lectureloops.com/shear-transformation/ for more.
+    shear = np.array(
+        [
+            [1.0, shear_x, -0.5 * shear_x * image_x],
+            [shear_y, 1.0, -0.5 * shear_y * image_y],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=np.float64,
+    )
+
+    # This matrix performs the rotation about the center of the image and scales.
+    # It is equivalent to the following:
+    #   1. Translate the center of the image to the origin
+    #   2. Rotate the image about the origin
+    #   3. Translate the center of the image back to where it was
+    #   4. Scale by scale factors
+    # It is scale @ unshift_center_to_origin @ rotate @ shift_center_to_origin from
+    # pure_python_get_tmat.
+    scale_after_rotate = np.array(  # Rotate
+        [
+            [
+                scale_x * np.cos(rad),
+                -scale_x * np.sin(rad),
+                scale_x * (image_middle_x * (1 - np.cos(rad)) + image_middle_y * np.sin(rad)),
+            ],
+            [
+                scale_y * np.sin(rad),
+                scale_y * np.cos(rad),
+                scale_y * (image_middle_y * (1 - np.cos(rad)) - image_middle_x * np.sin(rad)),
+            ],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=np.float64,
+    )
+
+    expected = scale_after_rotate @ shear @ translate
+    expected = expected[:2, :]
+    return expected
+
+
+def pure_python_get_tmat_fast3(
+    image_shape: Tuple[int, int],
+    translation: Tuple[float, float],
+    theta: float,
+    shear_values: Tuple[float, float],
+    scale_factors: Tuple[float, float],
+) -> npt.NDArray[np.float64]:
+    """Generates a transformation matrix corresponding to the input transformation parameters"""
+    # It may look suspect that we have image_y, image_x, but that's because the image shape is
+    # (height, width) (row-major order)
+    image_y, image_x = image_shape
+    image_middle_x = image_x * 0.5
+    image_middle_y = image_y * 0.5
+    translate_x, translate_y = translation
+    shear_x, shear_y = shear_values
+    scale_x, scale_y = scale_factors
+    # To match the semantics of OpenCV's getRotationMatrix2D, we rotate counter-clockwise by
+    # negative theta.
+    rad = np.deg2rad(-theta)
+
+    # Translate the image by the given translation factors. Then shears the image using the given
+    # shear factors, about the center of the image.
+    # See https://lectureloops.com/shear-transformation/ for more.
+    # It is shear @ translate from pure_python_get_tmat.
+    shear_after_translate = np.array(
+        [
+            [1.0, shear_x, shear_x * translate_y - 0.5 * shear_x * image_x + translate_x],
+            [shear_y, 1.0, shear_y * translate_x - 0.5 * shear_y * image_y + translate_y],
+            [0.0, 0.0, 1.0],
+        ],
+    )
+
+    # This matrix performs the rotation about the center of the image and scales.
+    # It is equivalent to the following:
+    #   1. Translate the center of the image to the origin
+    #   2. Rotate the image about the origin
+    #   3. Translate the center of the image back to where it was
+    #   4. Scale by scale factors
+    # It is scale @ unshift_center_to_origin @ rotate @ shift_center_to_origin from
+    # pure_python_get_tmat.
+    scale_after_rotate = np.array(  # Rotate
+        [
+            [
+                scale_x * np.cos(rad),
+                -scale_x * np.sin(rad),
+                scale_x * (image_middle_x * (1 - np.cos(rad)) + image_middle_y * np.sin(rad)),
+            ],
+            [
+                scale_y * np.sin(rad),
+                scale_y * np.cos(rad),
+                scale_y * (image_middle_y * (1 - np.cos(rad)) - image_middle_x * np.sin(rad)),
+            ],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=np.float64,
+    )
+
+    expected = scale_after_rotate @ shear_after_translate
+    expected = expected[:2, :]
+    return expected
+
+
 def single2lrburst(
     image: Union[Tensor, npt.NDArray[np.uint8]],
     burst_size: int,
