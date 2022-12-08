@@ -1,6 +1,11 @@
 from typing import Callable
+
+import numpy as np
+import numpy.typing as npt
 import pytest
-from hypothesis import given, strategies as st
+from hypothesis import given
+from hypothesis import strategies as st
+
 from bsrt.data_processing.synthetic_burst_generator import (
     get_tmat,
     pure_python_get_tmat,
@@ -8,8 +13,6 @@ from bsrt.data_processing.synthetic_burst_generator import (
     pure_python_get_tmat_fast2,
     pure_python_get_tmat_fast3,
 )
-import numpy as np
-import numpy.typing as npt
 
 
 def given_get_tmat_args(f):

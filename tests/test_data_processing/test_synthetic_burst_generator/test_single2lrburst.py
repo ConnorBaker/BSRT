@@ -1,7 +1,10 @@
 from typing import get_args
+
 import torch
+from hypothesis import given
+from hypothesis import strategies as st
 from torch import Tensor
-from hypothesis import given, strategies as st
+
 from bsrt.data_processing.image_transformation_params import ImageTransformationParams
 from bsrt.utils.types import InterpolationType
 from tests.hypothesis_utils.strategies._3hw_tensors import _3HW_TENSORS

@@ -1,10 +1,9 @@
-import torch
+from hypothesis import given
 from torch import Tensor
 from torch.nn import functional as F
-from hypothesis import given
+
 from bsrt.data_processing.camera_pipeline import apply_smoothstep, invert_smoothstep
 from tests.hypothesis_utils.strategies._3hw_tensors import _3HW_TENSORS
-
 
 # Property-based tests which ensure:
 # - apply_smoothstep is invariant with respect to shape

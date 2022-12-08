@@ -1,10 +1,11 @@
+from typing import NewType
+
 import torch
 from hypothesis import strategies as st
-from typing import NewType
+
 from tests.hypothesis_utils.strategies.chw_tensors import chw_shapes
 from tests.hypothesis_utils.strategies.torch_devices import torch_devices
 from tests.hypothesis_utils.strategies.torch_dtypes import torch_float_dtypes
-
 
 NCHWShape = NewType("NCHWShape", tuple[int, int, int, int])
 

@@ -1,19 +1,9 @@
 from copy import copy
-from typing import ClassVar, Literal, Tuple, Type, Union, TypeVar
 
 import torch
 import torch._C
+from crosshair import IgnoreAttempt, SymbolicFactory, realize, register_type
 from torch import Tensor
-from numpy.lib.mixins import NDArrayOperatorsMixin
-
-from crosshair import (
-    IgnoreAttempt,
-    SymbolicFactory,
-    deep_realize,
-    realize,
-    register_type,
-    register_patch,
-)
 
 #
 # Classes implemented in C generally cannot be simulated symbolically by

@@ -1,10 +1,11 @@
 import torch
-from torch import Tensor
-from hypothesis import given, strategies as st
+from hypothesis import given
+from hypothesis import strategies as st
 from hypothesis.strategies._internal.core import RandomSeeder
-from tests.hypothesis_utils.strategies._3hw_tensors import _3HW_TENSORS
-from bsrt.data_processing.camera_pipeline import random_ccm, apply_ccm
+from torch import Tensor
 
+from bsrt.data_processing.camera_pipeline import apply_ccm, random_ccm
+from tests.hypothesis_utils.strategies._3hw_tensors import _3HW_TENSORS
 
 # Property-based tests which ensure:
 # - The CCM from random_ccm() is 3x3

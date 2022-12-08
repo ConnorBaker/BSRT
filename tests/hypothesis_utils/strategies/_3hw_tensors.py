@@ -1,8 +1,10 @@
-import torch
-from hypothesis import settings, strategies as st
-from tests.hypothesis_utils.strategies.chw_tensors import chw_tensors, CHWShape
 from functools import partial
 
+import torch
+from hypothesis import settings
+from hypothesis import strategies as st
+
+from tests.hypothesis_utils.strategies.chw_tensors import CHWShape, chw_tensors
 
 _3HW_TENSORS = partial(
     chw_tensors,

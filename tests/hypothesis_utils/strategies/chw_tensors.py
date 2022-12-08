@@ -1,9 +1,10 @@
+from typing import NewType
+
 import torch
 from hypothesis import strategies as st
-from typing import NewType
+
 from tests.hypothesis_utils.strategies.torch_devices import torch_devices
 from tests.hypothesis_utils.strategies.torch_dtypes import torch_real_dtypes
-
 
 CHWShape = NewType("CHWShape", tuple[int, int, int])
 

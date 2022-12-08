@@ -1,9 +1,9 @@
 import torch
-from torch import Tensor
 from hypothesis import given
-from tests.hypothesis_utils.strategies._3hw_tensors import _3HW_TENSORS
-from bsrt.data_processing.camera_pipeline import mosaic, demosaic
+from torch import Tensor
 
+from bsrt.data_processing.camera_pipeline import demosaic, mosaic
+from tests.hypothesis_utils.strategies._3hw_tensors import _3HW_TENSORS
 
 # Property-based tests which ensure:
 # - The mosaiced image has four channels

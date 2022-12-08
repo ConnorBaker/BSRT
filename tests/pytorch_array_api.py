@@ -1,10 +1,12 @@
 from __future__ import annotations
+
 from types import SimpleNamespace
-import torch
 from typing import Any, Mapping, Optional, Sequence, Union
+
+import torch
 from hypothesis import strategies as st
-from hypothesis.extra.array_api import make_strategies_namespace, DataType
 from hypothesis.extra._array_helpers import Shape
+from hypothesis.extra.array_api import DataType, make_strategies_namespace
 
 torch.set_grad_enabled(False)
 

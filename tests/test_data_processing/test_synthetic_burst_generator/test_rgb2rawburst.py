@@ -1,15 +1,16 @@
 from typing import get_args
+
 import torch
-from torch import Tensor
-from hypothesis import given, strategies as st
+from hypothesis import given
+from hypothesis import strategies as st
 from hypothesis.strategies._internal.core import RandomSeeder
+from torch import Tensor
+
 from bsrt.data_processing.image_processing_params import ImageProcessingParams
 from bsrt.data_processing.image_transformation_params import ImageTransformationParams
+from bsrt.data_processing.synthetic_burst_generator import rgb2rawburst
 from bsrt.utils.types import InterpolationType
 from tests.hypothesis_utils.strategies._3hw_tensors import _3HW_TENSORS
-from bsrt.data_processing.synthetic_burst_generator import (
-    rgb2rawburst,
-)
 
 
 @given(
