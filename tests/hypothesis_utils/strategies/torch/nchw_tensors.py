@@ -3,9 +3,10 @@ from typing import NewType
 import torch
 from hypothesis import strategies as st
 
-from tests.hypothesis_utils.strategies.chw_tensors import chw_shapes
-from tests.hypothesis_utils.strategies.torch_devices import torch_devices
-from tests.hypothesis_utils.strategies.torch_dtypes import torch_float_dtypes
+from tests.hypothesis_utils.strategies.torch.chw_tensors import chw_shapes
+from tests.hypothesis_utils.strategies.torch.devices import torch_devices
+from tests.hypothesis_utils.strategies.torch.dtypes import torch_float_dtypes
+from tests.hypothesis_utils.strategies.torch.memory_formats import torch_memory_formats
 
 NCHWShape = NewType("NCHWShape", tuple[int, int, int, int])
 
@@ -61,6 +62,7 @@ def nchw_tensors(
     shape: None | NCHWShape | st.SearchStrategy[NCHWShape] = None,
     dtype: None | torch.dtype | st.SearchStrategy[torch.dtype] = None,
     device: None | str | torch.device | st.SearchStrategy[torch.device] = None,
+    memory_format: None | torch.memory_format | st.SearchStrategy[torch.memory_format] = None,
 ) -> torch.Tensor:
     """
     Returns a tensor with the given dtype and shape. If either is None, it will be sampled.
@@ -91,17 +93,19 @@ def nchw_tensors(
     elif isinstance(device, st.SearchStrategy):
         device = draw(device)
 
+    if memory_format is None:
+        memory_format = draw(torch_memory_formats)
+    elif isinstance(memory_format, st.SearchStrategy):
+        memory_format = draw(memory_format)
+
     if dtype.is_floating_point:
-        return torch.rand(shape, dtype=dtype, device=device)
+        return torch.empty(
+            size=shape, dtype=dtype, device=device, memory_format=memory_format
+        ).uniform_()
     elif not dtype.is_complex:
-        iinfo = torch.iinfo(dtype)
-        return torch.randint(
-            low=iinfo.min,
-            high=iinfo.max,
-            size=shape,
-            dtype=dtype,
-            device=device,
-        )
+        return torch.empty(
+            size=shape, dtype=dtype, device=device, memory_format=memory_format
+        ).random_()
     else:
         raise ValueError(f"Unsupported dtype: {dtype}")
 

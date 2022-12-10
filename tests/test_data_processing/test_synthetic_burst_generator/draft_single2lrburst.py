@@ -7,7 +7,7 @@ from torch import Tensor
 
 from bsrt.data_processing.image_transformation_params import ImageTransformationParams
 from bsrt.utils.types import InterpolationType
-from tests.hypothesis_utils.strategies._3hw_tensors import _3HW_TENSORS
+from tests.hypothesis_utils.strategies.torch._3hw_tensors import _3HW_TENSORS
 
 
 @given(

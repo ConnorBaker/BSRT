@@ -1,9 +1,10 @@
 from hypothesis import given
 from torch import Tensor
+import torch
 from torch.nn import functional as F
 
 from bsrt.data_processing.camera_pipeline import apply_smoothstep, invert_smoothstep
-from tests.hypothesis_utils.strategies._3hw_tensors import _3HW_TENSORS
+from tests.hypothesis_utils.strategies.torch._3hw_tensors import _3HW_TENSORS
 
 # Property-based tests which ensure:
 # - apply_smoothstep is invariant with respect to shape
@@ -94,6 +95,12 @@ def test_invert_smoothstep_is_inverse_of_apply_smoothstep(image: Tensor) -> None
 
     # The smoothstep function is not invertible, so we can only test that the result is close to
     # the original image.
+    if image.device.type == "cpu" and image.dtype == torch.bfloat16:
+        # bfloat16 is not supported on CPU
+        image = image.to(torch.float32)
+        smoothstep_inverted = smoothstep_inverted.to(torch.float32)
+        smoothstep_applied = smoothstep_applied.to(torch.float32)
+
     image_to_inverted_smoothstep_mse = F.mse_loss(image, smoothstep_inverted)
     image_to_smoothstep_applied_mse = F.mse_loss(image, smoothstep_applied)
     assert image_to_smoothstep_applied_mse < image_to_inverted_smoothstep_mse

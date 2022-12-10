@@ -3,8 +3,8 @@ from typing import NewType
 import torch
 from hypothesis import strategies as st
 
-from tests.hypothesis_utils.strategies.torch_devices import torch_devices
-from tests.hypothesis_utils.strategies.torch_dtypes import torch_real_dtypes
+from tests.hypothesis_utils.strategies.torch.devices import torch_devices
+from tests.hypothesis_utils.strategies.torch.dtypes import torch_real_dtypes
 
 CHWShape = NewType("CHWShape", tuple[int, int, int])
 
@@ -78,15 +78,8 @@ def chw_tensors(
         device = draw(device)
 
     if dtype.is_floating_point:
-        return torch.rand(shape, dtype=dtype, device=device)
+        return torch.empty(size=shape, dtype=dtype, device=device).uniform_()
     elif not dtype.is_complex:
-        iinfo = torch.iinfo(dtype)
-        return torch.randint(
-            low=iinfo.min,
-            high=iinfo.max,
-            size=shape,
-            dtype=dtype,
-            device=device,
-        )
+        return torch.empty(size=shape, dtype=dtype, device=device).random_()
     else:
         raise ValueError(f"Unsupported dtype: {dtype}")

@@ -3,7 +3,7 @@ from hypothesis import given
 from torch import Tensor
 
 from bsrt.data_processing.camera_pipeline import gamma_compression, gamma_expansion
-from tests.hypothesis_utils.strategies._3hw_tensors import _3HW_TENSORS
+from tests.hypothesis_utils.strategies.torch._3hw_tensors import _3HW_TENSORS
 
 # Property-based tests which ensure:
 # - gamma_expansion is invariant with respect to shape
