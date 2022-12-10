@@ -14,8 +14,8 @@ readme = "README.md"
 urls = { homepage = "https://github.com/connorbaker/bsrt" }
 requires-python = ">=3.10"
 dependencies = [
-    "torch[dynamo]==1.14.0.dev20221121+cu117",
-    "torchvision==0.15.0.dev20221121+cu117",
+    "torch==2.0.0.dev20221210+cu117",
+    "torchvision==0.15.0.dev20221210+cu117",
     "opencv-python-headless==4.6.0.66",
     "pytorch-lightning==1.8.4",
     "torchmetrics[image]==0.11.0",
