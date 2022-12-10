@@ -71,5 +71,5 @@ pythonPlatform = "Linux"
 
 [tool.pytest.ini_options]
 minversion = "7.0"
-addopts = "-n4 --hypothesis-profile=ci_gpu"
+addopts = "-n4 --hypothesis-profile=dev_gpu"
 testpaths = ["tests"]

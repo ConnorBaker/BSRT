@@ -12,7 +12,6 @@ from tests.hypothesis_utils.strategies._3hw_tensors import _3HW_TENSORS
 # - invert_smoothstep is invariant with respect to dtype
 # - apply_smoothstep is invariant with respect to device
 # - invert_smoothstep is invariant with respect to device
-# - apply_smoothstep is the inverse of invert_smoothstep (roughly)
 # - invert_smoothstep is the inverse of apply_smoothstep (roughly)
 
 
@@ -80,25 +79,6 @@ def test_invert_smoothstep_device_invariance(image: Tensor) -> None:
         image: A 3HW tensor of floating dtype
     """
     assert invert_smoothstep(image).device == image.device
-
-
-@given(image=_3HW_TENSORS())
-def test_apply_smoothstep_is_inverse_of_invert_smoothstep(image: Tensor) -> None:
-    """
-    Tests that apply_smoothstep() is the inverse of invert_smoothstep().
-
-    Args:
-        image: A 3HW tensor of floating dtype
-    """
-    smoothstep_applied = apply_smoothstep(image)
-    smoothstep_inverted = invert_smoothstep(smoothstep_applied)
-
-    # The smoothstep function is not invertible, so we can only test that the result is close to
-    # the original image.
-    image_to_smoothstep_applied_mse = F.mse_loss(image, smoothstep_applied)
-    image_to_inverted_smoothstep_mse = F.mse_loss(image, smoothstep_inverted)
-    assert image_to_inverted_smoothstep_mse < image_to_smoothstep_applied_mse
-    assert image_to_inverted_smoothstep_mse <= 1e-4
 
 
 @given(image=_3HW_TENSORS())
