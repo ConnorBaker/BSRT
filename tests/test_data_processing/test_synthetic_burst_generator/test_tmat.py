@@ -3,16 +3,26 @@ from typing import Callable
 import numpy as np
 import numpy.typing as npt
 import pytest
+import torch
+import torch._dynamo.config
+import torch._inductor.config
 from hypothesis import given
 from hypothesis import strategies as st
 
 from bsrt.data_processing.synthetic_burst_generator import (
     get_tmat,
-    pure_python_get_tmat,
-    pure_python_get_tmat_fast1,
-    pure_python_get_tmat_fast2,
-    pure_python_get_tmat_fast3,
+    numpy_fused_rotate_get_tmat,
+    numpy_fused_scale_rotate_and_shear_translate_get_tmat,
+    numpy_fused_scale_rotate_get_tmat,
+    numpy_get_tmat,
+    torch_fused_get_tmat1,
+    torch_get_tmat,
 )
+
+torch._dynamo.config.dynamic_shapes = False
+torch._dynamo.config.print_graph_breaks = True
+torch._dynamo.config.cache_size_limit = 8
+torch.set_float32_matmul_precision("high")
 
 
 def given_get_tmat_args(f):
@@ -76,10 +86,12 @@ def test_get_tmat_dtype(
 @pytest.mark.parametrize(
     "impl",
     [
-        pure_python_get_tmat,
-        pure_python_get_tmat_fast1,
-        pure_python_get_tmat_fast2,
-        pure_python_get_tmat_fast3,
+        numpy_get_tmat,
+        numpy_fused_rotate_get_tmat,
+        numpy_fused_scale_rotate_get_tmat,
+        numpy_fused_scale_rotate_and_shear_translate_get_tmat,
+        torch_get_tmat,
+        torch_fused_get_tmat1,
     ],
 )
 @given_get_tmat_args
@@ -89,7 +101,7 @@ def test_get_tmat_shape_eq_impl_shape(
     theta: float,
     shear_values: tuple[float, float],
     scale_factors: tuple[float, float],
-    impl: Callable[..., npt.NDArray[np.float64]],
+    impl: Callable[..., npt.NDArray[np.float64] | torch.Tensor],
 ) -> None:
     expected = get_tmat(
         image_shape,
@@ -111,10 +123,12 @@ def test_get_tmat_shape_eq_impl_shape(
 @pytest.mark.parametrize(
     "impl",
     [
-        pure_python_get_tmat,
-        pure_python_get_tmat_fast1,
-        pure_python_get_tmat_fast2,
-        pure_python_get_tmat_fast3,
+        numpy_get_tmat,
+        numpy_fused_rotate_get_tmat,
+        numpy_fused_scale_rotate_get_tmat,
+        numpy_fused_scale_rotate_and_shear_translate_get_tmat,
+        torch_get_tmat,
+        torch_fused_get_tmat1,
     ],
 )
 @given_get_tmat_args
@@ -124,7 +138,7 @@ def test_get_tmat_dtype_eq_impl_dtype(
     theta: float,
     shear_values: tuple[float, float],
     scale_factors: tuple[float, float],
-    impl: Callable[..., npt.NDArray[np.float64]],
+    impl: Callable[..., npt.NDArray[np.float64] | torch.Tensor],
 ) -> None:
     expected = get_tmat(
         image_shape,
@@ -140,16 +154,20 @@ def test_get_tmat_dtype_eq_impl_dtype(
         shear_values,
         scale_factors,
     )
+    if isinstance(actual, torch.Tensor):
+        expected = torch.from_numpy(expected)
     assert expected.dtype == actual.dtype, f"{expected.dtype} != {actual.dtype}"
 
 
 @pytest.mark.parametrize(
     "impl",
     [
-        pure_python_get_tmat,
-        pure_python_get_tmat_fast1,
-        pure_python_get_tmat_fast2,
-        pure_python_get_tmat_fast3,
+        numpy_get_tmat,
+        numpy_fused_rotate_get_tmat,
+        numpy_fused_scale_rotate_get_tmat,
+        numpy_fused_scale_rotate_and_shear_translate_get_tmat,
+        torch_get_tmat,
+        torch_fused_get_tmat1,
     ],
 )
 @given_get_tmat_args
@@ -159,7 +177,7 @@ def test_get_tmat_values_eq_impl_values(
     theta: float,
     shear_values: tuple[float, float],
     scale_factors: tuple[float, float],
-    impl: Callable[..., npt.NDArray[np.float64]],
+    impl: Callable[..., npt.NDArray[np.float64] | torch.Tensor],
 ) -> None:
     expected = get_tmat(
         image_shape,
@@ -175,7 +193,11 @@ def test_get_tmat_values_eq_impl_values(
         shear_values,
         scale_factors,
     )
-    assert np.allclose(expected, actual), f"{expected} != {actual}"
+    if isinstance(actual, torch.Tensor):
+        expected = torch.from_numpy(expected).to(device=actual.device, dtype=actual.dtype)
+        assert torch.allclose(expected, actual), f"{expected} != {actual}"
+    else:
+        assert np.allclose(expected, actual), f"{expected} != {actual}"
 
 
 # TODO: FAST4 which has just one matrix

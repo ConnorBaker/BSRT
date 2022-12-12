@@ -1,8 +1,7 @@
 import torch
-from torch.backends import mps
 from hypothesis import settings
 from hypothesis import strategies as st
-
+from torch.backends import mps
 
 if "_cpu" in settings._current_profile:
     torch_devices = st.just("cpu")

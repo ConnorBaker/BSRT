@@ -1,6 +1,6 @@
+import torch
 from hypothesis import given
 from torch import Tensor
-import torch
 from torch.nn import functional as F
 
 from bsrt.data_processing.camera_pipeline import apply_smoothstep, invert_smoothstep
