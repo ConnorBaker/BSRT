@@ -3,8 +3,7 @@ from typing import NewType
 import torch
 from hypothesis import strategies as st
 
-from tests.hypothesis_utils.strategies.torch.devices import torch_devices
-from tests.hypothesis_utils.strategies.torch.dtypes import torch_real_dtypes
+from tests.hypothesis_utils.strategies.torch.devices_and_dtypes import devices_and_dtypes
 
 CHWShape = NewType("CHWShape", tuple[int, int, int])
 
@@ -67,19 +66,11 @@ def chw_tensors(
     assert len(shape) == 3, "Shape must be 3-dimensional"
     assert all(s > 0 for s in shape), "Shape must have positive components"
 
-    if dtype is None:
-        dtype = draw(torch_real_dtypes)
-    elif isinstance(dtype, st.SearchStrategy):
-        dtype = draw(dtype)
-
-    if device is None:
-        device = draw(torch_devices)
-    elif isinstance(device, st.SearchStrategy):
-        device = draw(device)
-
-    if dtype.is_floating_point:
-        return torch.empty(size=shape, dtype=dtype, device=device).uniform_()
-    elif not dtype.is_complex:
-        return torch.empty(size=shape, dtype=dtype, device=device).random_()
+    device_and_dtype = draw(devices_and_dtypes(device=device, dtype=dtype))
+    empty_like = torch.empty(size=shape, **device_and_dtype)
+    if empty_like.dtype.is_floating_point:
+        return empty_like.uniform_()
+    elif not empty_like.dtype.is_complex:
+        return empty_like.random_()
     else:
         raise ValueError(f"Unsupported dtype: {dtype}")

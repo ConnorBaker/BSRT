@@ -23,8 +23,9 @@ def test_mosaic_has_four_channels(image: Tensor) -> None:
     Args:
         image: A 3HW image of floating dtype
     """
-    mosaiced_image = mosaic(image)
-    assert mosaiced_image.shape[0] == 4, f"Expected 4 channels, got {mosaiced_image.shape[0]}"
+    expected = 4
+    actual = mosaic(image).shape[0]
+    assert actual == expected
 
 
 @given(image=_3HW_TENSORS())
@@ -35,10 +36,9 @@ def test_mosaic_has_half_height(image: Tensor) -> None:
     Args:
         image: A 3HW image of floating dtype
     """
-    mosaiced_image = mosaic(image)
-    assert (
-        mosaiced_image.shape[1] == image.shape[1] // 2
-    ), f"Expected {image.shape[1] // 2} height, got {mosaiced_image.shape[1]}"
+    expected = image.shape[1] // 2
+    actual = mosaic(image).shape[1]
+    assert actual == expected
 
 
 @given(image=_3HW_TENSORS())
@@ -49,10 +49,9 @@ def test_mosaic_has_half_width(image: Tensor) -> None:
     Args:
         image: A 3HW image of floating dtype
     """
-    mosaiced_image = mosaic(image)
-    assert (
-        mosaiced_image.shape[2] == image.shape[2] // 2
-    ), f"Expected {image.shape[2] // 2} width, got {mosaiced_image.shape[2]}"
+    expected = image.shape[2] // 2
+    actual = mosaic(image).shape[2]
+    assert actual == expected
 
 
 @given(image=_3HW_TENSORS())
@@ -63,10 +62,9 @@ def test_mosaic_dtype_invariance(image: Tensor) -> None:
     Args:
         image: A 3HW image of floating dtype
     """
-    mosaiced_image = mosaic(image)
-    assert (
-        mosaiced_image.dtype == image.dtype
-    ), f"Expected {image.dtype} dtype, got {mosaiced_image.dtype}"
+    expected = image.dtype
+    actual = mosaic(image).dtype
+    assert actual == expected
 
 
 @given(image=_3HW_TENSORS())
@@ -77,10 +75,9 @@ def test_mosaic_device_invariance(image: Tensor) -> None:
     Args:
         image: A 3HW image of floating dtype
     """
-    mosaiced_image = mosaic(image)
-    assert (
-        mosaiced_image.device == image.device
-    ), f"Expected {image.device} device, got {mosaiced_image.device}"
+    expected = image.device
+    actual = mosaic(image).device
+    assert actual == expected
 
 
 @given(image=_3HW_TENSORS())
@@ -91,11 +88,10 @@ def test_demosaic_shape_invariance(image: Tensor) -> None:
     Args:
         image: A 3HW image of floating dtype
     """
+    expected = image.shape
     mosaiced_image = mosaic(image)
-    demosaiced_image = demosaic(mosaiced_image)
-    assert (
-        demosaiced_image.shape == image.shape
-    ), f"Expected {image.shape} shape, got {demosaiced_image.shape}"
+    actual = demosaic(mosaiced_image).shape
+    assert actual == expected
 
 
 @given(image=_3HW_TENSORS())
@@ -106,11 +102,10 @@ def test_demosaic_dtype_invariance(image: Tensor) -> None:
     Args:
         image: A 3HW image of floating dtype
     """
+    expected = image.dtype
     mosaiced_image = mosaic(image)
-    demosaiced_image = demosaic(mosaiced_image)
-    assert (
-        demosaiced_image.dtype == image.dtype
-    ), f"Expected {image.dtype} dtype, got {demosaiced_image.dtype}"
+    actual = demosaic(mosaiced_image).dtype
+    assert actual == expected
 
 
 @given(image=_3HW_TENSORS())
@@ -121,8 +116,7 @@ def test_demosaic_device_invariance(image: Tensor) -> None:
     Args:
         image: A 3HW image of floating dtype
     """
+    expected = image.device
     mosaiced_image = mosaic(image)
-    demosaiced_image = demosaic(mosaiced_image)
-    assert (
-        demosaiced_image.device == image.device
-    ), f"Expected {image.device} device, got {demosaiced_image.device}"
+    actual = demosaic(mosaiced_image).device
+    assert actual == expected

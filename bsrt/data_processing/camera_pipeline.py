@@ -19,7 +19,9 @@ shape (c, h, w). Additionally, some also support batch operations, i.e. inputs o
 """
 
 
-def random_ccm() -> Tensor:
+def random_ccm(
+    dtype: torch.dtype = torch.float32, device: torch.device = torch.device("cpu")
+) -> Tensor:
     """Generates random RGB -> Camera color correction matrices."""
     # Takes a random convex combination of XYZ -> Camera CCMs.
     xyz2cams = torch.tensor(
@@ -44,12 +46,14 @@ def random_ccm() -> Tensor:
                 [-0.4782, 1.3016, 0.1933],
                 [-0.097, 0.1581, 0.5181],
             ],
-        ]
+        ],
+        dtype=dtype,
+        device=device,
     )
 
     num_ccms = len(xyz2cams)
 
-    weights = torch.empty(num_ccms, 1, 1).uniform_(0.0, 1.0)
+    weights = torch.empty(size=(num_ccms, 1, 1), dtype=dtype, device=device).uniform_(0.0, 1.0)
     weights_sum = weights.sum()
     xyz2cam = (xyz2cams * weights).sum(dim=0) / weights_sum
 
@@ -59,9 +63,11 @@ def random_ccm() -> Tensor:
             [0.4124564, 0.3575761, 0.1804375],
             [0.2126729, 0.7151522, 0.0721750],
             [0.0193339, 0.1191920, 0.9503041],
-        ]
+        ],
+        dtype=dtype,
+        device=device,
     )
-    rgb2cam = xyz2cam @ rgb2xyz
+    rgb2cam = xyz2cam.mm(rgb2xyz)
 
     # Normalizes each row.
     rgb2cam /= rgb2cam.sum(dim=-1, keepdim=True)
@@ -99,11 +105,10 @@ def apply_ccm(image: Tensor, ccm: Tensor) -> Tensor:
 
     shape = image.shape
     image = image.view(3, -1)
-    ccm = ccm.type_as(image)
 
-    image = torch.mm(ccm, image)
+    applied = ccm.mm(image)
 
-    return image.view(shape)
+    return applied.view(shape)
 
 
 # TODO: Refactor to only accept batches of the shape (B, C, H, W)

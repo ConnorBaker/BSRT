@@ -24,7 +24,9 @@ def test_gamma_expansion_shape_invariance(image: Tensor) -> None:
     Args:
         image: A 3HW tensor of floating dtype
     """
-    assert image.shape == gamma_expansion(image).shape
+    expected = image.shape
+    actual = gamma_expansion(image).shape
+    assert actual == expected
 
 
 @given(image=_3HW_TENSORS())
@@ -35,7 +37,9 @@ def test_gamma_compression_shape_invariance(image: Tensor) -> None:
     Args:
         image: A 3HW tensor of floating dtype
     """
-    assert image.shape == gamma_compression(image).shape
+    expected = image.shape
+    actual = gamma_compression(image).shape
+    assert actual == expected
 
 
 @given(image=_3HW_TENSORS())
@@ -46,7 +50,9 @@ def test_gamma_expansion_dtype_invariance(image: Tensor) -> None:
     Args:
         image: A 3HW tensor of floating dtype
     """
-    assert image.dtype == gamma_expansion(image).dtype
+    expected = image.dtype
+    actual = gamma_expansion(image).dtype
+    assert actual == expected
 
 
 @given(image=_3HW_TENSORS())
@@ -57,7 +63,9 @@ def test_gamma_compression_dtype_invariance(image: Tensor) -> None:
     Args:
         image: A 3HW tensor of floating dtype
     """
-    assert image.dtype == gamma_compression(image).dtype
+    expected = image.dtype
+    actual = gamma_compression(image).dtype
+    assert actual == expected
 
 
 @given(image=_3HW_TENSORS())
@@ -68,7 +76,9 @@ def test_gamma_expansion_device_invariance(image: Tensor) -> None:
     Args:
         image: A 3HW tensor of floating dtype
     """
-    assert image.device == gamma_expansion(image).device
+    expected = image.device
+    actual = gamma_expansion(image).device
+    assert actual == expected
 
 
 @given(image=_3HW_TENSORS())
@@ -79,7 +89,9 @@ def test_gamma_compression_device_invariance(image: Tensor) -> None:
     Args:
         image: A 3HW tensor of floating dtype
     """
-    assert image.device == gamma_compression(image).device
+    expected = image.device
+    actual = gamma_compression(image).device
+    assert actual == expected
 
 
 @given(image=_3HW_TENSORS())
@@ -90,7 +102,9 @@ def test_gamma_expansion_is_inverse_of_gamma_compression(image: Tensor) -> None:
     Args:
         image: A 3HW tensor of floating dtype
     """
-    assert torch.allclose(image, gamma_expansion(gamma_compression(image)), rtol=1e-2, atol=1e-3)
+    expected = image
+    actual = gamma_expansion(gamma_compression(image))
+    assert torch.allclose(expected, actual, rtol=1e-2, atol=1e-3)
 
 
 @given(image=_3HW_TENSORS())
@@ -101,4 +115,6 @@ def test_gamma_compression_is_inverse_of_gamma_expansion(image: Tensor) -> None:
     Args:
         image: A 3HW tensor of floating dtype
     """
-    assert torch.allclose(image, gamma_compression(gamma_expansion(image)), rtol=1e-2, atol=1e-3)
+    expected = image
+    actual = gamma_compression(gamma_expansion(image))
+    assert torch.allclose(expected, actual, rtol=1e-2, atol=1e-3)

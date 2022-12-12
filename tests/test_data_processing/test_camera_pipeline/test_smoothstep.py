@@ -24,7 +24,9 @@ def test_apply_smoothstep_shape_invariance(image: Tensor) -> None:
     Args:
         image: A 3HW tensor of floating dtype
     """
-    assert apply_smoothstep(image).shape == image.shape
+    expected = image.shape
+    actual = apply_smoothstep(image).shape
+    assert actual == expected
 
 
 @given(image=_3HW_TENSORS())
@@ -35,7 +37,9 @@ def test_invert_smoothstep_shape_invariance(image: Tensor) -> None:
     Args:
         image: A 3HW tensor of floating dtype
     """
-    assert invert_smoothstep(image).shape == image.shape
+    expected = image.shape
+    actual = invert_smoothstep(image).shape
+    assert actual == expected
 
 
 @given(image=_3HW_TENSORS())
@@ -46,7 +50,9 @@ def test_apply_smoothstep_dtype_invariance(image: Tensor) -> None:
     Args:
         image: A 3HW tensor of floating dtype
     """
-    assert apply_smoothstep(image).dtype == image.dtype
+    expected = image.dtype
+    actual = apply_smoothstep(image).dtype
+    assert actual == expected
 
 
 @given(image=_3HW_TENSORS())
@@ -57,7 +63,9 @@ def test_invert_smoothstep_dtype_invariance(image: Tensor) -> None:
     Args:
         image: A 3HW tensor of floating dtype
     """
-    assert invert_smoothstep(image).dtype == image.dtype
+    expected = image.dtype
+    actual = invert_smoothstep(image).dtype
+    assert actual == expected
 
 
 @given(image=_3HW_TENSORS())
@@ -68,7 +76,9 @@ def test_apply_smoothstep_device_invariance(image: Tensor) -> None:
     Args:
         image: A 3HW tensor of floating dtype
     """
-    assert apply_smoothstep(image).device == image.device
+    expected = image.device
+    actual = apply_smoothstep(image).device
+    assert actual == expected
 
 
 @given(image=_3HW_TENSORS())
@@ -79,7 +89,9 @@ def test_invert_smoothstep_device_invariance(image: Tensor) -> None:
     Args:
         image: A 3HW tensor of floating dtype
     """
-    assert invert_smoothstep(image).device == image.device
+    expected = image.device
+    actual = invert_smoothstep(image).device
+    assert actual == expected
 
 
 @given(image=_3HW_TENSORS())

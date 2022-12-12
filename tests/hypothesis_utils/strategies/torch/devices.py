@@ -6,11 +6,12 @@ from torch.backends import mps
 if "_cpu" in settings._current_profile:
     torch_devices = st.just("cpu")
 else:
+    # Always use the first GPU available for consistency
     gpu_device_name: None | str = None
     if torch.cuda.is_available():
-        gpu_device_name = "cuda"
+        gpu_device_name = "cuda:0"
     elif mps.is_available():
-        gpu_device_name = "mps"
+        gpu_device_name = "mps:0"
 
     if gpu_device_name is None:
         print("No GPU available, falling back to CPU")
