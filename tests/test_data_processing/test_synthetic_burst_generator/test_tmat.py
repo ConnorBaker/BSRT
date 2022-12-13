@@ -9,20 +9,11 @@ import torch._inductor.config
 from hypothesis import given
 from hypothesis import strategies as st
 
-from bsrt.data_processing.synthetic_burst_generator import (
-    get_tmat,
-    numpy_fused_rotate_get_tmat,
-    numpy_fused_scale_rotate_and_shear_translate_get_tmat,
-    numpy_fused_scale_rotate_get_tmat,
-    numpy_get_tmat,
-    torch_fused_get_tmat1,
-    torch_get_tmat,
+from bsrt.data_processing.image_transformation_matrices import (
+    _get_tmat_reference as torch_get_tmat_reference,
 )
-
-torch._dynamo.config.dynamic_shapes = False
-torch._dynamo.config.print_graph_breaks = True
-torch._dynamo.config.cache_size_limit = 8
-torch.set_float32_matmul_precision("high")
+from bsrt.data_processing.image_transformation_matrices import get_tmat as torch_get_tmat
+from bsrt.data_processing.synthetic_burst_generator import get_tmat
 
 
 def given_get_tmat_args(f):
@@ -55,14 +46,15 @@ def test_get_tmat_shape(
     shear_values: tuple[float, float],
     scale_factors: tuple[float, float],
 ) -> None:
-    tmat = get_tmat(
+    expected = (2, 3)
+    actual = get_tmat(
         image_shape,
         translation,
         theta,
         shear_values,
         scale_factors,
-    )
-    assert tmat.shape == (2, 3), f"{tmat.shape} != (3, 3)"
+    ).shape
+    assert expected == actual
 
 
 @given_get_tmat_args
@@ -73,25 +65,22 @@ def test_get_tmat_dtype(
     shear_values: tuple[float, float],
     scale_factors: tuple[float, float],
 ) -> None:
-    tmat = get_tmat(
+    expected = np.float64
+    actual = get_tmat(
         image_shape,
         translation,
         theta,
         shear_values,
         scale_factors,
-    )
-    assert tmat.dtype == np.float64, f"{tmat.dtype} != np.float64"
+    ).dtype
+    assert expected == actual
 
 
 @pytest.mark.parametrize(
     "impl",
     [
-        numpy_get_tmat,
-        numpy_fused_rotate_get_tmat,
-        numpy_fused_scale_rotate_get_tmat,
-        numpy_fused_scale_rotate_and_shear_translate_get_tmat,
+        torch_get_tmat_reference,
         torch_get_tmat,
-        torch_fused_get_tmat1,
     ],
 )
 @given_get_tmat_args
@@ -109,26 +98,22 @@ def test_get_tmat_shape_eq_impl_shape(
         theta,
         shear_values,
         scale_factors,
-    )
+    ).shape
     actual = impl(
         image_shape,
         translation,
         theta,
         shear_values,
         scale_factors,
-    )
-    assert expected.shape == actual.shape, f"{expected.shape} != {actual.shape}"
+    ).shape
+    assert expected == actual
 
 
 @pytest.mark.parametrize(
     "impl",
     [
-        numpy_get_tmat,
-        numpy_fused_rotate_get_tmat,
-        numpy_fused_scale_rotate_get_tmat,
-        numpy_fused_scale_rotate_and_shear_translate_get_tmat,
+        torch_get_tmat_reference,
         torch_get_tmat,
-        torch_fused_get_tmat1,
     ],
 )
 @given_get_tmat_args
@@ -140,34 +125,36 @@ def test_get_tmat_dtype_eq_impl_dtype(
     scale_factors: tuple[float, float],
     impl: Callable[..., npt.NDArray[np.float64] | torch.Tensor],
 ) -> None:
-    expected = get_tmat(
+    expected_tmat = get_tmat(
         image_shape,
         translation,
         theta,
         shear_values,
         scale_factors,
     )
-    actual = impl(
+    actual_tmat = impl(
         image_shape,
         translation,
         theta,
         shear_values,
         scale_factors,
     )
-    if isinstance(actual, torch.Tensor):
-        expected = torch.from_numpy(expected)
-    assert expected.dtype == actual.dtype, f"{expected.dtype} != {actual.dtype}"
+
+    if isinstance(actual_tmat, torch.Tensor):
+        expected = torch.from_numpy(expected_tmat).dtype
+    else:
+        expected = expected_tmat.dtype
+
+    actual = actual_tmat.dtype
+
+    assert expected == actual
 
 
 @pytest.mark.parametrize(
     "impl",
     [
-        numpy_get_tmat,
-        numpy_fused_rotate_get_tmat,
-        numpy_fused_scale_rotate_get_tmat,
-        numpy_fused_scale_rotate_and_shear_translate_get_tmat,
+        torch_get_tmat_reference,
         torch_get_tmat,
-        torch_fused_get_tmat1,
     ],
 )
 @given_get_tmat_args
@@ -198,6 +185,3 @@ def test_get_tmat_values_eq_impl_values(
         assert torch.allclose(expected, actual), f"{expected} != {actual}"
     else:
         assert np.allclose(expected, actual), f"{expected} != {actual}"
-
-
-# TODO: FAST4 which has just one matrix

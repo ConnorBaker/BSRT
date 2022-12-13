@@ -102,7 +102,7 @@ def test_apply_ccm_shape_invariance(image: Tensor, rs: RandomSeeder) -> None:
 
     Args:
         image: A 3HW tensor of floating dtype
-        rs: A randomdef test_apply_ccm_shape_in
+        rs: A random seed
     """
     expected = image.shape
     ccm = random_ccm(dtype=image.dtype, device=image.device)

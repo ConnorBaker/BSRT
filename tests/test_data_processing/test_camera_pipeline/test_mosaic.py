@@ -1,7 +1,8 @@
+import torch
 from hypothesis import given
 from torch import Tensor
 
-from bsrt.data_processing.camera_pipeline import demosaic, mosaic
+from bsrt.data_processing.camera_pipeline import _mosaic_reference, demosaic, mosaic
 from tests.hypothesis_utils.strategies.torch._3hw_tensors import _3HW_TENSORS
 
 # Property-based tests which ensure:
@@ -120,3 +121,55 @@ def test_demosaic_device_invariance(image: Tensor) -> None:
     mosaiced_image = mosaic(image)
     actual = demosaic(mosaiced_image).device
     assert actual == expected
+
+
+@given(image=_3HW_TENSORS())
+def test_mosaic_dtype_matches_mosaic_reference_dtype(image: Tensor) -> None:
+    """
+    Tests that the mosaiced image has the same dtype as the original image.
+
+    Args:
+        image: A 3HW image of floating dtype
+    """
+    expected = _mosaic_reference(image).dtype
+    actual = mosaic(image).dtype
+    assert actual == expected
+
+
+@given(image=_3HW_TENSORS())
+def test_mosaic_device_matches_mosaic_reference_device(image: Tensor) -> None:
+    """
+    Tests that the mosaiced image is on the same device as the original image.
+
+    Args:
+        image: A 3HW image of floating dtype
+    """
+    expected = _mosaic_reference(image).device
+    actual = mosaic(image).device
+    assert actual == expected
+
+
+@given(image=_3HW_TENSORS())
+def test_mosaic_shape_matches_mosaic_reference_shape(image: Tensor) -> None:
+    """
+    Tests that the mosaiced image has the same shape as the original image.
+
+    Args:
+        image: A 3HW image of floating dtype
+    """
+    expected = _mosaic_reference(image).shape
+    actual = mosaic(image).shape
+    assert actual == expected
+
+
+@given(image=_3HW_TENSORS())
+def test_mosaic_values_match_mosaic_reference_values(image: Tensor) -> None:
+    """
+    Tests that the mosaiced image has the same values as the original image.
+
+    Args:
+        image: A 3HW image of floating dtype
+    """
+    expected = _mosaic_reference(image)
+    actual = mosaic(image)
+    assert torch.allclose(actual, expected)

@@ -2,7 +2,6 @@ from typing import TypedDict
 
 import torch
 from hypothesis import strategies as st
-from torch.backends import mps
 
 from tests.hypothesis_utils.strategies.torch.devices import torch_devices
 from tests.hypothesis_utils.strategies.torch.dtypes import torch_real_dtypes
@@ -28,6 +27,8 @@ def devices_and_dtypes(
     elif isinstance(device, st.SearchStrategy):
         device = draw(device)
 
+    assert isinstance(device, torch.device)
+
     if dtype is None:
         dtype_strat = torch_real_dtypes
     elif isinstance(dtype, torch.dtype):
@@ -40,8 +41,8 @@ def devices_and_dtypes(
         # MPS doesn't support bfloat16 or float64
         dtype_strat = dtype_strat.filter(lambda t: t not in [torch.bfloat16, torch.float64])
 
-    if device.type == "cpu" and mps.is_available():
-        # Apple M1 doesn't float16
+    if device.type == "cpu":
+        # Most CPUs don't support float16
         dtype_strat = dtype_strat.filter(lambda t: t != torch.float16)
 
     dtype = draw(dtype_strat)

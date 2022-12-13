@@ -4,8 +4,7 @@ import torch
 from hypothesis import strategies as st
 
 from tests.hypothesis_utils.strategies.torch.chw_tensors import chw_shapes
-from tests.hypothesis_utils.strategies.torch.devices import torch_devices
-from tests.hypothesis_utils.strategies.torch.dtypes import torch_float_dtypes
+from tests.hypothesis_utils.strategies.torch.devices_and_dtypes import devices_and_dtypes
 from tests.hypothesis_utils.strategies.torch.memory_formats import torch_memory_formats
 
 NCHWShape = NewType("NCHWShape", tuple[int, int, int, int])
@@ -80,32 +79,21 @@ def nchw_tensors(
     elif isinstance(shape, st.SearchStrategy):
         shape = draw(shape)
 
-    assert len(shape) == 4, "Shape must be 3-dimensional"
+    assert len(shape) == 4, "Shape must be 4-dimensional"
     assert all(s > 0 for s in shape), "Shape must have positive components"
 
-    if dtype is None:
-        dtype = draw(torch_float_dtypes)
-    elif isinstance(dtype, st.SearchStrategy):
-        dtype = draw(dtype)
-
-    if device is None:
-        device = draw(torch_devices)
-    elif isinstance(device, st.SearchStrategy):
-        device = draw(device)
+    device_and_dtype = draw(devices_and_dtypes(device=device, dtype=dtype))
 
     if memory_format is None:
         memory_format = draw(torch_memory_formats)
     elif isinstance(memory_format, st.SearchStrategy):
         memory_format = draw(memory_format)
 
-    if dtype.is_floating_point:
-        return torch.empty(
-            size=shape, dtype=dtype, device=device, memory_format=memory_format
-        ).uniform_()
-    elif not dtype.is_complex:
-        return torch.empty(
-            size=shape, dtype=dtype, device=device, memory_format=memory_format
-        ).random_()
+    empty_like = torch.empty(size=shape, **device_and_dtype, memory_format=memory_format)
+    if empty_like.dtype.is_floating_point:
+        return empty_like.uniform_()
+    elif not empty_like.dtype.is_complex:
+        return empty_like.random_()
     else:
         raise ValueError(f"Unsupported dtype: {dtype}")
 
@@ -117,6 +105,7 @@ def nchw_tensors_with_same_shape_and_device(
     shape: None | NCHWShape | st.SearchStrategy[NCHWShape] = None,
     dtype: None | torch.dtype | st.SearchStrategy[torch.dtype] = None,
     device: None | str | torch.device | st.SearchStrategy[torch.device] = None,
+    memory_format: None | torch.memory_format | st.SearchStrategy[torch.memory_format] = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
     Returns two tensors with the same shape on the same device.
@@ -129,11 +118,19 @@ def nchw_tensors_with_same_shape_and_device(
     Returns:
         A tuple of two tensors with the same shape and dtype on the same device.
     """
+
+    # There's no easy way to get the memory format of a tensor, so we just draw it here.
+    if memory_format is None:
+        memory_format = draw(torch_memory_formats)
+    elif isinstance(memory_format, st.SearchStrategy):
+        memory_format = draw(memory_format)
+
     t1 = draw(
         nchw_tensors(
             dtype=dtype,
             device=device,
             shape=shape,
+            memory_format=memory_format,
         )
     )
     t2 = draw(
@@ -141,6 +138,7 @@ def nchw_tensors_with_same_shape_and_device(
             dtype=t1.dtype,
             device=t1.device,
             shape=NCHWShape(t1.shape),
+            memory_format=memory_format,
         )
     )
     return t1, t2

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import List, Union, overload
-
 import cv2 as cv
 import numpy as np
 import numpy.typing as npt
@@ -9,8 +7,7 @@ import torch
 from torch import Tensor
 from typing_extensions import Literal
 
-from bsrt.data_processing.meta_info import MetaInfo
-from bsrt.utils.data_format_utils import npimage_to_torch, torch_to_npimage
+from bsrt.utils.data_format_utils import npimage_to_torch
 
 """ Based on http://timothybrooks.com/tech/unprocessing
 Functions for forward and inverse camera pipeline. All functions input a torch float tensor of
@@ -22,7 +19,15 @@ shape (c, h, w). Additionally, some also support batch operations, i.e. inputs o
 def random_ccm(
     dtype: torch.dtype = torch.float32, device: torch.device = torch.device("cpu")
 ) -> Tensor:
-    """Generates random RGB -> Camera color correction matrices."""
+    """Generates random RGB -> Camera color correction matrices.
+
+    Args:
+        dtype: The dtype of the returned tensor.
+        device: The device of the returned tensor.
+
+    Returns:
+        A 3x3 CCM tensor of dtype `dtype` and device `device`.
+    """
     # Takes a random convex combination of XYZ -> Camera CCMs.
     xyz2cams = torch.tensor(
         [
@@ -75,44 +80,70 @@ def random_ccm(
 
 
 def apply_smoothstep(image: Tensor) -> Tensor:
-    """Apply global tone mapping curve."""
-    image_out = 3 * image**2 - 2 * image**3
-    return image_out
+    """Apply global tone mapping curve and clamps to [0, 1].
+
+    Args:
+        image: Image to apply tone mapping to.
+
+    Returns:
+        Image with tone mapping applied.
+    """
+    return (image**2 * (3 - 2 * image)).clamp(0.0, 1.0)
 
 
 def invert_smoothstep(image: Tensor) -> Tensor:
-    """Approximately inverts a global tone mapping curve."""
-    image = image.clamp(0.0, 1.0)
-    return 0.5 - torch.sin(torch.asin(1.0 - 2.0 * image) / 3.0)
+    """Approximately inverts a global tone mapping curve and clamps to [0, 1].
+
+    Args:
+        image: Image to invert.
+
+    Returns:
+        Inverted image.
+    """
+    return (0.5 - torch.sin(torch.asin(1.0 - 2.0 * image.clamp(0.0, 1.0)) / 3.0)).clamp(0.0, 1.0)
 
 
 def gamma_expansion(image: Tensor) -> Tensor:
-    """Converts from gamma to linear space."""
+    """Converts from gamma to linear space and clamps to [0, 1].
+
+    Args:
+        image: Image to expand.
+
+    Returns:
+        Image in linear space.
+    """
     # Clamps to prevent numerical instability of gradients near zero.
-    return image.clamp(1e-8) ** 2.2
+    return (image.clamp(1e-8) ** 2.2).clamp(0.0, 1.0)
 
 
 def gamma_compression(image: Tensor) -> Tensor:
-    """Converts from linear to gammaspace."""
+    """Converts from linear to gammaspace and clamps to [0, 1].
+
+    Args:
+        image: Image to compress.
+
+    Returns:
+        Image in gamma space.
+    """
     # Clamps to prevent numerical instability of gradients near zero.
-    return image.clamp(1e-8) ** (1.0 / 2.2)
+    return (image.clamp(1e-8) ** (1.0 / 2.2)).clamp(0.0, 1.0)
 
 
 def apply_ccm(image: Tensor, ccm: Tensor) -> Tensor:
-    """Applies a color correction matrix."""
-    assert image.dim() == 3
-    assert image.shape[0] == 3
+    """Applies a color correction matrix to an image of shape (3, H, W) and clamps the results to
+    [0, 1].
 
-    shape = image.shape
-    image = image.view(3, -1)
+    Args:
+        image: Image to apply CCM to.
+        ccm: Color correction matrix.
 
-    applied = ccm.mm(image)
+    Returns:
+        Image with CCM applied.
+    """
+    return ccm.mm(image.view(3, -1)).view(image.shape).clamp(0.0, 1.0)
 
-    return applied.view(shape)
 
-
-# TODO: Refactor to only accept batches of the shape (B, C, H, W)
-def mosaic(image: Tensor, mode: Literal["grbg", "rggb"] = "rggb") -> Tensor:
+def _mosaic_reference(image: Tensor, mode: Literal["grbg", "rggb"] = "rggb") -> Tensor:
     """Extracts RGGB Bayer planes from an RGB image."""
     shape = image.shape
     if image.dim() == 3:
@@ -137,7 +168,24 @@ def mosaic(image: Tensor, mode: Literal["grbg", "rggb"] = "rggb") -> Tensor:
         return image.view((-1, 4, shape[-2] // 2, shape[-1] // 2))
 
 
-# TODO: Refactor to only accept batches of the shape (B, C, H, W)
+def mosaic(image: Tensor) -> Tensor:
+    """Extracts RGGB Bayer planes from an RGB image of shape (3, H, W) and returns a 3D tensor of
+    shape (4, H // 2, W // 2).
+
+    Args:
+        image: Image to mosaic.
+
+    Returns:
+        Mosaiced image.
+    """
+    red = image[0, 0::2, 0::2]
+    green_red = image[1, 0::2, 1::2]
+    green_blue = image[1, 1::2, 0::2]
+    blue = image[2, 1::2, 1::2]
+    image = torch.stack((red, green_red, green_blue, blue), dim=0)
+    return image
+
+
 def demosaic(image: Tensor) -> Tensor:
     assert isinstance(image, torch.Tensor)
     image_normed = (image.clamp(0.0, 1.0) * 255).type(torch.uint8)
@@ -166,7 +214,7 @@ def demosaic(image: Tensor) -> Tensor:
     # first.
     im_sc_np: npt.NDArray[np.uint8] = im_sc.cpu().numpy()
 
-    out: List[Tensor] = [
+    out: list[Tensor] = [
         npimage_to_torch(cv.cvtColor(im, cv.COLOR_BAYER_BG2RGB), input_bgr=False)
         for im in im_sc_np
     ]
@@ -175,49 +223,3 @@ def demosaic(image: Tensor) -> Tensor:
         return torch.stack(out, dim=0).to(image.device).type(image.dtype)
     else:
         return out[0].to(image.device).type(image.dtype)
-
-
-@overload
-def process_linear_image_rgb(
-    image: Tensor, meta_info: MetaInfo, return_np: Literal[False]
-) -> Tensor:
-    ...
-
-
-@overload
-def process_linear_image_rgb(
-    image: Tensor, meta_info: MetaInfo, return_np: Literal[True]
-) -> npt.NDArray[np.uint8]:
-    ...
-
-
-def process_linear_image_rgb(
-    image: Tensor, meta_info: MetaInfo, return_np: bool = False
-) -> Union[Tensor, npt.NDArray[np.uint8]]:
-    image = meta_info.gains.apply(image)
-    image = apply_ccm(image, meta_info.cam2rgb)
-
-    if meta_info.compress_gamma:
-        image = gamma_compression(image)
-
-    if meta_info.smoothstep:
-        image = apply_smoothstep(image)
-
-    image = image.clamp(0.0, 1.0)
-
-    if return_np:
-        return torch_to_npimage(image)
-    return image
-
-
-def process_linear_image_raw(image: Tensor, meta_info: MetaInfo) -> Tensor:
-    image = meta_info.gains.apply(image)
-    image = demosaic(image)
-    image = apply_ccm(image, meta_info.cam2rgb)
-
-    if meta_info.compress_gamma:
-        image = gamma_compression(image)
-
-    if meta_info.smoothstep:
-        image = apply_smoothstep(image)
-    return image.clamp(0.0, 1.0)
