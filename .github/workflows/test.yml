@@ -19,4 +19,4 @@ jobs:
           cache-dependency-path: "**/pyproject.toml"
       - run: python3 -m pip install pip --upgrade
       - run: python3 -m pip install --pre --extra-index-url https://download.pytorch.org/whl/nightly/cu117 '.[test]'
-      - run: pytest -n2 --hypothesis-show-statistics --hypothesis-profile ci_cpu
+      - run: pytest -n1 --durations=0 --hypothesis-show-statistics --hypothesis-profile ci_cpu
