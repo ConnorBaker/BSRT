@@ -3,20 +3,78 @@ from __future__ import annotations
 from abc import ABC
 from argparse import ArgumentParser, Namespace
 from dataclasses import dataclass, fields
-from typing import Type, TypeVar
+from typing import Callable, cast
+
+from typing_extensions import Literal, Type, TypeVar, get_args, overload
 
 _T = TypeVar("_T", bound="Params")
 
-STR_TO_TYPE = {
-    "bool": bool,
-    "int": int,
-    "float": float,
-    "str": str,
-    "Optional[bool]": lambda x: bool(x) if x is not None else None,
-    "Optional[int]": lambda x: int(x) if x is not None else None,
-    "Optional[float]": lambda x: float(x) if x is not None else None,
-    "Optional[str]": lambda x: str(x) if x is not None else None,
-}
+_SUPPORTED_TYPES = Literal[
+    "bool",
+    "int",
+    "float",
+    "str",
+    "Optional[bool]",
+    "Optional[int]",
+    "Optional[float]",
+    "Optional[str]",
+]
+
+
+@overload
+def str_type_to_type(type_str: Literal["bool"]) -> Callable[..., bool]:
+    ...
+
+
+@overload
+def str_type_to_type(type_str: Literal["int"]) -> Callable[..., int]:
+    ...
+
+
+@overload
+def str_type_to_type(type_str: Literal["float"]) -> Callable[..., float]:
+    ...
+
+
+@overload
+def str_type_to_type(type_str: Literal["str"]) -> Callable[..., str]:
+    ...
+
+
+@overload
+def str_type_to_type(type_str: Literal["Optional[bool]"]) -> Callable[..., None | bool]:
+    ...
+
+
+@overload
+def str_type_to_type(type_str: Literal["Optional[int]"]) -> Callable[..., None | int]:
+    ...
+
+
+@overload
+def str_type_to_type(type_str: Literal["Optional[float]"]) -> Callable[..., None | float]:
+    ...
+
+
+@overload
+def str_type_to_type(type_str: Literal["Optional[str]"]) -> Callable[..., None | str]:
+    ...
+
+
+def str_type_to_type(type_str: str) -> Callable[..., None | bool | int | float | str]:
+    match type_str:
+        case "bool":
+            return bool
+        case "int":
+            return int
+        case "float":
+            return float
+        case "str":
+            return str
+        case ["Optional[", *str_type, "]"]:
+            return lambda y: str_type_to_type(str_type)(y) if y is not None else None
+        case _:
+            raise ValueError(f"Unsupported type: {type_str}")
 
 
 @dataclass
@@ -25,13 +83,22 @@ class Params(ABC):
     def add_to_argparse(cls, parser: ArgumentParser) -> None:
         arg_group = parser.add_argument_group(cls.__name__)
         for field in fields(cls):
-            arg_group.add_argument(f"--{cls.__name__}.{field.name}", type=STR_TO_TYPE[field.type])
+            assert field.type in get_args(_SUPPORTED_TYPES)
+            field_type: _SUPPORTED_TYPES = cast(_SUPPORTED_TYPES, field.type)
+            arg_group.add_argument(
+                f"--{cls.__name__}.{field.name}", type=str_type_to_type(field_type)
+            )
 
     @classmethod
-    def from_args(cls: Type[_T], args: Namespace) -> _T:
-        return cls(
-            **{
-                field.name: STR_TO_TYPE[field.type](getattr(args, f"{cls.__name__}.{field.name}"))
-                for field in fields(cls)
-            }
-        )
+    def from_args(
+        cls: Type[_T], args: Namespace  # type: ignore[valid-type]
+    ) -> _T:  # type: ignore[valid-type]
+        kwargs = {}
+        for field in fields(cls):
+            assert field.type in get_args(_SUPPORTED_TYPES)
+            field_type: _SUPPORTED_TYPES = cast(_SUPPORTED_TYPES, field.type)
+            kwargs[field.name] = str_type_to_type(field_type)(
+                getattr(args, f"{cls.__name__}.{field.name}")
+            )
+        instance: _T = cast(Callable[..., _T], cls)(**kwargs)  # type: ignore[valid-type]
+        return instance

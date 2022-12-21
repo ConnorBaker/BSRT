@@ -16,7 +16,7 @@ from torch.distributed.algorithms.ddp_comm_hooks import post_localSGD_hook as po
 from typing_extensions import Literal
 
 from bsrt.datasets.synthetic_zurich_raw2rgb import SyntheticZurichRaw2Rgb
-from bsrt.lighting_bsrt import LightningBSRT
+from bsrt.lightning_bsrt import LightningBSRT
 from bsrt.tuning.cli_parser import (
     CLI_PARSER,
     PRECISION_MAP,

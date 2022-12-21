@@ -1,15 +1,14 @@
 ARG CUDA_VERSION=11.8.0
 FROM mambaorg/micromamba:1.0-jammy-cuda-${CUDA_VERSION}
 
+COPY --chown=$MAMBA_USER:$MAMBA_USER env.yml /BSRT/env.yml
+
 RUN \
     --mount=type=cache,mode=0755,target=/opt/conda/pkgs \
-    micromamba install \
+    micromamba create \
         --yes \
         --name base \
-        --channel conda-forge \
-        git==2.38.1 \
-        pip==22.3.1 \
-        python==3.10.6 \
+        --file /BSRT/env.yml \
     && micromamba clean \
         --all \
         --yes

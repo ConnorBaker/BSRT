@@ -21,7 +21,7 @@ def flow_warp(
         Tensor: warped image or feature map
     """
     assert x.size()[-2:] == flow.size()[1:3]
-    N, C, H, W = x.size()
+    _N, _C, H, W = x.size()
     # mesh grid
     grid_x, grid_y = torch.meshgrid(
         torch.arange(0, W, dtype=x.dtype, device=x.device),

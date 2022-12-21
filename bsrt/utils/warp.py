@@ -1,8 +1,13 @@
 import torch
 import torch.nn.functional as F
+from torch import Tensor
+
+from bsrt.utils.types import InterpolationType
 
 
-def warp(feat, flow, mode="bilinear", padding_mode="zeros"):
+def warp(
+    feat: Tensor, flow: Tensor, mode: InterpolationType = "bilinear", padding_mode: str = "zeros"
+) -> Tensor:
     """
     warp an image/tensor (im2) back to im1, according to the optical flow im1 --> im2
 
@@ -11,7 +16,7 @@ def warp(feat, flow, mode="bilinear", padding_mode="zeros"):
     flow: [B, 2, H, W] flow (x, y)
 
     """
-    B, C, H, W = feat.size()
+    _B, _C, H, W = feat.size()
     # print(feat.device, flow.device)
 
     # mesh grid

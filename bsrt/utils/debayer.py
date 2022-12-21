@@ -1,6 +1,7 @@
 import torch
 import torch.nn
 import torch.nn.functional
+from torch import Tensor
 
 from bsrt.utils.bilinear_upsample_2d import bilinear_upsample_2d
 
@@ -29,7 +30,7 @@ class Debayer3x3(torch.nn.Module):
     (G1,G2). The lookups for the two greens differ.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super(Debayer3x3, self).__init__()
 
         self.kernels = torch.nn.Parameter(
@@ -72,7 +73,8 @@ class Debayer3x3(torch.nn.Module):
             requires_grad=False,
         )
 
-    def forward(self, x):
+    # Pyright complains about missing the arguments *args and **kwargs
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         """Debayer image.
 
         Parameters
@@ -85,7 +87,7 @@ class Debayer3x3(torch.nn.Module):
         rgb : Bx3xHxW tensor
             Color images in RGB channel order.
         """
-        B, C, H, W = x.shape
+        B, _C, H, W = x.shape
 
         x = torch.nn.functional.pad(x, (1, 1, 1, 1), mode="replicate")
         c = torch.nn.functional.conv2d(x, self.kernels, stride=1)
@@ -101,7 +103,7 @@ class Debayer2x2(torch.nn.Module):
     to OpenCV naming conventions.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super(Debayer2x2, self).__init__()
 
         self.kernels = torch.nn.Parameter(
@@ -118,7 +120,8 @@ class Debayer2x2(torch.nn.Module):
             requires_grad=False,
         )
 
-    def forward(self, x):
+    # Pyright complains about missing the arguments *args and **kwargs
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         """Debayer image.
 
         Parameters
@@ -145,7 +148,7 @@ class DebayerSplit(torch.nn.Module):
     to OpenCV naming conventions.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
         self.pad = torch.nn.ReflectionPad2d(1)
@@ -153,7 +156,8 @@ class DebayerSplit(torch.nn.Module):
             torch.tensor([[0, 1, 0], [1, 0, 1], [0, 1, 0]])[None, None] * 0.25
         )
 
-    def forward(self, x):
+    # Pyright complains about missing the arguments *args and **kwargs
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         """Debayer image.
 
         Parameters
@@ -166,7 +170,7 @@ class DebayerSplit(torch.nn.Module):
         rgb : Bx3xHxW tensor
             Color images in RGB channel order.
         """
-        B, _, H, W = x.shape
+        _B, _C, H, W = x.shape
         red = x[:, :, ::2, ::2]
         blue = x[:, :, 1::2, 1::2]
 

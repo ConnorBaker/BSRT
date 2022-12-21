@@ -5,17 +5,19 @@
 # Originally Written by Ze Liu, Modified by Jingyun Liang.
 # -----------------------------------------------------------------------------------
 
-from typing import Callable, Iterable, List, Tuple, TypeVar, Union
+from math import prod
+from typing import Callable, Iterable
 
 import torch
 import torch.nn as nn
 from torch import Tensor
-from torchvision.models.swin_transformer import SwinTransformerBlockV2
+from torchvision.models.swin_transformer import SwinTransformerBlockV2  # type: ignore[import]
+from typing_extensions import TypeVar
 
 _T = TypeVar("_T")
 
 
-def to_2tuple(x: _T) -> Tuple[_T, _T]:
+def to_2tuple(x: _T) -> tuple[_T, _T]:  # type: ignore[valid-type]
     return (x, x)
 
 
@@ -25,17 +27,23 @@ class PatchMerging(nn.Module):
     Args:
         input_resolution (tuple[int]): Resolution of input feature.
         dim (int): Number of input channels.
-        norm_layer (nn.Module, optional): Normalization layer.  Default: nn.LayerNorm
+        norm_layer (nn.Module): Normalization layer.  Default: nn.LayerNorm
     """
 
-    def __init__(self, input_resolution, dim, norm_layer=nn.LayerNorm):
+    def __init__(
+        self,
+        input_resolution: Iterable[int],
+        dim: int,
+        norm_layer: nn.Module = nn.LayerNorm,  # type: ignore[assignment]
+    ) -> None:
         super().__init__()
         self.input_resolution = input_resolution
         self.dim = dim
         self.reduction = nn.Linear(4 * dim, 2 * dim, bias=False)
         self.norm = norm_layer(4 * dim)
 
-    def forward(self, x):
+    # Pyright says we're missing *args and **kwargs here, but we're not.
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         """
         x: B, H*W, C
         """
@@ -84,12 +92,12 @@ class BasicLayer(nn.Module):
         dim: int,
         depth: int,
         num_heads: int,
-        window_size: List[int],
+        window_size: list[int],
         mlp_ratio: float = 4.0,
         drop: float = 0.0,
         attn_drop: float = 0.0,
-        drop_path: Union[float, Iterable[float]] = 0.0,
-        norm_layer=nn.LayerNorm,
+        drop_path: float | Iterable[float] = 0.0,
+        norm_layer: None | nn.Module = nn.LayerNorm,  # type: ignore[assignment]
     ):
 
         super().__init__()
@@ -104,7 +112,7 @@ class BasicLayer(nn.Module):
                     dropout=drop,
                     attention_dropout=attn_drop,
                     stochastic_depth_prob=_drop_path,
-                    norm_layer=norm_layer,
+                    norm_layer=norm_layer,  # type: ignore[arg-type]
                 )
                 for i, _drop_path in zip(
                     range(depth),
@@ -113,7 +121,8 @@ class BasicLayer(nn.Module):
             ]
         )
 
-    def forward(self, x: Tensor, x_size: Tuple[int, int]) -> Tensor:
+    # Pyright says we're missing *args and **kwargs here, but we're not.
+    def forward(self, x: Tensor, x_size: tuple[int, int]) -> Tensor:  # type: ignore[override]
         H, W = x_size
         B, L, C = x.shape
         x = x.view(B, H, W, C)
@@ -150,15 +159,15 @@ class RSTB(nn.Module):
         dim: int,
         depth: int,
         num_heads: int,
-        window_size: List[int],
+        window_size: list[int],
         mlp_ratio: float = 4.0,
         drop: float = 0.0,
         attn_drop: float = 0.0,
-        drop_path: Union[float, Iterable[float]] = 0.0,
-        norm_layer=nn.LayerNorm,
-        img_size=224,
-        patch_size=4,
-        resi_connection="1conv",
+        drop_path: float | Iterable[float] = 0.0,
+        norm_layer: None | nn.Module = nn.LayerNorm,  # type: ignore[assignment]
+        img_size: int = 224,
+        patch_size: int = 4,
+        resi_connection: str = "1conv",
     ):
         super(RSTB, self).__init__()
 
@@ -206,7 +215,8 @@ class RSTB(nn.Module):
             norm_layer=None,
         )
 
-    def forward(self, x: Tensor, x_size: Tuple[int, int]) -> Tensor:
+    # Pyright says we're missing *args and **kwargs here, but we're not.
+    def forward(self, x: Tensor, x_size: tuple[int, int]) -> Tensor:  # type: ignore[override]
         x = (
             self.patch_embed(self.conv(self.patch_unembed(self.residual_group(x, x_size), x_size)))
             + x
@@ -225,18 +235,19 @@ class PatchEmbed(nn.Module):
         norm_layer (nn.Module, optional): Normalization layer. Default: None
     """
 
-    def __init__(self, img_size=224, patch_size=4, in_chans=3, embed_dim=96, norm_layer=None):
+    def __init__(
+        self,
+        img_size: int = 224,
+        patch_size: int = 4,
+        in_chans: int = 3,
+        embed_dim: int = 96,
+        norm_layer: None | nn.Module = None,
+    ):
         super().__init__()
-        _img_size: Tuple[int, int] = to_2tuple(img_size)
-        _patch_size: Tuple[int, int] = to_2tuple(patch_size)
-        patches_resolution = [
-            _img_size[0] // _patch_size[0],
-            _img_size[1] // _patch_size[1],
-        ]
-        self.img_size = _img_size
-        self.patch_size = _patch_size
-        self.patches_resolution = patches_resolution
-        self.num_patches = patches_resolution[0] * patches_resolution[1]
+        self.img_size = to_2tuple(img_size)
+        self.patch_size = to_2tuple(patch_size)
+        self.patches_resolution = [img_size // patch_size] * 2
+        self.num_patches = prod(self.patches_resolution)
 
         self.in_chans = in_chans
         self.embed_dim = embed_dim
@@ -246,7 +257,8 @@ class PatchEmbed(nn.Module):
         else:
             self.norm = None
 
-    def forward(self, x, use_norm=True):
+    # Pyright says we're missing *args and **kwargs here, but we're not.
+    def forward(self, x: Tensor, use_norm: bool = True) -> Tensor:  # type: ignore[override]
         x = x.flatten(2).transpose(1, 2)  # B Ph*Pw C
         if use_norm and self.norm is not None:
             x = self.norm(x)
@@ -264,23 +276,25 @@ class PatchUnEmbed(nn.Module):
         norm_layer (nn.Module, optional): Normalization layer. Default: None
     """
 
-    def __init__(self, img_size=224, patch_size=4, in_chans=3, embed_dim=96, norm_layer=None):
+    def __init__(
+        self,
+        img_size: int = 224,
+        patch_size: int = 4,
+        in_chans: int = 3,
+        embed_dim: int = 96,
+        norm_layer: None | nn.Module = None,
+    ):
         super().__init__()
-        img_size = to_2tuple(img_size)
-        patch_size = to_2tuple(patch_size)
-        patches_resolution = [
-            img_size[0] // patch_size[0],
-            img_size[1] // patch_size[1],
-        ]
-        self.img_size = img_size
-        self.patch_size = patch_size
-        self.patches_resolution = patches_resolution
-        self.num_patches = patches_resolution[0] * patches_resolution[1]
+        self.img_size = to_2tuple(img_size)
+        self.patch_size = to_2tuple(patch_size)
+        self.patches_resolution = [img_size // patch_size] * 2
+        self.num_patches = prod(self.patches_resolution)
 
         self.in_chans = in_chans
         self.embed_dim = embed_dim
 
-    def forward(self, x, x_size):
-        B, HW, C = x.shape
+    # Pyright says we're missing *args and **kwargs here, but we're not.
+    def forward(self, x: Tensor, x_size: tuple[int, int]) -> Tensor:  # type: ignore[override]
+        B, _HW, _C = x.shape
         x = x.transpose(1, 2).view(B, self.embed_dim, x_size[0], x_size[1])  # B Ph*Pw C
         return x

@@ -1,5 +1,3 @@
-from typing import Tuple, Union
-
 import torch
 import torch.nn as nn
 from torch import Tensor
@@ -18,11 +16,15 @@ def prepare_aligned(
     sr_factor: int,
     kernel_size: int,
     gaussian_kernel: Tensor,
-    boundary_ignore: Union[int, None],
-) -> Tuple[Tensor, Tensor, Tensor]:
+    boundary_ignore: None | int,
+) -> tuple[Tensor, Tensor, Tensor]:
     # Estimate flow between the prediction and the ground truth
     with torch.no_grad():
-        flow = alignment_net(pred / (pred.max() + 1e-6), gt / (gt.max() + 1e-6))
+        flow = alignment_net(
+            # Pyright complains about .max being partially unknown
+            pred / (pred.max() + 1e-6),  # type: ignore[attr-defined]
+            gt / (gt.max() + 1e-6),  # type: ignore[attr-defined]
+        )
 
     # Warp the prediction to the ground truth coordinates
     pred_warped = warp(pred, flow)

@@ -1,11 +1,12 @@
 import math
 from dataclasses import dataclass, field
-from typing import ClassVar, List, Sequence, Union
+from typing import Sequence
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
+from typing_extensions import ClassVar
 
 from bsrt.model import arch_util
 from bsrt.utils.bilinear_upsample_2d import bilinear_upsample_2d
@@ -19,7 +20,7 @@ class BasicModule(nn.Module):
 
     basic_module: nn.Sequential = field(init=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         super().__init__()
         self.basic_module = nn.Sequential(
             # We drop the first element because we do not want to apply a ReLU to the input.
@@ -41,8 +42,10 @@ class BasicModule(nn.Module):
             ][1:]
         )
 
-    def forward(self, tensor_input: Tensor) -> Tensor:
-        return self.basic_module(tensor_input)
+    # Pyright says we're missing *args and **kwargs here, but we're not.
+    def forward(self, tensor_input: Tensor) -> Tensor:  # type: ignore[override]
+        ret: Tensor = self.basic_module(tensor_input)
+        return ret
 
 
 @dataclass(eq=False)
@@ -63,7 +66,7 @@ class SpyNet(nn.Module):
     mean: Tensor = field(init=False)
     std: Tensor = field(init=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         super().__init__()
         self.basic_module = nn.ModuleList([BasicModule() for _ in range(6)])
 
@@ -79,22 +82,28 @@ class SpyNet(nn.Module):
 
     def process(
         self, ref: Tensor, supp: Tensor, w: int, h: int, w_floor: int, h_floor: int
-    ) -> List[Tensor]:
-        flow_list: List[Tensor] = []
+    ) -> list[Tensor]:
+        flow_list: list[Tensor] = []
 
-        _ref: List[Tensor] = [self.preprocess(ref)]
-        _supp: List[Tensor] = [self.preprocess(supp)]
+        _ref: list[Tensor] = [self.preprocess(ref)]
+        _supp: list[Tensor] = [self.preprocess(supp)]
 
         # FIXME: By repeatedly averaging these values, we can end up with a tensor where the width
         # and height are one.
         for _ in range(5):
             _ref.insert(
                 0,
-                F.avg_pool2d(input=_ref[0], kernel_size=2, stride=2, count_include_pad=False),
+                # Pyright says the type of F.avg_pool2d is partially unknown, but it's not.
+                F.avg_pool2d(  # type: ignore[attr-defined]
+                    input=_ref[0], kernel_size=2, stride=2, count_include_pad=False
+                ),
             )
             _supp.insert(
                 0,
-                F.avg_pool2d(input=_supp[0], kernel_size=2, stride=2, count_include_pad=False),
+                # Pyright says the type of F.avg_pool2d is partially unknown, but it's not.
+                F.avg_pool2d(  # type: ignore[attr-defined]
+                    input=_supp[0], kernel_size=2, stride=2, count_include_pad=False
+                ),
             )
 
         flow: Tensor = _ref[0].new_zeros(
@@ -152,7 +161,10 @@ class SpyNet(nn.Module):
 
         return flow_list
 
-    def forward(self, ref: Tensor, supp: Tensor) -> Union[Tensor, List[Tensor]]:
+    # Pyright says we're missing *args and **kwargs here, but we're not.
+    def forward(  # type: ignore[override]
+        self, ref: Tensor, supp: Tensor
+    ) -> Tensor | list[Tensor]:
         assert ref.size() == supp.size()
 
         h, w = ref.size(2), ref.size(3)

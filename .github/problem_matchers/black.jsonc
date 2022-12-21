@@ -1,0 +1,16 @@
+// Taken from https://raw.githubusercontent.com/mlflow/mlflow/9b8e9019eb6c144130e9a35310dd82b1153f07b8/.github/workflows/matchers/black.json
+{
+  "problemMatcher": [
+    {
+      "owner": "black",
+      "severity": "error",
+      "pattern": [
+        {
+          "regexp": "^([^:]+\\.py): (This file is unformatted\\. .+)",
+          "file": 1,
+          "message": 2
+        }
+      ]
+    }
+  ]
+}

@@ -2,7 +2,7 @@ from pytorch_lightning.cli import LightningCLI
 from pytorch_lightning.loggers.wandb import WandbLogger
 
 from bsrt.datasets.synthetic_zurich_raw2rgb import SyntheticZurichRaw2Rgb
-from bsrt.lighting_bsrt import LightningBSRT
+from bsrt.lightning_bsrt import LightningBSRT
 
 if __name__ == "__main__":
     import os

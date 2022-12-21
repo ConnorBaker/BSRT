@@ -1,9 +1,10 @@
 import torch
 from torch import Tensor, nn
-from torchvision.ops import DeformConv2d, deform_conv2d
+from torchvision.ops import DeformConv2d, deform_conv2d  # type: ignore[import]
 
 
-class DeformSepConvNet(DeformConv2d):
+# MyPy things the type of DeformConv2d is Any because torchvision.ops doesn't have a stub file.
+class DeformSepConvNet(DeformConv2d):  # type: ignore[misc]
     """Use other features to generate offsets and masks"""
 
     def __init__(
@@ -17,6 +18,10 @@ class DeformSepConvNet(DeformConv2d):
         groups: int = 1,
     ):
         super().__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, groups)
+        self.kernel_size: tuple[int, int]
+        self.stride: tuple[int, int]
+        self.padding: tuple[int, int]
+        self.dilation: tuple[int, int]
         channels_ = self.groups * 3 * self.kernel_size[0] * self.kernel_size[1]
         self.conv_offset_mask = nn.Conv2d(
             in_channels=in_channels,
@@ -29,12 +34,13 @@ class DeformSepConvNet(DeformConv2d):
 
         self.init_offset()
 
-    def init_offset(self):
+    def init_offset(self) -> None:
         self.conv_offset_mask.weight.data.zero_()
         assert self.conv_offset_mask.bias is not None
         self.conv_offset_mask.bias.data.zero_()
 
-    def forward(self, input: Tensor, fea: Tensor) -> Tensor:
+    # Pyright says we're missing *args and **kwargs here, but we're not.
+    def forward(self, input: Tensor, fea: Tensor) -> Tensor:  # type: ignore[override]
         """input: input features for deformable conv: N, C, H, W.
         fea: other features used for generating offsets and mask: N, C, H, W.
         """
@@ -44,7 +50,7 @@ class DeformSepConvNet(DeformConv2d):
         offset = offset.clamp(-100, 100)
 
         mask = torch.sigmoid(mask)
-        return deform_conv2d(
+        conv: Tensor = deform_conv2d(
             input,
             offset,
             self.weight,
@@ -54,3 +60,4 @@ class DeformSepConvNet(DeformConv2d):
             self.dilation,
             mask,
         )
+        return conv

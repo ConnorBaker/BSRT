@@ -1,0 +1,17 @@
+// Copyright © 2020 Tomáš Janoušek
+// Taken from https://raw.githubusercontent.com/liskin/gh-problem-matcher-wrap/f47f2f5b3bd541add3e58f7936fff7bb29bae306/problem-matchers/isort.json
+{
+  "problemMatcher": [
+    {
+      "owner": "isort",
+      "severity": "error",
+      "pattern": [
+        {
+          "regexp": "^ERROR: (\\S+) (.*)$",
+          "file": 1,
+          "message": 2
+        }
+      ]
+    }
+  ]
+}

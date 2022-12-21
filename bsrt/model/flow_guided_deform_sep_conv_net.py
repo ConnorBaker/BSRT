@@ -1,6 +1,6 @@
 import torch
 from torch import Tensor
-from torchvision.ops import deform_conv2d
+from torchvision.ops import deform_conv2d  # type: ignore[import]
 
 from bsrt.model.deform_sep_conv_net import DeformSepConvNet
 
@@ -28,7 +28,10 @@ class FlowGuidedDeformSepConvNet(DeformSepConvNet):
             groups=groups,
         )
 
-    def forward(self, input: Tensor, fea: Tensor, flows: Tensor) -> Tensor:
+    # Pyright says we're missing *args and **kwargs here, but we're not.
+    def forward(  # type: ignore[override]
+        self, input: Tensor, fea: Tensor, flows: Tensor
+    ) -> Tensor:
         """input: input features for deformable conv: N, C, H, W.
         fea: other features used for generating offsets and mask: N, C, H, W.
         flows: N, 2, H, W.
@@ -41,7 +44,7 @@ class FlowGuidedDeformSepConvNet(DeformSepConvNet):
         offset = offset.clamp(-100, 100)
 
         mask = torch.sigmoid(mask)
-        return deform_conv2d(
+        conv: Tensor = deform_conv2d(
             input,
             offset,
             self.weight,
@@ -51,3 +54,4 @@ class FlowGuidedDeformSepConvNet(DeformSepConvNet):
             self.dilation,
             mask,
         )
+        return conv

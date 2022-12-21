@@ -1,8 +1,10 @@
 from dataclasses import dataclass, field
-from typing import Dict, Union
+from typing import Any, Dict, Union
 
 import torch
 import torch.nn.functional as F
+from mfsr_utils.pipelines.camera import demosaic
+from mfsr_utils.pipelines.synthetic_burst_generator import SyntheticBurstGeneratorData
 from pytorch_lightning import LightningModule
 from pytorch_lightning.loggers.wandb import WandbLogger
 from torch import Tensor, nn
@@ -13,8 +15,6 @@ from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity as LPI
 from torchmetrics.image.psnr import PeakSignalNoiseRatio as PSNR
 from torchmetrics.image.ssim import MultiScaleStructuralSimilarityIndexMeasure as MS_SSIM
 
-from bsrt.data_processing.camera_pipeline import demosaic
-from bsrt.data_processing.synthetic_burst_generator import SyntheticBurstGeneratorData
 from bsrt.model.bsrt import BSRT
 from bsrt.tuning.lr_scheduler.cosine_annealing_warm_restarts import (
     CosineAnnealingWarmRestartsParams,
@@ -44,7 +44,7 @@ class LightningBSRT(LightningModule):
     train_metrics: MetricCollection = field(init=False)
     valid_metrics: MetricCollection = field(init=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         super().__init__()
 
         # Initialize model
@@ -61,13 +61,17 @@ class LightningBSRT(LightningModule):
         self.train_metrics = metrics.clone(prefix="train/")
         self.valid_metrics = metrics.clone(prefix="val/")
 
-        self.save_hyperparameters(ignore=["model", "train_metrics", "valid_metrics"])
+        # Mypy things save_hyperparameters is a Tensor
+        self.save_hyperparameters(  # type: ignore[operator]
+            ignore=["model", "train_metrics", "valid_metrics"]
+        )
 
-    def forward(self, bursts: Tensor) -> Tensor:
-        return self.model(bursts)
+    def forward(self, bursts: Tensor) -> Tensor:  # type: ignore[override]
+        ret: Tensor = self.model(bursts)
+        return ret
 
-    def training_step(
-        self, batch: SyntheticBurstGeneratorData, batch_idx: int
+    def training_step(  # type: ignore[override]
+        self, batch: SyntheticBurstGeneratorData
     ) -> Dict[str, Tensor]:
         bursts = batch["burst"]
         gts = batch["gt"]
@@ -87,7 +91,7 @@ class LightningBSRT(LightningModule):
         loss["loss"] = loss["train/lpips"]
         return loss
 
-    def validation_step(
+    def validation_step(  # type: ignore[override]
         self, batch: SyntheticBurstGeneratorData, batch_idx: int
     ) -> Dict[str, Tensor]:
         bursts = batch["burst"]
@@ -108,18 +112,27 @@ class LightningBSRT(LightningModule):
         if batch_idx == 0 and isinstance(self.logger, WandbLogger):
             # Gross hack to work around "RuntimeError: "upsample_nearest2d_out_frame" not
             # implemented for 'BFloat16'"
-            nn_busrts: Tensor = F.interpolate(
-                demosaic(
-                    bursts[:, 0, :, :].to(
-                        torch.float32 if bursts.dtype == torch.bfloat16 else bursts.dtype
-                    )
-                ),
+            orig_dtype = bursts.dtype
+            if orig_dtype == torch.bfloat16:
+                bursts = bursts.to(torch.float32)
+
+            # TODO: Pyright complains that the type of F.interpolate is partially unknown
+            nn_busrts: Tensor = F.interpolate(  # type: ignore
+                input=demosaic(bursts[:, 0, :, :]),
+                size=None,
+                align_corners=None,
+                recompute_scale_factor=None,
+                antialias=False,
                 scale_factor=4,
-                mode="nearest-exact",
-            ).to(bursts.dtype)
+                # mode="nearest-exact",
+            )
+
+            if orig_dtype == torch.bfloat16:
+                nn_busrts = nn_busrts.to(bursts.dtype)
 
             for i, (nn_burst, sr, gt) in enumerate(zip(nn_busrts, srs, gts)):
-                self.logger.log_image(
+                # TODO: Pyright complains that the type of log_image is partially unknown
+                self.logger.log_image(  # type: ignore
                     key=f"val/sample/{i}",
                     images=[nn_burst, sr, gt],
                     caption=["LR", "SR", "GT"],
@@ -154,7 +167,9 @@ class LightningBSRT(LightningModule):
         return ret
 
     # Set gradients to `None` instead of zero to improve performance.
-    def optimizer_zero_grad(self, epoch, batch_idx, optimizer, optimizer_idx):
+    def optimizer_zero_grad(
+        self, epoch: int, batch_idx: int, optimizer: Optimizer, optimizer_idx: int
+    ) -> None:
         optimizer.zero_grad(set_to_none=True)
 
     # Due to the LRScheduler refactor in PyTorch 1.14, we need to override this method to avoid
@@ -164,5 +179,7 @@ class LightningBSRT(LightningModule):
     # `OneCycleLR` doesn't follow PyTorch's LRScheduler API. You should override the
     # `LightningModule.lr_scheduler_step` hook with your own logic if you are using a custom LR
     # scheduler.
-    def lr_scheduler_step(self, scheduler, optimizer_idx, metric):
+    def lr_scheduler_step(  # type: ignore[override]
+        self, scheduler: LRScheduler, optimizer_idx: int, metric: Any
+    ) -> None:
         super().lr_scheduler_step(scheduler, optimizer_idx, metric)

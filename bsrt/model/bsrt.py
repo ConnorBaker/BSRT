@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from typing import List, Type
 
 import torch
 import torch.nn as nn
@@ -46,7 +45,7 @@ class BSRT(nn.Module):
     lr: float = 1e-4
     mlp_ratio: float = 4.0
     model_level: Literal["S", "L"] = "L"
-    norm_layer: Type[nn.LayerNorm] = nn.LayerNorm
+    norm_layer: nn.Module = nn.LayerNorm  # type: ignore[assignment]
     num_features: int = 64
     num_frames: int = 14
     out_chans: int = 3  # RGB output so 3 channels
@@ -59,17 +58,17 @@ class BSRT(nn.Module):
     center: int = field(init=False, default=0)
     conv_first: nn.Conv2d = field(init=False)
     conv_flow: nn.Conv2d = field(init=False)
-    depths: List[int] = field(init=False)
+    depths: list[int] = field(init=False)
     embed_dim: int = field(init=False)
     flow_ps: nn.PixelShuffle = field(init=False)
     img_size: int = field(init=False)
-    num_heads: List[int] = field(init=False)
+    num_heads: list[int] = field(init=False)
     num_layers: int = field(init=False)
     patch_embed: swu.PatchEmbed = field(init=False)
     patch_unembed: swu.PatchUnEmbed = field(init=False)
     spynet: SpyNet = field(init=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         super().__init__()
 
         if self.model_level == "S":
@@ -115,10 +114,11 @@ class BSRT(nn.Module):
             self.in_chans * (1 + 2 * 0), self.embed_dim, 3, 1, 1, bias=True
         )
 
-        # stochastic depth
-        dpr: List[float] = torch.linspace(
+        # stochastic depth decay rule
+        # Pyright says tolist is partially unknown, but it's not.
+        dpr: list[float] = torch.linspace(
             0, self.drop_path_rate, sum(self.depths)
-        ).tolist()  # stochastic depth decay rule
+        ).tolist()  # type: ignore[attr-defined]
 
         self.pre_layer = swu.BasicLayer(
             dim=self.embed_dim,
@@ -218,10 +218,10 @@ class BSRT(nn.Module):
 
         self.apply(self._init_weights)
 
-    def _init_weights(self, m):
+    def _init_weights(self, m: nn.Module) -> None:
         if isinstance(m, nn.Linear):
             nn.init.trunc_normal_(m.weight, std=0.02)
-            if isinstance(m, nn.Linear) and m.bias is not None:
+            if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
         elif isinstance(m, nn.LayerNorm):
             nn.init.constant_(m.bias, 0)
@@ -253,7 +253,8 @@ class BSRT(nn.Module):
 
         return x
 
-    def forward(self, x: Tensor) -> Tensor:
+    # Pyright says we're missing *args and **kwargs here, but we're not.
+    def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]
         # B: batch size
         # N: number of frames
         # C: number of channels
@@ -271,13 +272,13 @@ class BSRT(nn.Module):
         x_ = self.conv_flow(self.flow_ps(x.view(B * N, C, H, W))).view(B, N, -1, H * 2, W * 2)
 
         # calculate flows
-        ref_flows = self.get_ref_flows(x_)
+        ref_flows: list[Tensor] = self.get_ref_flows(x_)
 
         # extract LR features
         x = self.lrelu(self.conv_first(x.view(B * N, -1, H, W)))
 
         L1_fea = self.mid_ps(self.conv_after_pre_layer(self.pre_forward_features(x)))
-        _, _, H, W = L1_fea.size()
+        _, _, L1_fea_H, L1_fea_W = L1_fea.size()
 
         L2_fea = self.lrelu(self.fea_L2_conv1(L1_fea))
         L3_fea = self.lrelu(self.fea_L3_conv1(L2_fea))
@@ -287,9 +288,9 @@ class BSRT(nn.Module):
         L2_fea = self.smooth1(self._upsample_add(L3_fea, self.latlayer1(L2_fea)))
         L1_fea = self.smooth2(self._upsample_add(L2_fea, self.latlayer2(L1_fea)))
 
-        L1_fea = L1_fea.view(B, N, -1, H, W).contiguous()
-        L2_fea = L2_fea.view(B, N, -1, H // 2, W // 2).contiguous()
-        L3_fea = L3_fea.view(B, N, -1, H // 4, W // 4).contiguous()
+        L1_fea = L1_fea.view(B, N, -1, L1_fea_H, L1_fea_W).contiguous()
+        L2_fea = L2_fea.view(B, N, -1, L1_fea_H // 2, L1_fea_W // 2).contiguous()
+        L3_fea = L3_fea.view(B, N, -1, L1_fea_H // 4, L1_fea_W // 4).contiguous()
 
         # PCD align
         # ref feature list
@@ -298,7 +299,7 @@ class BSRT(nn.Module):
             L2_fea[:, self.center, :, :, :].clone(),
             L3_fea[:, self.center, :, :, :].clone(),
         ]
-        _aligned_fea = []
+        _aligned_fea: list[Tensor] = []
         for i in range(N):
             nbr_fea_l = [
                 L1_fea[:, i, :, :, :].clone(),
@@ -335,7 +336,7 @@ class BSRT(nn.Module):
         clamped = x.clamp(0, 1)
         return clamped
 
-    def get_ref_flows(self, x: Tensor) -> List[Tensor]:
+    def get_ref_flows(self, x: Tensor) -> list[Tensor]:
         """Get flow between frames ref and other"""
         b, n, c, h, w = x.size()
         x_nbr = x.reshape(-1, c, h, w)

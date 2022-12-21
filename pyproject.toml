@@ -14,21 +14,32 @@ readme = "README.md"
 urls = { homepage = "https://github.com/connorbaker/bsrt" }
 requires-python = ">=3.10"
 dependencies = [
-    "torch==2.0.0.dev20221210+cu117",
-    "torchvision==0.15.0.dev20221210+cu117",
+    "mfsr_utils @ git+https://github.com/ConnorBaker/mfsr_utils.git",
+    "torch==2.0.0.*",
+    "torchvision==0.15.0.*",
     "opencv-python-headless==4.6.0.66",
-    "pytorch-lightning==1.8.4.post0",
+    "pytorch-lightning==1.8.5.post0",
     "torchmetrics[image]==0.11.0",
     "wandb==0.13.6",
 ]
 
 [project.optional-dependencies]
 tune = [
-    "syne-tune[gpsearchers] @ git+https://github.com/awslabs/syne-tune.git@db591a7ec1571a267725da1c2ce422e27f22874f",
+    "syne-tune[gpsearchers] @ git+https://github.com/awslabs/syne-tune.git@f55b4fb54cec21aac3e0417714eded890cd59c37",
 ]
 lint = ["black==22.12.0", "flake8==6.0.0", "isort==5.11.2"]
-typecheck = ["pyright==1.1.283", "mypy==0.991"]
-test = ["pytest==7.2.0", "pytest-xdist==3.1.0", "hypothesis==6.61.0"]
+typecheck = ["pyright==1.1.284", "mypy==0.991"]
+test = [
+    "pytest==7.2.0",
+    "pytest-xdist==3.1.0",
+    "hypothesis==6.61.0",
+    "hypothesis_torch_utils @ git+https://github.com/ConnorBaker/hypothesis_torch_utils.git",
+]
+
+[tool.setuptools]
+include-package-data = true
+package-dir = { bsrt = "bsrt" }
+package-data = { bsrt = ["py.typed"] }
 
 [tool.black]
 line-length = 99
@@ -39,37 +50,16 @@ profile = "black"
 line_length = 99
 py_version = "39" # 3.10 isn't supported yet
 
-[tool.setuptools]
-packages = ["bsrt"]
-
 [tool.mypy]
 python_version = "3.10"
 platform = "linux"
-# TODO: Fix these
-disable_error_code = [
-    "arg-type",
-    "assignment",
-    "attr-defined",
-    "empty-body",
-    "import",
-    "index",
-    "misc",
-    "no-redef",
-    "operator",
-    "override",
-]
-
+strict = true
+# mypy_path = "$MYPY_CONFIG_FILE_DIR/typings"
+warn_unused_ignores = false # Pyright catches different things than mypy
 
 [tool.pyright]
-# TODO: Enable strict typechecking.
-include = ["bsrt", "tests"]
-exclude = ["**/__pycache__", "tests/pytorch_array_api.py"]
-reportMissingImports = true
-reportMissingTypeStubs = false
+include = ["./bsrt"]
 pythonVersion = "3.10"
 pythonPlatform = "Linux"
-
-[tool.pytest.ini_options]
-minversion = "7.0"
-addopts = "-n4 --hypothesis-profile=dev_gpu"
-testpaths = ["tests"]
+typeCheckingMode = "strict"
+useLibraryCodeForTypes = true
