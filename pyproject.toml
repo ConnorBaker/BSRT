@@ -28,7 +28,7 @@ tune = [
     "syne-tune[gpsearchers] @ git+https://github.com/awslabs/syne-tune.git@f55b4fb54cec21aac3e0417714eded890cd59c37",
 ]
 lint = ["black==22.12.0", "flake8==6.0.0", "isort==5.11.2"]
-typecheck = ["pyright==1.1.284", "mypy==0.991"]
+typecheck = ["pyright==1.1.285", "mypy==0.991"]
 test = [
     "pytest==7.2.0",
     "pytest-xdist==3.1.0",
