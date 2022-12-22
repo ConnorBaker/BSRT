@@ -18,7 +18,7 @@ dependencies = [
     "torch==2.0.0.*",
     "torchvision==0.15.0.*",
     "opencv-python-headless==4.6.0.66",
-    "pytorch-lightning==1.8.5.post0",
+    "pytorch-lightning==1.8.6",
     "torchmetrics[image]==0.11.0",
     "wandb==0.13.7",
 ]
