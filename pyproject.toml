@@ -20,7 +20,7 @@ dependencies = [
     "opencv-python-headless==4.6.0.66",
     "pytorch-lightning==1.8.6",
     "torchmetrics[image]==0.11.0",
-    "wandb==0.13.7",
+    "wandb==0.13.9",
 ]
 
 [project.optional-dependencies]
