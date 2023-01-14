@@ -44,7 +44,7 @@ class BSRT(nn.Module):
     in_chans: int = 4  # RAW images are RGGB or the like, so 4 channels
     lr: float = 1e-4
     mlp_ratio: float = 4.0
-    model_level: Literal["S", "L"] = "L"
+    model_level: Literal["S", "L"] = "S"
     norm_layer: nn.Module = nn.LayerNorm  # type: ignore[assignment]
     num_features: int = 64
     num_frames: int = 14
@@ -277,7 +277,9 @@ class BSRT(nn.Module):
         # extract LR features
         x = self.lrelu(self.conv_first(x.view(B * N, -1, H, W)))
 
-        L1_fea = self.mid_ps(self.conv_after_pre_layer(self.pre_forward_features(x)))
+        L1_fea = self.pre_forward_features(x)
+        L1_fea = self.conv_after_pre_layer(L1_fea)
+        L1_fea = self.mid_ps(L1_fea)
         _, _, L1_fea_H, L1_fea_W = L1_fea.size()
 
         L2_fea = self.lrelu(self.fea_L2_conv1(L1_fea))
@@ -321,7 +323,10 @@ class BSRT(nn.Module):
 
         aligned_fea = torch.stack(_aligned_fea, dim=1)  # [B, N, C, H, W] --> [B, T, C, H, W]
 
-        x = self.lrelu(self.fusion(aligned_fea))
+        x = self.fusion(aligned_fea)
+        x = x.clone()
+        x = self.lrelu(x)
+        x = x.clone()
 
         x = self.lrelu(self.conv_after_body(self.forward_features(x))) + x
 

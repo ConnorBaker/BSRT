@@ -1,14 +1,14 @@
 from pathlib import Path
 
 import torch
-import torch.cuda
-import wandb
 from lightning_lite.utilities.seed import seed_everything
 from syne_tune import StoppingCriterion, Tuner
 from syne_tune.backend import LocalBackend
 from syne_tune.optimizer.schedulers.multiobjective.moasha import MOASHA
 from syne_tune.util import experiment_path
 
+# import torch.cuda
+import wandb
 from bsrt.tuning.cli_parser import CLI_PARSER, OptimizerName, SchedulerName, TunerConfig
 from bsrt.tuning.config_space import ConfigSpace
 from bsrt.tuning.lr_scheduler.cosine_annealing_warm_restarts import (
@@ -52,14 +52,14 @@ if __name__ == "__main__":
     os.environ["NCCL_SOCKET_NTHREADS"] = "4"
     os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
 
-    import torch.backends.cuda
-    import torch.backends.cudnn
+    # import torch.backends.cuda
+    # import torch.backends.cudnn
 
-    torch.backends.cuda.matmul.allow_tf32 = True
-    torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
-    torch.backends.cudnn.allow_tf32 = True
-    torch.backends.cudnn.deterministic = False
-    torch.backends.cudnn.benchmark = True
+    # torch.backends.cuda.matmul.allow_tf32 = True
+    # torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
+    # torch.backends.cudnn.allow_tf32 = True
+    # torch.backends.cudnn.deterministic = False
+    # torch.backends.cudnn.benchmark = True
 
     args = CLI_PARSER.parse_args()
     tuner_config = TunerConfig.from_args(args)

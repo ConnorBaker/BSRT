@@ -1,5 +1,6 @@
 import math
 from dataclasses import dataclass, field
+from functools import partial
 from typing import Sequence
 
 import torch
@@ -61,7 +62,7 @@ class SpyNet(nn.Module):
         str
     ] = "https://github.com/JingyunLiang/VRT/releases/download/v0.0/spynet_sintel_final-3d2a1287.pth"  # noqa: E501
 
-    return_levels: Sequence[int] = field(default_factory=lambda: [5])
+    return_levels: Sequence[int] = field(default_factory=partial(list, 5))
     basic_module: nn.ModuleList = field(init=False)
     mean: Tensor = field(init=False)
     std: Tensor = field(init=False)

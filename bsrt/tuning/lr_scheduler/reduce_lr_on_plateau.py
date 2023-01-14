@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from functools import partial
 
 from syne_tune.config_space import Float, loguniform
 
@@ -10,7 +11,7 @@ from bsrt.tuning.params import Params
 
 @dataclass
 class ReduceLROnPlateauConfigSpace(ConfigSpace):
-    factor: Float = loguniform(1e-4, 1.0)
+    factor: Float = field(default_factory=partial(loguniform, 1e-4, 1.0))
 
 
 @dataclass

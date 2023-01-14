@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from functools import partial
 from typing import Optional
 
 from syne_tune.config_space import Float, loguniform, uniform
@@ -11,12 +12,12 @@ from bsrt.tuning.params import Params
 
 @dataclass
 class OneCycleLRConfigSpace(ConfigSpace):
-    max_lr: Float = loguniform(1e-3, 1.0)
-    pct_start: Float = uniform(0.1, 0.5)
-    base_momentum: Float = uniform(0.5, 0.9)
-    max_momentum: Float = uniform(0.9, 1.0)
-    div_factor: Float = uniform(1e1, 1e3)
-    final_div_factor: Float = uniform(1e3, 1e5)
+    max_lr: Float = field(default_factory=partial(loguniform, 1e-3, 1.0))
+    pct_start: Float = field(default_factory=partial(uniform, 0.1, 0.5))
+    base_momentum: Float = field(default_factory=partial(uniform, 0.5, 0.9))
+    max_momentum: Float = field(default_factory=partial(uniform, 0.9, 1.0))
+    div_factor: Float = field(default_factory=partial(uniform, 1e1, 1e3))
+    final_div_factor: Float = field(default_factory=partial(uniform, 1e3, 1e5))
 
 
 @dataclass

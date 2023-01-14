@@ -21,5 +21,5 @@ RUN \
     --mount=type=cache,mode=0755,target=/home/$MAMBA_USER/.cache/pip \
     pip install \
         --pre \
-        --extra-index-url https://download.pytorch.org/whl/nightly/cu117 \
+        --extra-index-url https://download.pytorch.org/whl/nightly/cu118 \
         .[tune]

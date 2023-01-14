@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from functools import partial
 
 from syne_tune.config_space import Float, Integer, loguniform, randint
 
@@ -10,9 +11,9 @@ from bsrt.tuning.params import Params
 
 @dataclass
 class CosineAnnealingWarmRestartsConfigSpace(ConfigSpace):
-    T_0: Integer = randint(1, 100)
-    T_mult: Integer = randint(1, 10)
-    eta_min: Float = loguniform(1e-5, 1e-1)
+    T_0: Integer = field(default_factory=partial(randint, 1, 100))
+    T_mult: Integer = field(default_factory=partial(randint, 1, 10))
+    eta_min: Float = field(default_factory=partial(loguniform, 1e-5, 1e-1))
 
 
 @dataclass
