@@ -1,21 +1,29 @@
+import os
 from argparse import Namespace
 from pathlib import Path
 from typing import List, Optional
 
+import torch
 from lightning_lite.utilities.seed import seed_everything
+from mfsr_utils.datasets.zurich_raw2rgb import ZurichRaw2Rgb
+from mfsr_utils.pipelines.synthetic_burst_generator import (
+    SyntheticBurstGeneratorData,
+    SyntheticBurstGeneratorTransform,
+)
 from pytorch_lightning.callbacks import Callback, StochasticWeightAveraging
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.loggers.wandb import WandbLogger
 from pytorch_lightning.strategies.ddp import DDPStrategy
 from pytorch_lightning.strategies.strategy import Strategy
 from pytorch_lightning.trainer import Trainer
-from syne_tune.constants import ST_CHECKPOINT_DIR
+from syne_tune.constants import ST_CHECKPOINT_DIR  # type: ignore
 from syne_tune.report import Reporter
 from torch.distributed.algorithms.ddp_comm_hooks import default_hooks
 from torch.distributed.algorithms.ddp_comm_hooks import post_localSGD_hook as post_localSGD
+from torch.utils.data import random_split
+from torch.utils.data.dataloader import DataLoader
 from typing_extensions import Literal
 
-from bsrt.datasets.synthetic_zurich_raw2rgb import SyntheticZurichRaw2Rgb
 from bsrt.lightning_bsrt import LightningBSRT
 from bsrt.tuning.cli_parser import (
     CLI_PARSER,
@@ -84,8 +92,8 @@ def get_strategy() -> Strategy:
             subgroup=None,
             start_localSGD_iter=8,
         ),
-        ddp_comm_hook=post_localSGD.post_localSGD_hook,
-        ddp_comm_wrapper=default_hooks.bf16_compress_wrapper,
+        ddp_comm_hook=post_localSGD.post_localSGD_hook,  # type: ignore
+        ddp_comm_wrapper=default_hooks.bf16_compress_wrapper,  # type: ignore
         model_averaging_period=4,
     )
 
@@ -116,6 +124,27 @@ def objective(
 ) -> None:
     seed_everything(42)
 
+    # Desired batch size
+    target_batch_size: int = 64
+
+    # Number of batches a single GPU can handle in memory
+    single_gpu_batch_size: int = tuner_config.batch_size
+
+    # Number of GPUs
+    import torch.cuda
+
+    num_gpus: int = torch.cuda.device_count()
+
+    # Number of batches to accumulate before performing a backward pass
+    actual_batch_size: int = single_gpu_batch_size * num_gpus
+
+    # Number of batches to accumulate before performing a backward pass
+    accumulate_batch_size: int = target_batch_size // actual_batch_size
+
+    # Num CPUs
+    num_cpus: None | int = os.cpu_count()
+    assert num_cpus is not None
+
     # TODO: Add name/version to make it clear we're resuming runs
     wandb_logger = WandbLogger(
         entity="connorbaker", project="bsrt", group=tuner_config.experiment_name, reinit=True
@@ -137,7 +166,7 @@ def objective(
         num_sanity_val_steps=0,
         gradient_clip_val=0.5,
         gradient_clip_algorithm="norm",
-        accumulate_grad_batches=8,
+        accumulate_grad_batches=accumulate_batch_size,
         callbacks=get_callbacks(st_checkpoint_dir),
     )
 
@@ -153,16 +182,29 @@ def objective(
         for k, v in params.__dict__.items()
     }
 
-    data_module = SyntheticZurichRaw2Rgb(
-        precision=PRECISION_MAP[tuner_config.precision],
-        crop_size=256,
-        data_dir=tuner_config.data_dir,
-        burst_size=14,
-        batch_size=tuner_config.batch_size,
-        num_workers=-1,
-        prefetch_factor=4,
+    data_dir: Path = Path(tuner_config.data_dir)
+    full_dataset: ZurichRaw2Rgb[SyntheticBurstGeneratorData] = ZurichRaw2Rgb(
+        data_dir,
+        transform=SyntheticBurstGeneratorTransform(
+            burst_size=14, crop_sz=256, dtype=PRECISION_MAP[tuner_config.precision]
+        ),
+    )
+    train_dataset, val_dataset = random_split(full_dataset, [0.8, 0.2])
+    train_data_loader: DataLoader[SyntheticBurstGeneratorData] = DataLoader(
+        train_dataset,
+        batch_size=single_gpu_batch_size,
+        num_workers=num_cpus,
         pin_memory=True,
         persistent_workers=True,
+        prefetch_factor=4,
+    )
+    val_data_loader: DataLoader[SyntheticBurstGeneratorData] = DataLoader(
+        val_dataset,
+        batch_size=single_gpu_batch_size,
+        num_workers=num_cpus,
+        pin_memory=True,
+        persistent_workers=True,
+        prefetch_factor=4,
     )
 
     for _logger in trainer.loggers:
@@ -174,15 +216,16 @@ def objective(
             print(f"Loading checkpoint from {ckpt_path}")
         else:
             print(f"No checkpoint found at {ckpt_path}")
-        trainer.fit(
+        trainer.fit(  # type: ignore
             model=model,
-            datamodule=data_module,
+            train_dataloaders=train_data_loader,
+            val_dataloaders=val_data_loader,
             ckpt_path=ckpt_path.as_posix() if ckpt_path.exists() else None,
         )
 
-        wandb_logger.experiment.finish()
+        wandb_logger.experiment.finish()  # type: ignore
     except Exception as e:
-        wandb_logger.experiment.finish(1)
+        wandb_logger.experiment.finish(1)  # type: ignore
         raise e
 
 
@@ -200,6 +243,20 @@ if __name__ == "__main__":
     bsrt_params = BSRTParams.from_args(args)
     optimizer_params = get_optimizer_params(args.optimizer, args)
     scheduler_params = get_scheduler_params(args.scheduler, args)
+
+    os.environ["NCCL_NSOCKS_PERTHREAD"] = "8"
+    os.environ["NCCL_SOCKET_NTHREADS"] = "4"
+    os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
+
+    import torch.backends.cuda
+    import torch.backends.cudnn
+
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
+    torch.backends.cudnn.allow_tf32 = True
+    torch.backends.cudnn.deterministic = False
+    torch.backends.cudnn.benchmark = True
+    torch.set_float32_matmul_precision("medium")  # type: ignore
 
     objective(
         args.st_checkpoint_dir,

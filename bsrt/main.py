@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import torch
@@ -7,7 +8,7 @@ from mfsr_utils.pipelines.synthetic_burst_generator import (
     SyntheticBurstGeneratorTransform,
 )
 from pytorch_lightning.loggers.wandb import WandbLogger
-from pytorch_lightning.strategies.ddp_spawn import DDPSpawnStrategy
+from pytorch_lightning.strategies.ddp import DDPStrategy
 from pytorch_lightning.trainer import Trainer
 from torch.utils.data import random_split
 from torch.utils.data.dataloader import DataLoader
@@ -18,8 +19,6 @@ from bsrt.tuning.model.bsrt import BSRTParams
 from bsrt.tuning.optimizer.adamw import AdamWParams
 
 if __name__ == "__main__":
-    import os
-
     os.environ["NCCL_NSOCKS_PERTHREAD"] = "8"
     os.environ["NCCL_SOCKET_NTHREADS"] = "4"
     os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
@@ -32,12 +31,15 @@ if __name__ == "__main__":
     torch.backends.cudnn.allow_tf32 = True
     torch.backends.cudnn.deterministic = False
     torch.backends.cudnn.benchmark = True
+    # BF16 should be enough for our use case.
+    # See: https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html
+    torch.set_float32_matmul_precision("medium")  # type: ignore
 
     # Desired batch size
-    target_batch_size: int = 128
+    target_batch_size: int = 64
 
     # Number of batches a single GPU can handle in memory
-    single_gpu_batch_size: int = 8
+    single_gpu_batch_size: int = 4
 
     # Number of GPUs
     num_gpus: int = torch.cuda.device_count()
@@ -87,14 +89,14 @@ if __name__ == "__main__":
     train_data_loader: DataLoader[SyntheticBurstGeneratorData] = DataLoader(
         train_dataset,
         batch_size=single_gpu_batch_size,
-        num_workers=1,
+        num_workers=num_cpus,
         pin_memory=True,
         persistent_workers=True,
     )
     val_data_loader: DataLoader[SyntheticBurstGeneratorData] = DataLoader(
         val_dataset,
         batch_size=single_gpu_batch_size,
-        num_workers=1,
+        num_workers=num_cpus,
         pin_memory=True,
         persistent_workers=True,
     )
@@ -112,16 +114,21 @@ if __name__ == "__main__":
     logger.watch(model, log="all", log_graph=True)
 
     trainer = Trainer(
-        enable_checkpointing=True,
-        gradient_clip_val=0.5,
+        num_sanity_val_steps=0,
+        # limit_train_batches=100,
+        # limit_val_batches=100,
+        enable_checkpointing=False,
+        # TODO: Try with different gradient clip values with norm and value.
+        gradient_clip_val=1.0,
+        gradient_clip_algorithm="value",
         accelerator="auto",
-        # Static graph must be false for torch.compile to work.
-        strategy=DDPSpawnStrategy(static_graph=False, find_unused_parameters=False),
+        strategy=DDPStrategy(static_graph=True, find_unused_parameters=False),
         accumulate_grad_batches=accumulate_batch_size,
         precision=32,
         deterministic=False,
         detect_anomaly=False,
         logger=logger,
+        # logger=False,
     )
 
     trainer.fit(  # type: ignore

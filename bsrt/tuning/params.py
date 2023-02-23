@@ -71,8 +71,9 @@ def str_type_to_type(type_str: str) -> Callable[..., None | bool | int | float |
             return float
         case "str":
             return str
-        case ["Optional[", *str_type, "]"]:
-            return lambda y: str_type_to_type(str_type)(y) if y is not None else None
+        case optional if type_str.startswith("Optional[") and type_str.endswith("]"):
+            inner = optional.lstrip("Optional[").rstrip("]")
+            return lambda y: str_type_to_type(inner)(y) if y is not None else None
         case _:
             raise ValueError(f"Unsupported type: {type_str}")
 

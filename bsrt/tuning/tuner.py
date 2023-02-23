@@ -1,13 +1,15 @@
+# Example usage:
+# python -m bsrt.tuning.tuner --experiment_name bsrt-exp --optimizer AdamW --scheduler OneCycleLR --precision float32 --data_dir "/home/connorbaker/datasets" --limit_train_batches 1.0 --limit_val_batches 1.0 --batch_size 8 --max_epochs 100 --wandb_api_key "YOUR_API_KEY"
+
 from pathlib import Path
 
-import torch
 from lightning_lite.utilities.seed import seed_everything
+from mfsr_utils.datasets.zurich_raw2rgb import ZurichRaw2Rgb
 from syne_tune import StoppingCriterion, Tuner
 from syne_tune.backend import LocalBackend
 from syne_tune.optimizer.schedulers.multiobjective.moasha import MOASHA
 from syne_tune.util import experiment_path
 
-# import torch.cuda
 import wandb
 from bsrt.tuning.cli_parser import CLI_PARSER, OptimizerName, SchedulerName, TunerConfig
 from bsrt.tuning.config_space import ConfigSpace
@@ -46,23 +48,10 @@ def get_scheduler_config_space(scheduler_name: SchedulerName) -> ConfigSpace:
 
 if __name__ == "__main__":
     seed_everything(42)
-    import os
-
-    os.environ["NCCL_NSOCKS_PERTHREAD"] = "8"
-    os.environ["NCCL_SOCKET_NTHREADS"] = "4"
-    os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
-
-    # import torch.backends.cuda
-    # import torch.backends.cudnn
-
-    # torch.backends.cuda.matmul.allow_tf32 = True
-    # torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
-    # torch.backends.cudnn.allow_tf32 = True
-    # torch.backends.cudnn.deterministic = False
-    # torch.backends.cudnn.benchmark = True
 
     args = CLI_PARSER.parse_args()
     tuner_config = TunerConfig.from_args(args)
+    ZurichRaw2Rgb.download_to(Path(tuner_config.data_dir))
 
     wandb.setup()
     wandb.login(key=tuner_config.wandb_api_key)
@@ -100,7 +89,7 @@ if __name__ == "__main__":
             scheduler=scheduler,
             stop_criterion=StoppingCriterion(),
             n_workers=1,
-            max_failures=1000,
+            max_failures=100,
             sleep_time=5.0,
             save_tuner=True,
             suffix_tuner_name=False,
