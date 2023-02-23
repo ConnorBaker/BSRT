@@ -13,7 +13,7 @@
   torchmetrics,
   wandb,
   # tune
-  syne-tune ? throw "syne-tune is not available on this platform",
+  syne-tune,
   # lint
   black,
   flake8,
@@ -44,7 +44,10 @@ buildPythonPackage {
   ];
 
   passthru.optional-dependencies = {
-    tune = [syne-tune];
+    tune = [
+      syne-tune
+      syne-tune.optional-dependencies.gpsearchers
+    ];
     lint = [
       black
       flake8

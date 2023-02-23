@@ -3,6 +3,7 @@
 
 from pathlib import Path
 
+import wandb
 from lightning_lite.utilities.seed import seed_everything
 from mfsr_utils.datasets.zurich_raw2rgb import ZurichRaw2Rgb
 from syne_tune import StoppingCriterion, Tuner
@@ -10,7 +11,6 @@ from syne_tune.backend import LocalBackend
 from syne_tune.optimizer.schedulers.multiobjective.moasha import MOASHA
 from syne_tune.util import experiment_path
 
-import wandb
 from bsrt.tuning.cli_parser import CLI_PARSER, OptimizerName, SchedulerName, TunerConfig
 from bsrt.tuning.config_space import ConfigSpace
 from bsrt.tuning.lr_scheduler.cosine_annealing_warm_restarts import (

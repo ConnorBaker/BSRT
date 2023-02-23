@@ -22,7 +22,7 @@
     inherit (nixpkgs.lib) composeManyExtensions;
     overlay = composeManyExtensions [
       mfsr_utils.overlays.default
-      (import ./nix/extensions/bsrt.nix)
+      (import ./nix/extensions)
     ];
 
     pkgs = import nixpkgs {
@@ -41,12 +41,17 @@
     inherit (python310.pkgs) bsrt;
   in {
     overlays.default = overlay;
-    devShells.${system}.default = pkgs.mkShell {
-      packages = [
-        cudatoolkit
-        python310
-        bsrt
-      ];
+    packages.${system}.default = pkgs.mkShell {
+      packages =
+        [
+          cudatoolkit
+          python310
+          bsrt
+        ]
+        ++ (
+          with bsrt.passthru.optional-dependencies;
+            tune ++ lint ++ typecheck ++ test
+        );
       shellHook = ''
         export CUDA_HOME=${cudatoolkit}
         export PATH=$CUDA_HOME/bin:$PATH
