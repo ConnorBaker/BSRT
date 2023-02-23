@@ -27,6 +27,47 @@ Read the full paper on arXiv: <https://arxiv.org/abs/2204.08332>.
 - Python: Python 3.10
 - CUDA: Runtime must be available
 
+## Building a Docker Images
+
+### Dockerfile.micromamba
+
+TODO: Description
+
+```bash
+sudo docker buildx build -t bsrt_micromamba -f dockerfiles/Dockerfile.micromamba .
+```
+
+### Dockerfile.from_scratch
+
+TODO: Description
+
+TODO: Does not include BSRT yet
+
+```bash
+sudo docker buildx build -t bsrt_from_scratch -f dockerfiles/Dockerfile.from_scratch .
+```
+
+### docker-bake.hcl
+
+TODO: Description
+
+```bash
+bash bake.sh
+```
+
+## Running a Docker Image
+
+```bash
+sudo docker run \
+  --gpus all \
+  --mount type=bind,source="$HOME/datasets",target="$HOME/datasets" \
+  --ipc=host \
+  --ulimit memlock=-1 \
+  --ulimit stack=67108864 \
+  bsrt bash -c "python3 /bsrt/bsrt/main.py"
+```
+
+
 ## Training
 
 ### Hyperparameter search
