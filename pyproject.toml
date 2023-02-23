@@ -14,18 +14,23 @@ readme = "README.md"
 urls = { homepage = "https://github.com/connorbaker/bsrt" }
 requires-python = ">=3.10"
 dependencies = [
-    "mfsr_utils @ git+https://github.com/ConnorBaker/mfsr_utils.git",
-    "torch>=2.0.0.*",
-    "torchvision>=0.15.0.*",
-    "opencv-python-headless>=4.7.0.68",
+    # See https://github.com/ConnorBaker/mfsr_utils
+    "mfsr_utils",
+    "torch",
+    "torchvision",
+    "filelock>=3.9",
+    "opencv>=4.7.0",
     "pytorch-lightning>=1.8.6",
-    "torchmetrics[image]>=0.11.0",
+    # See https://github.com/ercanburak/PerceptualSimilarity
+    "lpips",
+    "torchmetrics>=0.11.0",
     "wandb>=0.13.7",
 ]
 
 [project.optional-dependencies]
 tune = [
-    "syne-tune[gpsearchers] @ git+https://github.com/awslabs/syne-tune.git@f55b4fb54cec21aac3e0417714eded890cd59c37",
+    # See https://github.com/awslabs/syne-tune
+    "syne-tune[gpsearchers]",
 ]
 lint = ["black>=22.12.0", "flake8>=6.0.0", "isort>=5.11.4"]
 typecheck = ["pyright>=1.1.286", "mypy>=0.991"]
@@ -33,7 +38,8 @@ test = [
     "pytest>=7.2.0",
     "pytest-xdist>=3.1.0",
     "hypothesis>=6.61.0",
-    "hypothesis_torch_utils @ git+https://github.com/ConnorBaker/hypothesis_torch_utils.git",
+    # See https://github.com/ConnorBaker/hypothesis_torch_utils
+    "hypothesis_torch_utils",
 ]
 
 [tool.setuptools]

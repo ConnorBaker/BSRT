@@ -1,0 +1,95 @@
+{
+  "nodes": {
+    "hypothesis_torch_utils": {
+      "inputs": {
+        "nixpkgs": "nixpkgs"
+      },
+      "locked": {
+        "lastModified": 1677119268,
+        "narHash": "sha256-FoOhIBDKGrPbk8v3ngurKB0jrTuBnmC0Gz9xQGgDz2g=",
+        "owner": "ConnorBaker",
+        "repo": "hypothesis_torch_utils",
+        "rev": "388546613f0057a422a7254478148fa5b4927dfb",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ConnorBaker",
+        "repo": "hypothesis_torch_utils",
+        "type": "github"
+      }
+    },
+    "mfsr_utils": {
+      "inputs": {
+        "hypothesis_torch_utils": "hypothesis_torch_utils",
+        "nixpkgs": "nixpkgs_2"
+      },
+      "locked": {
+        "lastModified": 1677121262,
+        "narHash": "sha256-5r4fmSwrDVuvVOWVlhdd1o89rN34ZFKcM2wihKTw7oo=",
+        "owner": "connorbaker",
+        "repo": "mfsr_utils",
+        "rev": "a64a28de536c0e8b18e27e65535fbfd40800b9cd",
+        "type": "github"
+      },
+      "original": {
+        "owner": "connorbaker",
+        "repo": "mfsr_utils",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1677116698,
+        "narHash": "sha256-y/2RqOMHcuaIluN1QaQi7D1Kt+ZT/u5Z9wAjQCJeK2I=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "af735e7623db2c72d5aa506bcef19fbb946f2b5e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_2": {
+      "locked": {
+        "lastModified": 1677116698,
+        "narHash": "sha256-y/2RqOMHcuaIluN1QaQi7D1Kt+ZT/u5Z9wAjQCJeK2I=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "af735e7623db2c72d5aa506bcef19fbb946f2b5e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_3": {
+      "locked": {
+        "lastModified": 1677185190,
+        "narHash": "sha256-K8ngN+tHQGWga7c/mxJ4SdPR56GVXueao/WjKvOS9vo=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "be20d9a5a5e6830207ec40fd4fbf0fa43070a3e0",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "master",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "mfsr_utils": "mfsr_utils",
+        "nixpkgs": "nixpkgs_3"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
