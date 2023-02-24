@@ -33,22 +33,22 @@ if __name__ == "__main__":
     torch.backends.cudnn.benchmark = True
     # BF16 should be enough for our use case.
     # See: https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html
-    torch.set_float32_matmul_precision("medium")  # type: ignore
+    torch.set_float32_matmul_precision("high")  # type: ignore
 
     # Desired batch size
-    target_batch_size: int = 64
+    # target_batch_size: int = 64
 
     # Number of batches a single GPU can handle in memory
-    single_gpu_batch_size: int = 4
+    single_gpu_batch_size: int = 8
 
     # Number of GPUs
-    num_gpus: int = torch.cuda.device_count()
+    # num_gpus: int = torch.cuda.device_count()
 
-    # Number of batches to accumulate before performing a backward pass
-    actual_batch_size: int = single_gpu_batch_size * num_gpus
+    # # Number of batches to accumulate before performing a backward pass
+    # actual_batch_size: int = single_gpu_batch_size * num_gpus
 
-    # Number of batches to accumulate before performing a backward pass
-    accumulate_batch_size: int = target_batch_size // actual_batch_size
+    # # Number of batches to accumulate before performing a backward pass
+    # accumulate_batch_size: int = target_batch_size // actual_batch_size
 
     # Num CPUs
     num_cpus: None | int = os.cpu_count()
@@ -119,12 +119,14 @@ if __name__ == "__main__":
         # limit_val_batches=100,
         enable_checkpointing=False,
         # TODO: Try with different gradient clip values with norm and value.
-        gradient_clip_val=1.0,
-        gradient_clip_algorithm="value",
+        # gradient_clip_val=1.0,
+        # gradient_clip_algorithm="value",
         accelerator="auto",
         strategy=DDPStrategy(static_graph=True, find_unused_parameters=False),
-        accumulate_grad_batches=accumulate_batch_size,
-        precision=32,
+        # TODO: For some reason, nonzero accumulate_grad_batches throws
+        # SystemError: <built-in method run_backward of torch._C._EngineBase object at 0x7ffff791b270> returned NULL without setting an exception.
+        # accumulate_grad_batches=accumulate_batch_size,
+        precision="bf16",
         deterministic=False,
         detect_anomaly=False,
         logger=logger,
