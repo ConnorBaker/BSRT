@@ -1,6 +1,8 @@
 {
-  inputs.nixpkgs.url = "github:nixos/nixpkgs/master";
+  inputs.nixpkgs.url = "github:nixos/nixpkgs";
   inputs.mfsr_utils.url = "github:connorbaker/mfsr_utils";
+  inputs.nixGL.url = "github:guibou/nixGL";
+  inputs.nixGL.inputs.nixpkgs.follows = "nixpkgs";
 
   nixConfig = {
     # Add the CUDA maintainer's cache to the binary cache list.
@@ -16,11 +18,21 @@
     self,
     nixpkgs,
     mfsr_utils,
+    nixGL,
   }: let
     system = "x86_64-linux";
+    nvidiaDriver = {
+      version = "525.89.02";
+      sha256 = "sha256-DkEsiMW9mPhCqDmm9kYU8g5MCVDvfP+xKxWKcWM1k+k=";
+    };
 
-    inherit (nixpkgs.lib) composeManyExtensions;
-    overlay = composeManyExtensions [
+    overlay = nixpkgs.lib.composeManyExtensions [
+      (final: prev: {
+        python3 = prev.python310;
+        python3Packages = prev.python310Packages;
+        cudaPackages = prev.cudaPackages_11_8;
+      })
+      nixGL.overlays.default
       mfsr_utils.overlays.default
       (import ./nix/extensions)
     ];
@@ -31,49 +43,33 @@
         allowUnfree = true;
         cudaSupport = true;
         cudaCapabilities = ["8.0"];
-        cudaForwardCompat = true;
+        cudaForwardCompat = false;
       };
       overlays = [overlay];
     };
 
-    inherit (pkgs.cudaPackages) cudatoolkit;
-    inherit (pkgs) python310;
-    inherit (python310.pkgs) bsrt;
+    inherit (pkgs) python310 python310Packages nixgl cudaPackages;
+    inherit (python310Packages) bsrt;
+    inherit (nixgl.nvidiaPackages nvidiaDriver) nixGLNvidia;
   in {
+    inherit pkgs;
     overlays.default = overlay;
     packages.${system}.default = pkgs.mkShell {
       packages =
         [
-          cudatoolkit
           python310
           bsrt
+          nixGLNvidia
         ]
         ++ (
           with bsrt.passthru.optional-dependencies;
             tune ++ lint ++ typecheck ++ test
         );
+
+      # Make an alias for python so it's wrapped with nixGLNvidia-525.89.02.
       shellHook = ''
-        export CUDA_HOME=${cudatoolkit}
-        export PATH=$CUDA_HOME/bin:$PATH
-        if [ ! -f /run/opengl-driver/lib/libcuda.so.1 ]; then
-          echo
-          echo "Could not find /run/opengl-driver/lib/libcuda.so.1."
-          echo
-          echo "You have at least three options:"
-          echo
-          echo "1. Use nixGL (https://github.com/guibou/nixGL)"
-          echo "2. Add libcuda.so.1 to your LD_PRELOAD environment variable."
-          echo "3. Symlink libcuda.so.1 to /run/opengl-driver/lib/libcuda.so.1."
-          echo
-          echo "   This is the easiest option, but it requires root."
-          echo "   You can do this by running:"
-          echo
-          echo "   sudo mkdir -p /run/opengl-driver/lib"
-          echo "   sudo ln -s /usr/lib64/libcuda.so.1 /run/opengl-driver/lib/libcuda.so.1"
-          echo
-          echo "Continuing to the shell, but be aware that CUDA might not work."
-          echo
-        fi
+        alias python3="nixGLNvidia-525.89.02 python3"
+        alias python="nixGLNvidia-525.89.02 python3"
       '';
     };
 

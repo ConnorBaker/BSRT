@@ -7,7 +7,13 @@ from mfsr_utils.pipelines.synthetic_burst_generator import SyntheticBurstGenerat
 from pytorch_lightning import LightningModule
 from pytorch_lightning.loggers.wandb import WandbLogger
 from torch import Tensor, nn
-from torch.optim.lr_scheduler import LRScheduler, ReduceLROnPlateau
+
+if torch.__version__ < "2.0.0":
+    from torch.optim.lr_scheduler import _LRScheduler as LRScheduler
+else:
+    from torch.optim.lr_scheduler import LRScheduler
+
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.optim.optimizer import Optimizer
 from torchmetrics import MetricCollection
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity as LPIPS

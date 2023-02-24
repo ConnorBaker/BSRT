@@ -1,10 +1,15 @@
 from argparse import ArgumentParser
 from typing import Union, get_args
 
+import torch
+if torch.__version__ < "2.0.0":
+    from torch.optim.lr_scheduler import _LRScheduler as LRScheduler
+else:
+    from torch.optim.lr_scheduler import LRScheduler
+
 from torch.optim.lr_scheduler import (
     CosineAnnealingWarmRestarts,
     ExponentialLR,
-    LRScheduler,
     OneCycleLR,
     ReduceLROnPlateau,
 )
