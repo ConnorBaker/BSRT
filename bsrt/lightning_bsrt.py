@@ -47,7 +47,7 @@ class LightningBSRT(LightningModule):
 
     model: nn.Module = field(init=False)
     train_metrics: MetricCollection = field(init=False)
-    valid_metrics: MetricCollection = field(init=False)
+    validation_metrics: MetricCollection = field(init=False)
 
     def __post_init__(self) -> None:
         super().__init__()
@@ -64,11 +64,11 @@ class LightningBSRT(LightningModule):
             }
         )
         self.train_metrics = metrics.clone(prefix="train/")
-        self.valid_metrics = metrics.clone(prefix="val/")
+        self.validation_metrics = metrics.clone(prefix="val/")
 
         # Mypy thinks save_hyperparameters is a Tensor
         self.save_hyperparameters(  # type: ignore[operator]
-            ignore=["model", "train_metrics", "valid_metrics"]
+            ignore=["model", "train_metrics", "validation_metrics"]
         )
 
     def forward(self, bursts: Tensor) -> Tensor:  # type: ignore[override]
@@ -92,7 +92,7 @@ class LightningBSRT(LightningModule):
 
         # PyTorch Lightning requires that when validation_step returns a dict, it must contain a
         # key named loss
-        loss["loss"] = loss["train/lpips"]
+        loss["loss"] = abs(1 - loss["train/ms_ssim"])
         return loss
 
     def validation_step(  # type: ignore[override]
@@ -107,8 +107,8 @@ class LightningBSRT(LightningModule):
         srs = srs.to(torch.float32)
 
         # Calculate losses
-        loss: dict[str, Tensor] = self.valid_metrics(srs, gts)
-        self.log_dict(self.valid_metrics, on_step=False, on_epoch=True)  # type: ignore
+        loss: dict[str, Tensor] = self.validation_metrics(srs, gts)
+        self.log_dict(self.validation_metrics, on_step=False, on_epoch=True)  # type: ignore
 
         # Log the image only for the first batch
         # TODO: We could log different images with different names
@@ -136,7 +136,7 @@ class LightningBSRT(LightningModule):
 
         # PyTorch Lightning requires that when validation_step returns a dict, it must contain a
         # key named loss
-        loss["loss"] = loss["val/lpips"]
+        loss["loss"] = abs(1 - loss["val/ms_ssim"])
         return loss
 
     def configure_optimizers(self) -> dict[str, str | Optimizer | LRScheduler]:
@@ -158,7 +158,7 @@ class LightningBSRT(LightningModule):
             "lr_scheduler": scheduler,
         }
         if isinstance(scheduler, ReduceLROnPlateau):
-            ret["monitor"] = "val/lpips"
+            ret["monitor"] = "val/ms_ssim"
 
         return ret
 

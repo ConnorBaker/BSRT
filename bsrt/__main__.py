@@ -19,6 +19,9 @@ from bsrt.tuning.model.bsrt import BSRTParams
 from bsrt.tuning.optimizer.adamw import AdamWParams
 
 if __name__ == "__main__":
+    from lightning_fabric.fabric import Fabric  # type: ignore
+    Fabric.seed_everything(42, workers=True)
+
     os.environ["NCCL_NSOCKS_PERTHREAD"] = "8"
     os.environ["NCCL_SOCKET_NTHREADS"] = "4"
     os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
@@ -126,7 +129,7 @@ if __name__ == "__main__":
         # TODO: For some reason, nonzero accumulate_grad_batches throws
         # SystemError: <built-in method run_backward of torch._C._EngineBase object at 0x7ffff791b270> returned NULL without setting an exception.
         # accumulate_grad_batches=accumulate_batch_size,
-        precision="bf16",
+        precision=32,
         deterministic=False,
         detect_anomaly=False,
         logger=logger,

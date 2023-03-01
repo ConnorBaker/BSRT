@@ -51,19 +51,6 @@ buildPythonPackage {
 
   pythonImportsCheck = ["syne_tune"];
 
-  # extras_require={
-  #       "raytune": required_ray,
-  #       "bore": required_bore,
-  #       "kde": required_kde,
-  #       "gpsearchers": required_gpsearchers,
-  #       "benchmarks": required_benchmarks,
-  #       "blackbox-repository": required_blackbox_repository,
-  #       "aws": required_aws,
-  #       "yahpo": required_yahpo,
-  #       "dev": required_dev,
-  #       "extra": required_extra,
-  #   },
-
   passthru.optional-dependencies = {
     raytune = [
       ray

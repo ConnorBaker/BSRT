@@ -17,26 +17,32 @@
     },
     "hypothesis_torch_utils": {
       "inputs": {
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": [
+          "nixpkgs"
+        ]
       },
       "locked": {
         "lastModified": 1677119268,
         "narHash": "sha256-FoOhIBDKGrPbk8v3ngurKB0jrTuBnmC0Gz9xQGgDz2g=",
-        "owner": "ConnorBaker",
+        "owner": "connorbaker",
         "repo": "hypothesis_torch_utils",
         "rev": "388546613f0057a422a7254478148fa5b4927dfb",
         "type": "github"
       },
       "original": {
-        "owner": "ConnorBaker",
+        "owner": "connorbaker",
         "repo": "hypothesis_torch_utils",
         "type": "github"
       }
     },
     "mfsr_utils": {
       "inputs": {
-        "hypothesis_torch_utils": "hypothesis_torch_utils",
-        "nixpkgs": "nixpkgs_2"
+        "hypothesis_torch_utils": [
+          "hypothesis_torch_utils"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ]
       },
       "locked": {
         "lastModified": 1677121262,
@@ -75,54 +81,42 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1677116698,
-        "narHash": "sha256-y/2RqOMHcuaIluN1QaQi7D1Kt+ZT/u5Z9wAjQCJeK2I=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "af735e7623db2c72d5aa506bcef19fbb946f2b5e",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
-    "nixpkgs_2": {
-      "locked": {
-        "lastModified": 1677116698,
-        "narHash": "sha256-y/2RqOMHcuaIluN1QaQi7D1Kt+ZT/u5Z9wAjQCJeK2I=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "af735e7623db2c72d5aa506bcef19fbb946f2b5e",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
-    "nixpkgs_3": {
-      "locked": {
-        "lastModified": 1677203436,
-        "narHash": "sha256-GFy9y3GKLU/GewoxDsqIkEzZoDaZlr7fU5/eoL+sqZ0=",
+        "lastModified": 1677595807,
+        "narHash": "sha256-luxUZ/YesQHI9Eb1X652TXLyX1f/xG/kunxMWqw/CL8=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "3a6f81747728186e1988e53ee3a7f232ceddf9f7",
+        "rev": "4a6cd14f37b22c9d2f90e3774b8ea9601025ad6b",
         "type": "github"
       },
       "original": {
         "owner": "nixos",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "opencv-fix": {
+      "locked": {
+        "lastModified": 1677298230,
+        "narHash": "sha256-UIicGcdp9ysmTEjpPm4ve5yTzmgahWAfQ0orRb0/zyk=",
+        "owner": "connorbaker",
+        "repo": "nixpkgs",
+        "rev": "c70cc935d106293e6e1a75357ee5bc8bf9e68cd3",
+        "type": "github"
+      },
+      "original": {
+        "owner": "connorbaker",
+        "ref": "feat/opencv-use-cudaPackages",
         "repo": "nixpkgs",
         "type": "github"
       }
     },
     "root": {
       "inputs": {
+        "hypothesis_torch_utils": "hypothesis_torch_utils",
         "mfsr_utils": "mfsr_utils",
         "nixGL": "nixGL",
-        "nixpkgs": "nixpkgs_3"
+        "nixpkgs": "nixpkgs",
+        "opencv-fix": "opencv-fix"
       }
     }
   },
