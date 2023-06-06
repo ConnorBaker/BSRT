@@ -1,9 +1,9 @@
-final: prev: let
-  inherit (prev.lib) attrsets;
-  new.python310.pkgs = prev.python310.pkgs.overrideScope (python-final: python-prev: {
+final: prev: {
+  python3Packages = prev.python3Packages.overrideScope (python-final: python-prev: {
     syne-tune = python-final.callPackage ../syne-tune.nix {};
     lpips = python-final.callPackage ../lpips.nix {};
     bsrt = python-final.callPackage ../bsrt.nix {};
+    # transformer-engine = python-final.callPackage ../transformer-engine.nix {};
+    # flash-attention = python-final.callPackage ../flash-attention.nix {};
   });
-in
-  attrsets.recursiveUpdate prev new
+}

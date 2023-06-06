@@ -15,41 +15,70 @@
         "type": "github"
       }
     },
+    "flake-utils_2": {
+      "locked": {
+        "lastModified": 1659877975,
+        "narHash": "sha256-zllb8aq3YO3h8B/U0/J1WBgAL8EX5yWf5pMj3G0NAmc=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "c0e246b9b83f637f4681389ecabcb2681b4f3af0",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
+    "flake-utils_3": {
+      "locked": {
+        "lastModified": 1659877975,
+        "narHash": "sha256-zllb8aq3YO3h8B/U0/J1WBgAL8EX5yWf5pMj3G0NAmc=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "c0e246b9b83f637f4681389ecabcb2681b4f3af0",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
     "hypothesis_torch_utils": {
       "inputs": {
+        "nixGL": "nixGL",
         "nixpkgs": [
+          "mfsr_utils",
           "nixpkgs"
         ]
       },
       "locked": {
-        "lastModified": 1677119268,
-        "narHash": "sha256-FoOhIBDKGrPbk8v3ngurKB0jrTuBnmC0Gz9xQGgDz2g=",
-        "owner": "connorbaker",
+        "lastModified": 1678746996,
+        "narHash": "sha256-bmvcYh8WXQjk39QQ5zmZ2JAfZkRZGcX7jezpY/Wg5pM=",
+        "owner": "ConnorBaker",
         "repo": "hypothesis_torch_utils",
-        "rev": "388546613f0057a422a7254478148fa5b4927dfb",
+        "rev": "c172cc512dcc4d338b69e41999fe46e727ec891d",
         "type": "github"
       },
       "original": {
-        "owner": "connorbaker",
+        "owner": "ConnorBaker",
         "repo": "hypothesis_torch_utils",
         "type": "github"
       }
     },
     "mfsr_utils": {
       "inputs": {
-        "hypothesis_torch_utils": [
-          "hypothesis_torch_utils"
-        ],
-        "nixpkgs": [
-          "nixpkgs"
-        ]
+        "hypothesis_torch_utils": "hypothesis_torch_utils",
+        "nixGL": "nixGL_2",
+        "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1677121262,
-        "narHash": "sha256-5r4fmSwrDVuvVOWVlhdd1o89rN34ZFKcM2wihKTw7oo=",
+        "lastModified": 1678758476,
+        "narHash": "sha256-MTFkYDReZp7+LH2FiBMqcgvjPD0hrK15ki2tbAruX+A=",
         "owner": "connorbaker",
         "repo": "mfsr_utils",
-        "rev": "a64a28de536c0e8b18e27e65535fbfd40800b9cd",
+        "rev": "26221d692a357442c92ee1877e11792be9873579",
         "type": "github"
       },
       "original": {
@@ -61,6 +90,51 @@
     "nixGL": {
       "inputs": {
         "flake-utils": "flake-utils",
+        "nixpkgs": [
+          "mfsr_utils",
+          "hypothesis_torch_utils",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1676383589,
+        "narHash": "sha256-KCkWZXCjH+C4Kn7fUGSrEl5btk+sERHhZueSsvVbPWc=",
+        "owner": "guibou",
+        "repo": "nixGL",
+        "rev": "c917918ab9ebeee27b0dd657263d3f57ba6bb8ad",
+        "type": "github"
+      },
+      "original": {
+        "owner": "guibou",
+        "repo": "nixGL",
+        "type": "github"
+      }
+    },
+    "nixGL_2": {
+      "inputs": {
+        "flake-utils": "flake-utils_2",
+        "nixpkgs": [
+          "mfsr_utils",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1676383589,
+        "narHash": "sha256-KCkWZXCjH+C4Kn7fUGSrEl5btk+sERHhZueSsvVbPWc=",
+        "owner": "guibou",
+        "repo": "nixGL",
+        "rev": "c917918ab9ebeee27b0dd657263d3f57ba6bb8ad",
+        "type": "github"
+      },
+      "original": {
+        "owner": "guibou",
+        "repo": "nixGL",
+        "type": "github"
+      }
+    },
+    "nixGL_3": {
+      "inputs": {
+        "flake-utils": "flake-utils_3",
         "nixpkgs": [
           "nixpkgs"
         ]
@@ -81,42 +155,41 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1677595807,
-        "narHash": "sha256-luxUZ/YesQHI9Eb1X652TXLyX1f/xG/kunxMWqw/CL8=",
-        "owner": "nixos",
+        "lastModified": 1678747152,
+        "narHash": "sha256-TWPeJwNUBzLF54rDJ59FoXOC6pF43KH6H7nnPv5OLSQ=",
+        "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "4a6cd14f37b22c9d2f90e3774b8ea9601025ad6b",
+        "rev": "1bd932a2315cad69da8f62bf355bf57091718961",
         "type": "github"
       },
       "original": {
-        "owner": "nixos",
+        "owner": "NixOS",
+        "ref": "refs/pull/218044/head",
         "repo": "nixpkgs",
         "type": "github"
       }
     },
-    "opencv-fix": {
+    "nixpkgs_2": {
       "locked": {
-        "lastModified": 1677298230,
-        "narHash": "sha256-UIicGcdp9ysmTEjpPm4ve5yTzmgahWAfQ0orRb0/zyk=",
-        "owner": "connorbaker",
+        "lastModified": 1685250078,
+        "narHash": "sha256-txIFQmwHLJTq4FHVYjYYrRbVVtTq0LPZZIB1ZXDscLs=",
+        "owner": "ConnorBaker",
         "repo": "nixpkgs",
-        "rev": "c70cc935d106293e6e1a75357ee5bc8bf9e68cd3",
+        "rev": "03cb1542a3a39452df75fdb072e839aa77b24262",
         "type": "github"
       },
       "original": {
-        "owner": "connorbaker",
-        "ref": "feat/opencv-use-cudaPackages",
+        "owner": "ConnorBaker",
+        "ref": "feat/xformers_0_0_20",
         "repo": "nixpkgs",
         "type": "github"
       }
     },
     "root": {
       "inputs": {
-        "hypothesis_torch_utils": "hypothesis_torch_utils",
         "mfsr_utils": "mfsr_utils",
-        "nixGL": "nixGL",
-        "nixpkgs": "nixpkgs",
-        "opencv-fix": "opencv-fix"
+        "nixGL": "nixGL_3",
+        "nixpkgs": "nixpkgs_2"
       }
     }
   },

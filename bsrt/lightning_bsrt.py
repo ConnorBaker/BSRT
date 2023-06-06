@@ -1,8 +1,6 @@
 from dataclasses import dataclass, field
 
 import torch
-import torch.nn.functional as F
-from mfsr_utils.pipelines.camera import demosaic
 from mfsr_utils.pipelines.synthetic_burst_generator import SyntheticBurstGeneratorData
 from pytorch_lightning import LightningModule
 from pytorch_lightning.loggers.wandb import WandbLogger
@@ -115,23 +113,12 @@ class LightningBSRT(LightningModule):
         if batch_idx == 0 and isinstance(self.logger, WandbLogger):
             bursts = bursts.to(torch.float32)
 
-            # TODO: Pyright complains that the type of F.interpolate is partially unknown
-            nn_busrts: Tensor = F.interpolate(  # type: ignore
-                input=demosaic(bursts[:, 0, :, :]),
-                size=None,
-                align_corners=None,
-                recompute_scale_factor=None,
-                antialias=False,
-                scale_factor=4,
-                # mode="nearest-exact",
-            )
-
-            for i, (nn_burst, sr, gt) in enumerate(zip(nn_busrts, srs, gts)):
+            for i, (sr, gt) in enumerate(zip(srs, gts)):
                 # TODO: Pyright complains that the type of log_image is partially unknown
                 self.logger.log_image(  # type: ignore
                     key=f"val/sample/{i}",
-                    images=[nn_burst, sr, gt],
-                    caption=["LR", "SR", "GT"],
+                    images=[sr, gt],
+                    caption=["SR", "GT"],
                 )
 
         # PyTorch Lightning requires that when validation_step returns a dict, it must contain a
@@ -161,9 +148,3 @@ class LightningBSRT(LightningModule):
             ret["monitor"] = "val/ms_ssim"
 
         return ret
-
-    # Set gradients to `None` instead of zero to improve performance.
-    def optimizer_zero_grad(
-        self, epoch: int, batch_idx: int, optimizer: Optimizer, optimizer_idx: int
-    ) -> None:
-        optimizer.zero_grad(set_to_none=True)

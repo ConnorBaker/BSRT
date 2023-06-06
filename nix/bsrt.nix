@@ -1,6 +1,4 @@
 {
-  python3,
-  fetchFromGitHub,
   buildPythonPackage,
   # Propagated build inputs
   # main deps

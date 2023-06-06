@@ -134,3 +134,4 @@ typings
 
 # Nix
 result
+.direnv

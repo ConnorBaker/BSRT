@@ -1,13 +1,15 @@
 {
-  python,
   fetchFromGitHub,
   buildPythonPackage,
+  lib,
+  pythonRelaxDepsHook,
   # Propagated build inputs
   # main deps
   packaging,
   dill,
   numpy,
   pandas,
+  sortedcontainers,
   typing-extensions,
   # raytune deps
   ray,
@@ -27,59 +29,66 @@
   pyyaml,
   ujson,
   s3fs,
-}:
-buildPythonPackage {
-  name = "syne_tune";
-  version = "0.1.4";
+}: let
+  pname = "syne-tune";
+  version = "0.6.0";
+in
+  buildPythonPackage {
+    inherit pname version;
 
-  src = fetchFromGitHub {
-    owner = "awslabs";
-    repo = "syne-tune";
-    rev = "e6036878aa7338f39467b5540537605f72df75c9";
-    hash = "sha256-7mk6xlIKgllNVLOop+GBTS24b9+HKyCq5EZVHlBxZ8c=";
-  };
+    src = fetchFromGitHub {
+      owner = "awslabs";
+      repo = pname;
+      rev = "v${version}";
+      hash = "sha256-eP80CBRUbspuUzB37qm7sPKcVITrgn59/pNjYo6fkEc=";
+    };
 
-  doCheck = false;
+    doCheck = false;
 
-  propagatedBuildInputs = [
-    packaging
-    dill
-    numpy
-    pandas
-    typing-extensions
-  ];
+    nativeBuildInputs = [pythonRelaxDepsHook];
 
-  pythonImportsCheck = ["syne_tune"];
+    pythonRelaxDeps = ["numpy"];
 
-  passthru.optional-dependencies = {
-    raytune = [
-      ray
-      ray.optional-dependencies.tune
-      scikit-learn
-      scikit-optimize
-    ];
-    bore = [
+    propagatedBuildInputs = [
+      packaging
+      dill
       numpy
-      xgboost
-      scikit-learn
-      gpy
+      pandas
+      typing-extensions
+      sortedcontainers
     ];
-    kde = [statsmodels];
-    gpsearchers = [
-      scipy
-      autograd
-    ];
-    # benchmarks = required_benchmarks;
-    # blackbox-repository = required_blackbox_repository;
-    aws = [
-      boto3
-      sagemaker
-      pyyaml
-      ujson
-      s3fs
-    ];
-    # yahpo = required_yahpo;
-    # dev = required_dev;
-    # extra = required_extra;
-  };
-}
+
+    pythonImportsCheck = [(lib.strings.replaceStrings ["-"] ["_"] pname)];
+
+    passthru.optional-dependencies = {
+      raytune = [
+        ray
+        ray.optional-dependencies.tune
+        scikit-learn
+        scikit-optimize
+      ];
+      bore = [
+        numpy
+        xgboost
+        scikit-learn
+        gpy
+      ];
+      kde = [statsmodels];
+      gpsearchers = [
+        scipy
+        autograd
+      ];
+      # benchmarks = required_benchmarks;
+      # blackbox-repository = required_blackbox_repository;
+      aws = [
+        boto3
+        sagemaker
+        pyyaml
+        ujson
+        s3fs
+      ];
+      # yahpo = required_yahpo;
+      # dev = required_dev;
+      # extra = required_extra;
+    };
+  }
