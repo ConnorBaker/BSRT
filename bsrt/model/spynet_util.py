@@ -27,9 +27,7 @@ class BasicModule(nn.Module):
             # We drop the first element because we do not want to apply a ReLU to the input.
             *[
                 layer
-                for in_channels, out_channels in zip(
-                    BasicModule.channel_steps[:-1], BasicModule.channel_steps[1:]
-                )
+                for in_channels, out_channels in zip(BasicModule.channel_steps[:-1], BasicModule.channel_steps[1:])
                 for layer in [
                     nn.LeakyReLU(inplace=False),
                     nn.Conv2d(
@@ -81,9 +79,7 @@ class SpyNet(nn.Module):
         tensor_output = (tensor_input - self.mean) / self.std
         return tensor_output
 
-    def process(
-        self, ref: Tensor, supp: Tensor, w: int, h: int, w_floor: int, h_floor: int
-    ) -> list[Tensor]:
+    def process(self, ref: Tensor, supp: Tensor, w: int, h: int, w_floor: int, h_floor: int) -> list[Tensor]:
         flow_list: list[Tensor] = []
 
         _ref: list[Tensor] = [self.preprocess(ref)]
@@ -163,9 +159,7 @@ class SpyNet(nn.Module):
         return flow_list
 
     # Pyright says we're missing *args and **kwargs here, but we're not.
-    def forward(  # type: ignore[override]
-        self, ref: Tensor, supp: Tensor
-    ) -> Tensor | list[Tensor]:
+    def forward(self, ref: Tensor, supp: Tensor) -> Tensor | list[Tensor]:  # type: ignore[override]
         assert ref.size() == supp.size()
 
         h, w = ref.size(2), ref.size(3)

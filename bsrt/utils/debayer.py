@@ -152,9 +152,7 @@ class DebayerSplit(torch.nn.Module):
         super().__init__()
 
         self.pad = torch.nn.ReflectionPad2d(1)
-        self.kernel = torch.nn.Parameter(
-            torch.tensor([[0, 1, 0], [1, 0, 1], [0, 1, 0]])[None, None] * 0.25
-        )
+        self.kernel = torch.nn.Parameter(torch.tensor([[0, 1, 0], [1, 0, 1], [0, 1, 0]])[None, None] * 0.25)
 
     # Pyright complains about missing the arguments *args and **kwargs
     def forward(self, x: Tensor) -> Tensor:  # type: ignore[override]

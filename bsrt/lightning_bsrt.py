@@ -2,18 +2,12 @@ from dataclasses import dataclass, field
 
 import torch
 import torch.nn.functional as F
-from mfsr_utils.pipelines.camera import demosaic
 from mfsr_utils.pipelines.synthetic_burst_generator import SyntheticBurstGeneratorData
 from pytorch_lightning import LightningModule
 from pytorch_lightning.loggers.wandb import WandbLogger
 from torch import Tensor, nn
 
-if torch.__version__ < "2.0.0":
-    from torch.optim.lr_scheduler import _LRScheduler as LRScheduler
-else:
-    from torch.optim.lr_scheduler import LRScheduler
-
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import LRScheduler, ReduceLROnPlateau
 from torch.optim.optimizer import Optimizer
 from torchmetrics import MetricCollection
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity as LPIPS
@@ -39,10 +33,7 @@ class LightningBSRT(LightningModule):
     bsrt_params: BSRTParams
     optimizer_params: AdamWParams | SGDParams
     scheduler_params: (
-        CosineAnnealingWarmRestartsParams
-        | ExponentialLRParams
-        | OneCycleLRParams
-        | ReduceLROnPlateauParams
+        CosineAnnealingWarmRestartsParams | ExponentialLRParams | OneCycleLRParams | ReduceLROnPlateauParams
     )
 
     model: nn.Module = field(init=False)
@@ -67,9 +58,7 @@ class LightningBSRT(LightningModule):
         self.validation_metrics = metrics.clone(prefix="val/")
 
         # Mypy thinks save_hyperparameters is a Tensor
-        self.save_hyperparameters(  # type: ignore[operator]
-            ignore=["model", "train_metrics", "validation_metrics"]
-        )
+        self.save_hyperparameters(ignore=["model", "train_metrics", "validation_metrics"])  # type: ignore[operator]
 
     def forward(self, bursts: Tensor) -> Tensor:  # type: ignore[override]
         ret: Tensor = self.model(bursts)
@@ -112,27 +101,29 @@ class LightningBSRT(LightningModule):
 
         # Log the image only for the first batch
         # TODO: We could log different images with different names
-        if batch_idx == 0 and isinstance(self.logger, WandbLogger):
-            bursts = bursts.to(torch.float32)
+        # TODO: Logging of images should be done outside of validation because it slows down
+        # validation and balloons the memory usage.
+        # if batch_idx == 0 and isinstance(self.logger, WandbLogger):
+        #     bursts = bursts.to(torch.float32)
 
-            # TODO: Pyright complains that the type of F.interpolate is partially unknown
-            nn_busrts: Tensor = F.interpolate(  # type: ignore
-                input=demosaic(bursts[:, 0, :, :]),
-                size=None,
-                align_corners=None,
-                recompute_scale_factor=None,
-                antialias=False,
-                scale_factor=4,
-                # mode="nearest-exact",
-            )
+        #     # TODO: Pyright complains that the type of F.interpolate is partially unknown
+        #     nn_busrts: Tensor = F.interpolate(  # type: ignore
+        #         input=demosaic(bursts[:, 0, :, :]),
+        #         size=None,
+        #         align_corners=None,
+        #         recompute_scale_factor=None,
+        #         antialias=False,
+        #         scale_factor=4,
+        #         # mode="nearest-exact",
+        #     )
 
-            for i, (nn_burst, sr, gt) in enumerate(zip(nn_busrts, srs, gts)):
-                # TODO: Pyright complains that the type of log_image is partially unknown
-                self.logger.log_image(  # type: ignore
-                    key=f"val/sample/{i}",
-                    images=[nn_burst, sr, gt],
-                    caption=["LR", "SR", "GT"],
-                )
+        #     for i, (nn_burst, sr, gt) in enumerate(zip(nn_busrts, srs, gts)):
+        #         # TODO: Pyright complains that the type of log_image is partially unknown
+        #         self.logger.log_image(  # type: ignore
+        #             key=f"val/sample/{i}",
+        #             images=[nn_burst, sr, gt],
+        #             caption=["LR", "SR", "GT"],
+        #         )
 
         # PyTorch Lightning requires that when validation_step returns a dict, it must contain a
         # key named loss
@@ -140,10 +131,7 @@ class LightningBSRT(LightningModule):
         return loss
 
     def configure_optimizers(self) -> dict[str, str | Optimizer | LRScheduler]:
-        if (
-            isinstance(self.scheduler_params, OneCycleLRParams)
-            and self.scheduler_params.total_steps is None
-        ):
+        if isinstance(self.scheduler_params, OneCycleLRParams) and self.scheduler_params.total_steps is None:
             total_steps = self.trainer.estimated_stepping_batches
             assert (
                 isinstance(total_steps, int) and total_steps >= 1
@@ -161,9 +149,3 @@ class LightningBSRT(LightningModule):
             ret["monitor"] = "val/ms_ssim"
 
         return ret
-
-    # Set gradients to `None` instead of zero to improve performance.
-    def optimizer_zero_grad(
-        self, epoch: int, batch_idx: int, optimizer: Optimizer, optimizer_idx: int
-    ) -> None:
-        optimizer.zero_grad(set_to_none=True)

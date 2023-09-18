@@ -67,49 +67,48 @@ sudo docker run \
   bsrt bash -c "python3 /bsrt/bsrt/main.py"
 ```
 
-
 ## Training
 
 ### Hyperparameter search
 
 1. Create a ramdisk to store the training dataset
 
-  ```bash
-  mkdir "$HOME/ramdisk"
-  sudo mount -t tmpfs tmpfs "$HOME/ramdisk"
-  sudo chown $USER:$USER -R "$HOME/ramdisk"
-  mkdir "$HOME/ramdisk/datasets"
-  ```
+```bash
+mkdir "$HOME/ramdisk"
+sudo mount -t tmpfs tmpfs "$HOME/ramdisk"
+sudo chown $USER:$USER -R "$HOME/ramdisk"
+mkdir "$HOME/ramdisk/datasets"
+```
 
 2. Download and run the docker image
 
-  ```bash
-  docker run \
-    --gpus all \
-    --mount type=bind,source="$HOME/ramdisk/datasets",target=/datasets \
-    --ipc=host \
-    --ulimit memlock=-1 \
-    --ulimit stack=67108864 \
-    --rm connorbaker01/bsrt:main
-  ```
+```bash
+docker run \
+  --gpus all \
+  --mount type=bind,source="$HOME/ramdisk/datasets",target=/datasets \
+  --ipc=host \
+  --ulimit memlock=-1 \
+  --ulimit stack=67108864 \
+  --rm connorbaker01/bsrt:main
+```
 
 3. Run a hyperparameter search backed by Optuna
 
-  ```bash
-  python -m bsrt.tuning.tuner \
-    --experiment_name "model_with_adam_plateau" \
-    --optimizer "AdamW" \
-    --scheduler "ReduceLROnPlateau" \
-    --precision "bfloat16" \
-    --num_trials 1 \
-    --max_epochs 20 \
-    --batch_size 16 \
-    --limit_train_batches 0.1 \
-    --limit_val_batches 0.1 \
-    --data_dir /datasets \
-    --wandb_api_key="<your WandB API key>" \
-    --db_uri="<your DB connection string>"
-  ```
+```bash
+python -m bsrt.tuning.tuner \
+  --experiment_name "model_with_adam_plateau" \
+  --optimizer "AdamW" \
+  --scheduler "ReduceLROnPlateau" \
+  --precision "bfloat16" \
+  --num_trials 1 \
+  --max_epochs 20 \
+  --batch_size 16 \
+  --limit_train_batches 0.1 \
+  --limit_val_batches 0.1 \
+  --data_dir /datasets \
+  --wandb_api_key="<your WandB API key>" \
+  --db_uri="<your DB connection string>"
+```
 
 ### Pre-training with synthetic data
 
@@ -162,4 +161,4 @@ The following is a BibTeX reference.
 
 ## Contact
 
-email: [ziwei.ro@gmail.com]
+email: \[ziwei.ro@gmail.com\]

@@ -125,6 +125,9 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+# Ruff
+.ruff_cache
+
 # ML
 .vscode
 lightning_logs
@@ -134,3 +137,4 @@ typings
 
 # Nix
 result
+.direnv

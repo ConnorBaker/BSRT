@@ -146,9 +146,7 @@ def objective(
     assert num_cpus is not None
 
     # TODO: Add name/version to make it clear we're resuming runs
-    wandb_logger = WandbLogger(
-        entity="connorbaker", project="bsrt", group=tuner_config.experiment_name, reinit=True
-    )
+    wandb_logger = WandbLogger(entity="connorbaker", project="bsrt", group=tuner_config.experiment_name, reinit=True)
 
     trainer = Trainer(
         accelerator="auto",

@@ -5,9 +5,7 @@ from torch import Tensor
 from bsrt.utils.types import InterpolationType
 
 
-def warp(
-    feat: Tensor, flow: Tensor, mode: InterpolationType = "bilinear", padding_mode: str = "zeros"
-) -> Tensor:
+def warp(feat: Tensor, flow: Tensor, mode: InterpolationType = "bilinear", padding_mode: str = "zeros") -> Tensor:
     """
     warp an image/tensor (im2) back to im1, according to the optical flow im1 --> im2
 
@@ -20,9 +18,7 @@ def warp(
     # print(feat.device, flow.device)
 
     # mesh grid
-    rowv, colv = torch.meshgrid(
-        [torch.arange(0.5, H + 0.5), torch.arange(0.5, W + 0.5)], indexing="ij"
-    )
+    rowv, colv = torch.meshgrid([torch.arange(0.5, H + 0.5), torch.arange(0.5, W + 0.5)], indexing="ij")
     grid = torch.stack((colv, rowv), dim=0).unsqueeze(0).float()
     # print(grid.device, flow.device, feat.device)
     grid = grid + flow
@@ -35,8 +31,6 @@ def warp(
 
     grid_norm = grid_norm.permute(0, 2, 3, 1)
 
-    output = F.grid_sample(
-        feat, grid_norm, mode=mode, align_corners=False, padding_mode=padding_mode
-    )
+    output = F.grid_sample(feat, grid_norm, mode=mode, align_corners=False, padding_mode=padding_mode)
 
     return output

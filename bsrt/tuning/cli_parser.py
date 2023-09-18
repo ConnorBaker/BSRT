@@ -8,9 +8,7 @@ import torch
 from typing_extensions import Literal, get_args
 
 OptimizerName = Literal["AdamW", "SGD"]
-SchedulerName = Literal[
-    "CosineAnnealingWarmRestarts", "ExponentialLR", "OneCycleLR", "ReduceLROnPlateau"
-]
+SchedulerName = Literal["CosineAnnealingWarmRestarts", "ExponentialLR", "OneCycleLR", "ReduceLROnPlateau"]
 PrecisionName = Literal["bfloat16", "float16", "float32", "float64"]
 PRECISION_MAP: Mapping[PrecisionName, torch.dtype] = {
     "bfloat16": torch.bfloat16,
@@ -54,14 +52,10 @@ class TunerConfig:
 CLI_PARSER = argparse.ArgumentParser()
 
 wandb_arg_group = CLI_PARSER.add_argument_group("WandB")
-wandb_arg_group = CLI_PARSER.add_argument(
-    "--wandb_api_key", type=str, required=True, help="Wandb API key"
-)
+wandb_arg_group = CLI_PARSER.add_argument("--wandb_api_key", type=str, required=True, help="Wandb API key")
 
 experiment_arg_group = CLI_PARSER.add_argument_group("Experiment")
-experiment_arg_group.add_argument(
-    "--experiment_name", type=str, required=False, help="Name of the experiment"
-)
+experiment_arg_group.add_argument("--experiment_name", type=str, required=False, help="Name of the experiment")
 experiment_arg_group.add_argument(
     "--optimizer",
     choices=get_args(OptimizerName),
@@ -82,16 +76,8 @@ experiment_arg_group.add_argument(
 )
 
 data_loader_arg_group = CLI_PARSER.add_argument_group("DataLoader")
-data_loader_arg_group.add_argument(
-    "--data_dir", type=str, required=True, help="Path to data directory"
-)
-data_loader_arg_group.add_argument(
-    "--max_epochs", type=int, required=True, help="Max number of epochs"
-)
+data_loader_arg_group.add_argument("--data_dir", type=str, required=True, help="Path to data directory")
+data_loader_arg_group.add_argument("--max_epochs", type=int, required=True, help="Max number of epochs")
 data_loader_arg_group.add_argument("--batch_size", type=int, required=True, help="Batch size")
-data_loader_arg_group.add_argument(
-    "--limit_train_batches", type=float, required=True, help="Limit train batches"
-)
-data_loader_arg_group.add_argument(
-    "--limit_val_batches", type=float, required=True, help="Limit val batches"
-)
+data_loader_arg_group.add_argument("--limit_train_batches", type=float, required=True, help="Limit train batches")
+data_loader_arg_group.add_argument("--limit_val_batches", type=float, required=True, help="Limit val batches")

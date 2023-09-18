@@ -10,9 +10,7 @@ from typing_extensions import Literal
 class _NonLocalBlockNDGeneral(nn.Module):
     def __init__(
         self,
-        kind: Literal[
-            "concatenation", "gaussian", "embedded_gaussian", "dot_product", "cross_dot_product"
-        ],
+        kind: Literal["concatenation", "gaussian", "embedded_gaussian", "dot_product", "cross_dot_product"],
         in_channels: int,
         inter_channels: int,
         dimension: Literal[1, 2, 3] = 3,
@@ -23,9 +21,7 @@ class _NonLocalBlockNDGeneral(nn.Module):
 
         assert dimension in [1, 2, 3]
 
-        self.kind: Literal[
-            "concatenation", "gaussian", "embedded_gaussian", "dot_product", "cross_dot_product"
-        ] = kind
+        self.kind: Literal["concatenation", "gaussian", "embedded_gaussian", "dot_product", "cross_dot_product"] = kind
         self.dimension = dimension
         self.sub_sample = sub_sample
 
@@ -117,15 +113,11 @@ class _NonLocalBlockNDGeneral(nn.Module):
             )
 
         if kind == "concatenation":
-            self.concat_project = nn.Sequential(
-                nn.Conv2d(self.inter_channels * 2, 1, 1, 1, 0, bias=False), nn.ReLU()
-            )
+            self.concat_project = nn.Sequential(nn.Conv2d(self.inter_channels * 2, 1, 1, 1, 0, bias=False), nn.ReLU())
 
         if sub_sample:
             self.g = nn.Sequential(self.g, max_pool_layer)
-            self.phi = (
-                nn.Sequential(self.phi, max_pool_layer) if kind != "gaussian" else max_pool_layer
-            )
+            self.phi = nn.Sequential(self.phi, max_pool_layer) if kind != "gaussian" else max_pool_layer
 
     # Pyright says we're missing *args and **kwargs here, but we're not.
     def forward(  # type: ignore[override]

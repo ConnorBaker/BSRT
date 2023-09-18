@@ -52,9 +52,7 @@ def prepare_aligned(
     )
 
     # Match the colorspace between the prediction and ground truth
-    pred_warped_m, valid = match_colors(
-        frame_gt_ds, burst_0_warped, pred_warped, kernel_size, gaussian_kernel
-    )
+    pred_warped_m, valid = match_colors(frame_gt_ds, burst_0_warped, pred_warped, kernel_size, gaussian_kernel)
 
     # Ignore boundary pixels if specified
     pred_warped_m = ignore_boundary(pred_warped_m, boundary_ignore)

@@ -8,9 +8,7 @@ from bsrt.metrics.utils.ignore_boundry import ignore_boundary
 from bsrt.utils.bilinear_upsample_2d import bilinear_upsample_2d
 
 
-def gauss_1d(
-    sz: int, sigma: float, center: Tensor, end_pad: int = 0, density: bool = False
-) -> Tensor:
+def gauss_1d(sz: int, sigma: float, center: Tensor, end_pad: int = 0, density: bool = False) -> Tensor:
     """Returns a 1-D Gaussian"""
     k = torch.arange(-(sz - 1) / 2, (sz + 1) / 2 + end_pad).reshape(1, -1)
     gauss = torch.exp(-1.0 / (2 * sigma**2) * (k - center.reshape(-1, 1)) ** 2)
@@ -28,9 +26,9 @@ def gauss_2d(
 ) -> Tensor:
     """Returns a 2-D Gaussian"""
 
-    return gauss_1d(sz, sigma, center[:, 0], end_pad[0], density).reshape(
-        center.shape[0], 1, -1
-    ) * gauss_1d(sz, sigma, center[:, 1], end_pad[1], density).reshape(center.shape[0], -1, 1)
+    return gauss_1d(sz, sigma, center[:, 0], end_pad[0], density).reshape(center.shape[0], 1, -1) * gauss_1d(
+        sz, sigma, center[:, 1], end_pad[1], density
+    ).reshape(center.shape[0], -1, 1)
 
 
 def get_gaussian_kernel(sd: float) -> tuple[Tensor, int]:

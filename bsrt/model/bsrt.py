@@ -110,9 +110,7 @@ class BSRT(nn.Module):
 
         # 1, shallow feature extraction
         self.conv_flow = nn.Conv2d(1, 3, kernel_size=3, stride=1, padding=1)
-        self.conv_first = nn.Conv2d(
-            self.in_chans * (1 + 2 * 0), self.embed_dim, 3, 1, 1, bias=True
-        )
+        self.conv_first = nn.Conv2d(self.in_chans * (1 + 2 * 0), self.embed_dim, 3, 1, 1, bias=True)
 
         # stochastic depth decay rule
         # Pyright says tolist is partially unknown, but it's not.
@@ -132,35 +130,21 @@ class BSRT(nn.Module):
         )
         self.pre_norm = self.norm_layer(self.embed_dim)
 
-        self.conv_after_pre_layer = nn.Conv2d(
-            self.embed_dim, self.num_features * 4, 3, 1, 1, bias=True
-        )
+        self.conv_after_pre_layer = nn.Conv2d(self.embed_dim, self.num_features * 4, 3, 1, 1, bias=True)
         self.mid_ps = nn.PixelShuffle(2)
 
         self.fea_L2_conv1 = nn.Conv2d(self.num_features, self.num_features * 2, 3, 2, 1, bias=True)
-        self.fea_L3_conv1 = nn.Conv2d(
-            self.num_features * 2, self.num_features * 4, 3, 2, 1, bias=True
-        )
+        self.fea_L3_conv1 = nn.Conv2d(self.num_features * 2, self.num_features * 4, 3, 2, 1, bias=True)
 
         # 2, Feature Enhanced PCD Align
         # Top layers
-        self.toplayer = nn.Conv2d(
-            self.num_features * 4, self.num_features, kernel_size=1, stride=1, padding=0
-        )
+        self.toplayer = nn.Conv2d(self.num_features * 4, self.num_features, kernel_size=1, stride=1, padding=0)
         # Smooth layers
-        self.smooth1 = nn.Conv2d(
-            self.num_features, self.num_features, kernel_size=3, stride=1, padding=1
-        )
-        self.smooth2 = nn.Conv2d(
-            self.num_features, self.num_features, kernel_size=3, stride=1, padding=1
-        )
+        self.smooth1 = nn.Conv2d(self.num_features, self.num_features, kernel_size=3, stride=1, padding=1)
+        self.smooth2 = nn.Conv2d(self.num_features, self.num_features, kernel_size=3, stride=1, padding=1)
         # Lateral layers
-        self.latlayer1 = nn.Conv2d(
-            self.num_features * 2, self.num_features, kernel_size=1, stride=1, padding=0
-        )
-        self.latlayer2 = nn.Conv2d(
-            self.num_features * 1, self.num_features, kernel_size=1, stride=1, padding=0
-        )
+        self.latlayer1 = nn.Conv2d(self.num_features * 2, self.num_features, kernel_size=1, stride=1, padding=0)
+        self.latlayer2 = nn.Conv2d(self.num_features * 1, self.num_features, kernel_size=1, stride=1, padding=0)
         self.align = FlowGuidedPCDAlign(nf=self.num_features, groups=self.flow_alignment_groups)
 
         # 3, Multi-frame Feature Fusion
@@ -264,9 +248,7 @@ class BSRT(nn.Module):
         x_center = x[:, self.center, :, :, :].contiguous()
 
         # skip module
-        skip1 = self.lrelu2(
-            self.skip_pixel_shuffle(self.skipup1(self.skip_pixel_shuffle(x_center)))
-        )
+        skip1 = self.lrelu2(self.skip_pixel_shuffle(self.skipup1(self.skip_pixel_shuffle(x_center))))
         skip2 = self.skip_pixel_shuffle(self.skipup2(skip1))
 
         x_ = self.conv_flow(self.flow_ps(x.view(B * N, C, H, W))).view(B, N, -1, H * 2, W * 2)
@@ -345,15 +327,10 @@ class BSRT(nn.Module):
         """Get flow between frames ref and other"""
         b, n, c, h, w = x.size()
         x_nbr = x.reshape(-1, c, h, w)
-        x_ref = (
-            x[:, self.center : self.center + 1, :, :, :].repeat(1, n, 1, 1, 1).reshape(-1, c, h, w)
-        )
+        x_ref = x[:, self.center : self.center + 1, :, :, :].repeat(1, n, 1, 1, 1).reshape(-1, c, h, w)
 
         # backward
         flows: Tensor = self.spynet(x_ref, x_nbr)
-        flows_list = [
-            flow.view(b, n, 2, h // (2 ** (i)), w // (2 ** (i)))
-            for flow, i in zip(flows, range(3))
-        ]
+        flows_list = [flow.view(b, n, 2, h // (2 ** (i)), w // (2 ** (i))) for flow, i in zip(flows, range(3))]
 
         return flows_list

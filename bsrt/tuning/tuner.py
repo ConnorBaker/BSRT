@@ -1,5 +1,15 @@
 # Example usage:
-# python -m bsrt.tuning.tuner --experiment_name bsrt-exp --optimizer AdamW --scheduler OneCycleLR --precision float32 --data_dir "/home/connorbaker/datasets" --limit_train_batches 1.0 --limit_val_batches 1.0 --batch_size 8 --max_epochs 100 --wandb_api_key "YOUR_API_KEY"
+# python -m bsrt.tuning.tuner \
+# --experiment_name bsrt-exp \
+# --optimizer AdamW \
+# --scheduler OneCycleLR \
+# --precision float32 \
+# --data_dir "/home/connorbaker/datasets" \
+# --limit_train_batches 1.0 \
+# --limit_val_batches 1.0 \
+# --batch_size 8 \
+# --max_epochs 100 \
+# --wandb_api_key "YOUR_API_KEY"
 
 from pathlib import Path
 

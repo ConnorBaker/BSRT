@@ -99,7 +99,6 @@ class BasicLayer(nn.Module):
         drop_path: float | Iterable[float] = 0.0,
         norm_layer: None | nn.Module = nn.LayerNorm,  # type: ignore[assignment]
     ):
-
         super().__init__()
         self.blocks = nn.Sequential(
             *[
@@ -217,10 +216,7 @@ class RSTB(nn.Module):
 
     # Pyright says we're missing *args and **kwargs here, but we're not.
     def forward(self, x: Tensor, x_size: tuple[int, int]) -> Tensor:  # type: ignore[override]
-        x = (
-            self.patch_embed(self.conv(self.patch_unembed(self.residual_group(x, x_size), x_size)))
-            + x
-        )
+        x = self.patch_embed(self.conv(self.patch_unembed(self.residual_group(x, x_size), x_size))) + x
         return x
 
 

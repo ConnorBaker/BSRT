@@ -1,5 +1,6 @@
 [build-system]
-requires = ["setuptools >= 65", "wheel"]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
 
 [project]
 name = "bsrt"
@@ -10,8 +11,7 @@ maintainers = [
     { name = "Ziwei Luo", email = "ziwei.ro@gmail.com" },
     { name = "Connor Baker", email = "connorbaker01@gmail.com" },
 ]
-readme = "README.md"
-urls = { homepage = "https://github.com/connorbaker/bsrt" }
+urls.homepage = "https://github.com/connorbaker/bsrt"
 requires-python = ">=3.10"
 dependencies = [
     # See https://github.com/ConnorBaker/mfsr_utils
@@ -20,7 +20,10 @@ dependencies = [
     "torchvision",
     "filelock>=3.9",
     "opencv>=4.7.0",
+    "pydantic>=2.0.0",
     "pytorch-lightning>=1.8.6",
+    # See https://github.com/awslabs/syne-tune
+    "syne-tune[gpsearchers]",
     # See https://github.com/ercanburak/PerceptualSimilarity
     "lpips",
     "torchmetrics>=0.11.0",
@@ -28,39 +31,37 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-tune = [
-    # See https://github.com/awslabs/syne-tune
-    "syne-tune[gpsearchers]",
-]
-lint = ["black>=22.12.0", "flake8>=6.0.0", "isort>=5.11.4"]
-typecheck = ["pyright>=1.1.286", "mypy>=0.991"]
-test = [
-    "pytest>=7.2.0",
-    "pytest-xdist>=3.1.0",
-    "hypothesis>=6.61.0",
-    # See https://github.com/ConnorBaker/hypothesis_torch_utils
-    "hypothesis_torch_utils",
+dev = [
+    # Lint
+    "black>=22.12.0",
+    "ruff>=0.3.0",
+    # Typecheck
+    "mypy>=0.991",
 ]
 
-[tool.setuptools]
-include-package-data = true
-package-dir = { bsrt = "bsrt" }
-package-data = { bsrt = ["py.typed"] }
+[project.scripts]
+bsrt = "bsrt.__main__:main"
 
 [tool.black]
-line-length = 99
+line-length = 120
 target-version = ['py310']
 
-[tool.isort]
-profile = "black"
-line_length = 99
-py_version = "39" # 3.10 isn't supported yet
+[tool.ruff]
+select = [
+    # Pyflakes
+    "F",
+    # Pycodestyle
+    "E",
+    "W",
+    # isort
+    "I",
+]
+line-length = 120
 
 [tool.mypy]
 python_version = "3.10"
 platform = "linux"
 strict = true
-# mypy_path = "$MYPY_CONFIG_FILE_DIR/typings"
 warn_unused_ignores = false # Pyright catches different things than mypy
 
 [tool.pyright]

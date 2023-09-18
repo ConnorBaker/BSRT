@@ -29,9 +29,7 @@ class FlowGuidedDeformSepConvNet(DeformSepConvNet):
         )
 
     # Pyright says we're missing *args and **kwargs here, but we're not.
-    def forward(  # type: ignore[override]
-        self, input: Tensor, fea: Tensor, flows: Tensor
-    ) -> Tensor:
+    def forward(self, input: Tensor, fea: Tensor, flows: Tensor) -> Tensor:  # type: ignore[override]
         """input: input features for deformable conv: N, C, H, W.
         fea: other features used for generating offsets and mask: N, C, H, W.
         flows: N, 2, H, W.

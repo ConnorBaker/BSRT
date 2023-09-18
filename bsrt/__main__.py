@@ -1,7 +1,6 @@
 import os
 from pathlib import Path
 
-import torch
 from mfsr_utils.datasets.zurich_raw2rgb import ZurichRaw2Rgb
 from mfsr_utils.pipelines.synthetic_burst_generator import (
     SyntheticBurstGeneratorData,
@@ -18,8 +17,10 @@ from bsrt.tuning.lr_scheduler.reduce_lr_on_plateau import ReduceLROnPlateauParam
 from bsrt.tuning.model.bsrt import BSRTParams
 from bsrt.tuning.optimizer.adamw import AdamWParams
 
-if __name__ == "__main__":
+
+def main() -> None:
     from lightning_fabric.fabric import Fabric  # type: ignore
+
     Fabric.seed_everything(42, workers=True)
 
     os.environ["NCCL_NSOCKS_PERTHREAD"] = "8"
@@ -27,22 +28,24 @@ if __name__ == "__main__":
     os.environ["TORCH_CUDNN_V8_API_ENABLED"] = "1"
 
     import torch.backends.cuda
-    import torch.backends.cudnn
 
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
+    
+    import torch.backends.cudnn
+    
     torch.backends.cudnn.allow_tf32 = True
     torch.backends.cudnn.deterministic = False
     torch.backends.cudnn.benchmark = True
     # BF16 should be enough for our use case.
     # See: https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html
-    torch.set_float32_matmul_precision("high")  # type: ignore
+    torch.set_float32_matmul_precision("medium")  # type: ignore
 
     # Desired batch size
     # target_batch_size: int = 64
 
     # Number of batches a single GPU can handle in memory
-    single_gpu_batch_size: int = 8
+    single_gpu_batch_size: int = 12
 
     # Number of GPUs
     # num_gpus: int = torch.cuda.device_count()
@@ -84,9 +87,7 @@ if __name__ == "__main__":
 
     full_dataset: ZurichRaw2Rgb[SyntheticBurstGeneratorData] = ZurichRaw2Rgb(
         data_dir,
-        transform=SyntheticBurstGeneratorTransform(
-            burst_size=14, crop_sz=256, dtype=torch.float32
-        ),
+        transform=SyntheticBurstGeneratorTransform(burst_size=14, crop_sz=256, dtype=torch.float32),
     )
     train_dataset, val_dataset = random_split(full_dataset, [0.8, 0.2])
     train_data_loader: DataLoader[SyntheticBurstGeneratorData] = DataLoader(
@@ -112,30 +113,33 @@ if __name__ == "__main__":
         "reinit": True,
     }
 
-    logger: WandbLogger = WandbLogger(**wandb_kwargs)
-    logger.log_hyperparams(model.hparams)  # type: ignore
-    logger.watch(model, log="all", log_graph=True)
+    # logger: WandbLogger = WandbLogger(**wandb_kwargs)
+    # logger.log_hyperparams(model.hparams)  # type: ignore
+    # logger.watch(model, log="all", log_graph=True)
 
     trainer = Trainer(
         num_sanity_val_steps=0,
         # limit_train_batches=100,
         # limit_val_batches=100,
-        enable_checkpointing=False,
+        enable_checkpointing=True,
         # TODO: Try with different gradient clip values with norm and value.
         # gradient_clip_val=1.0,
         # gradient_clip_algorithm="value",
         accelerator="auto",
         strategy=DDPStrategy(static_graph=True, find_unused_parameters=False),
         # TODO: For some reason, nonzero accumulate_grad_batches throws
-        # SystemError: <built-in method run_backward of torch._C._EngineBase object at 0x7ffff791b270> returned NULL without setting an exception.
+        # SystemError: <built-in method run_backward of torch._C._EngineBase object at 0x7ffff791b270> returned NULL
+        # without setting an exception.
         # accumulate_grad_batches=accumulate_batch_size,
-        precision=32,
+        precision="bf16-mixed",
         deterministic=False,
         detect_anomaly=False,
-        logger=logger,
+        # logger=logger,
         # logger=False,
     )
 
-    trainer.fit(  # type: ignore
-        model, train_dataloaders=train_data_loader, val_dataloaders=val_data_loader
-    )
+    trainer.fit(model, train_dataloaders=train_data_loader, val_dataloaders=val_data_loader)  # type: ignore
+
+
+if __name__ == "__main__":
+    main()

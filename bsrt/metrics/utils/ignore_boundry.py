@@ -14,9 +14,7 @@ def ignore_boundary(x: Tensor, boundary_ignore: Union[int, None]) -> Tensor:
     ...
 
 
-def ignore_boundary(
-    x: Union[Tensor, None], boundary_ignore: Union[int, None] = None
-) -> Union[Tensor, None]:
+def ignore_boundary(x: Union[Tensor, None], boundary_ignore: Union[int, None] = None) -> Union[Tensor, None]:
     if boundary_ignore is not None and x is not None:
         x = x[
             ...,

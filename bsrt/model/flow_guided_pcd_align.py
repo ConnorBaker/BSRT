@@ -17,34 +17,26 @@ class FlowGuidedPCDAlign(nn.Module):
         # L3: level 3, 1/4 spatial size
         self.L3_offset_conv1 = nn.Conv2d(nf * 2 + 2, nf, 3, 1, 1, bias=True)  # concat for diff
         self.L3_offset_conv2 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-        self.L3_dcnpack = FlowGuidedDeformSepConvNet(
-            nf, nf, 3, stride=1, padding=1, dilation=1, groups=groups
-        )
+        self.L3_dcnpack = FlowGuidedDeformSepConvNet(nf, nf, 3, stride=1, padding=1, dilation=1, groups=groups)
 
         # L2: level 2, 1/2 spatial size
         self.L2_offset_conv1 = nn.Conv2d(nf * 2 + 2, nf, 3, 1, 1, bias=True)  # concat for diff
         self.L2_offset_conv2 = nn.Conv2d(nf * 2, nf, 3, 1, 1, bias=True)  # concat for offset
         self.L2_offset_conv3 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-        self.L2_dcnpack = FlowGuidedDeformSepConvNet(
-            nf, nf, 3, stride=1, padding=1, dilation=1, groups=groups
-        )
+        self.L2_dcnpack = FlowGuidedDeformSepConvNet(nf, nf, 3, stride=1, padding=1, dilation=1, groups=groups)
         self.L2_fea_conv = nn.Conv2d(nf * 2, nf, 3, 1, 1, bias=True)  # concat for fea
 
         # L1: level 1, original spatial size
         self.L1_offset_conv1 = nn.Conv2d(nf * 2 + 2, nf, 3, 1, 1, bias=True)  # concat for diff
         self.L1_offset_conv2 = nn.Conv2d(nf * 2, nf, 3, 1, 1, bias=True)  # concat for offset
         self.L1_offset_conv3 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-        self.L1_dcnpack = FlowGuidedDeformSepConvNet(
-            nf, nf, 3, stride=1, padding=1, dilation=1, groups=groups
-        )
+        self.L1_dcnpack = FlowGuidedDeformSepConvNet(nf, nf, 3, stride=1, padding=1, dilation=1, groups=groups)
         self.L1_fea_conv = nn.Conv2d(nf * 2, nf, 3, 1, 1, bias=True)  # concat for fea
 
         # Cascading DCN
         self.cas_offset_conv1 = nn.Conv2d(nf * 2, nf, 3, 1, 1, bias=True)  # concat for diff
         self.cas_offset_conv2 = nn.Conv2d(nf, nf, 3, 1, 1, bias=True)
-        self.cas_dcnpack = DeformSepConvNet(
-            nf, nf, 3, stride=1, padding=1, dilation=1, groups=groups
-        )
+        self.cas_dcnpack = DeformSepConvNet(nf, nf, 3, stride=1, padding=1, dilation=1, groups=groups)
 
         self.lrelu = nn.LeakyReLU(negative_slope=0.1, inplace=True)
 

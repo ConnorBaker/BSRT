@@ -86,9 +86,7 @@ class Params(ABC):
         for field in fields(cls):
             assert field.type in get_args(_SUPPORTED_TYPES)
             field_type: _SUPPORTED_TYPES = cast(_SUPPORTED_TYPES, field.type)
-            arg_group.add_argument(
-                f"--{cls.__name__}.{field.name}", type=str_type_to_type(field_type)
-            )
+            arg_group.add_argument(f"--{cls.__name__}.{field.name}", type=str_type_to_type(field_type))
 
     @classmethod
     def from_args(
@@ -98,8 +96,6 @@ class Params(ABC):
         for field in fields(cls):
             assert field.type in get_args(_SUPPORTED_TYPES)
             field_type: _SUPPORTED_TYPES = cast(_SUPPORTED_TYPES, field.type)
-            kwargs[field.name] = str_type_to_type(field_type)(
-                getattr(args, f"{cls.__name__}.{field.name}")
-            )
+            kwargs[field.name] = str_type_to_type(field_type)(getattr(args, f"{cls.__name__}.{field.name}"))
         instance: _T = cast(Callable[..., _T], cls)(**kwargs)  # type: ignore[valid-type]
         return instance
